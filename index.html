@@ -2295,6 +2295,9 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
  onAuthStateChanged(auth, function(user){
    window.tyCurrentFirebaseUser = user || null;
+   if(user && typeof window.tySyncFirebaseUserWithBackend === "function"){
+     window.tySyncFirebaseUserWithBackend(user).catch(function(){});
+   }
    if(typeof window.tyApplyAuthUser === "function") window.tyApplyAuthUser(user || null);
  });
 </script>
@@ -3896,7 +3899,11 @@ support_title:"TravelYaraaサポート",
   document.addEventListener("DOMContentLoaded", function(){
     initPreferences();
     handleLoginIdentifierInput();
-    if(!window.tyCurrentFirebaseUser) tyApplyAuthUser(null);
+    if(window.tyCurrentFirebaseUser) return;
+    try{
+      if(localStorage.getItem("ty_user_auth_token") || localStorage.getItem("tyUserLoggedIn") === "true") return;
+    }catch(e){}
+    tyApplyAuthUser(null);
   });
 })();
 </script>
@@ -5835,7 +5842,9 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     if(wantsLogin(params)){
       try{
         sessionStorage.setItem(FLOW_KEY, "1");
-        sessionStorage.removeItem(ACTION_KEY);
+        if(sessionStorage.getItem(ACTION_KEY) !== "1"){
+          sessionStorage.removeItem(ACTION_KEY);
+        }
       }catch(e){}
     }
   }
@@ -5893,11 +5902,18 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     persistQuickProfile(user);
     var redirect = "";
     try{ redirect = safeRedirectPath(localStorage.getItem(REDIRECT_KEY) || ""); }catch(e){}
-    clearLoginFlow();
-    try{ localStorage.removeItem(REDIRECT_KEY); }catch(e){}
-    if(!redirect) return;
-    if(location.pathname !== redirect){
-      location.replace(redirect);
+    var go = function(){
+      clearLoginFlow();
+      try{ localStorage.removeItem(REDIRECT_KEY); }catch(e){}
+      if(!redirect) return;
+      if(location.pathname !== redirect){
+        location.replace(redirect);
+      }
+    };
+    if(typeof window.tySyncFirebaseUserWithBackend === "function"){
+      window.tySyncFirebaseUserWithBackend(user).finally(go);
+    }else{
+      go();
     }
   }
 

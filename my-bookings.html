@@ -20,7 +20,9 @@
     .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:68px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--line)}
     .back{position:relative;flex:0 0 42px;width:42px;height:42px;border:0;border-radius:13px;background:#f5f9ff;color:var(--blue);font-size:0}
     .back:before{content:"";position:absolute;left:16px;top:13px;width:13px;height:13px;border-left:3px solid currentColor;border-bottom:3px solid currentColor;transform:rotate(45deg)}
-    .topbar h1{margin:0;color:var(--navy);font-size:25px;line-height:1.1;font-weight:900}
+    .topbar h1{margin:0;flex:1;color:var(--navy);font-size:25px;line-height:1.1;font-weight:900}
+    .topbar-login{border:0;border-radius:12px;background:var(--blue);color:#fff;padding:10px 16px;font-weight:900;font-size:14px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,98,227,.18)}
+    .topbar-login[hidden]{display:none!important}
     .service-tabs,.status-tabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:12px 14px 4px}
     .service-tabs::-webkit-scrollbar,.status-tabs::-webkit-scrollbar{display:none}
     .service-tab{flex:1 0 112px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--navy);padding:11px 12px;font-weight:850;box-shadow:0 5px 18px rgba(7,29,73,.04)}
@@ -73,6 +75,7 @@
     <header class="topbar">
       <button class="back" id="backButton" type="button" aria-label="Go back"></button>
       <h1>My Bookings</h1>
+      <button class="topbar-login" id="topbarLoginBtn" type="button" hidden>Login</button>
     </header>
 
     <nav class="service-tabs" aria-label="Booking services">
@@ -105,6 +108,7 @@
   let activeStatus='upcoming';
   let firebaseResolved=false;
   let firebaseUser=null;
+  let loggedIn=false;
   let resolveFirebaseReady;
   const firebaseReady=new Promise(resolve=>{resolveFirebaseReady=resolve;});
   let firebaseSyncPromise=null;
@@ -156,14 +160,40 @@
     })();
     try{return await firebaseSyncPromise;}finally{firebaseSyncPromise=null;}
   }
+  function hasStoredSession(){
+    const authToken=token();
+    if(!authToken)return false;
+    try{
+      const flag=localStorage.getItem('tyUserLoggedIn');
+      if(flag==='true')return true;
+      const profile=JSON.parse(localStorage.getItem('ty_user_profile')||localStorage.getItem('travelYaraaUser')||'null');
+      return !!(profile&& (profile.uid||profile.userId||profile.email||profile.phone));
+    }catch(_){return !!authToken;}
+  }
   async function ensureToken(){
+    const existing=token();
+    if(existing&&hasStoredSession()){
+      if(firebaseUser&&!firebaseSyncPromise){
+        syncFirebaseUser(firebaseUser).catch(()=>{});
+      }
+      return existing;
+    }
     if(!firebaseResolved){
       await Promise.race([firebaseReady,new Promise(resolve=>setTimeout(resolve,2500))]);
     }
-    if(!firebaseUser)return '';
+    if(!firebaseUser)return existing&&hasStoredSession()?existing:'';
     if(firebaseSyncPromise)return firebaseSyncPromise;
-    const existing=token();
     return existing||syncFirebaseUser(firebaseUser);
+  }
+  function isDummyBooking(booking){
+    if(!booking||typeof booking!=='object')return true;
+    if(booking.isDummy===true||booking.dummy===true||booking.isTest===true||booking.testBooking===true||booking.sample===true)return true;
+    const marker=text(booking.source||booking.origin||booking.bookingSource||booking.createdBy).toLowerCase();
+    if(/dummy|sample|test|placeholder|mock|demo/.test(marker))return true;
+    const id=text(firstValue(booking.bookingId,booking.id,booking.razorpayOrderId,booking.razorpay_order_id)).toLowerCase();
+    if(!id)return true;
+    if(/^(dummy|test|sample|mock|demo|row-|placeholder)/.test(id))return true;
+    return false;
   }
   async function request(path){const auth=token();if(!auth){const error=new Error('AUTH_REQUIRED');error.status=401;throw error;}const response=await fetch(api(path),{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+auth},cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false){const error=new Error(data.message||data.error||('Request failed '+response.status));error.status=response.status;throw error;}return data;}
   function rowsFrom(data){
@@ -171,9 +201,12 @@
     if(Array.isArray(data)) rows=data;
     else for(const value of [data&&data.bookings,data&&data.items,data&&data.rows,data&&data.data&&data.data.bookings,data&&data.data&&data.data.items,data&&data.data]){if(Array.isArray(value)){rows=value;break;}}
     const unique=new Map();
-    rows.forEach((booking,index)=>{
-      const key=String(firstValue(booking&&booking.bookingId,booking&&booking.id,booking&&booking.razorpayOrderId,booking&&booking.razorpay_order_id)||('row-'+index)).trim();
-      if(!unique.has(key)) unique.set(key,booking);
+    rows.filter(booking=>!isDummyBooking(booking)).forEach((booking)=>{
+      const id=String(firstValue(booking.bookingId,booking.id)).trim();
+      const orderId=String(firstValue(booking.razorpayOrderId,booking.razorpay_order_id)).trim();
+      const key=(id||orderId).toLowerCase();
+      if(!key||unique.has(key))return;
+      unique.set(key,booking);
     });
     return [...unique.values()];
   }
@@ -202,7 +235,17 @@
 
   function setActive(){$$('.service-tab').forEach(b=>b.classList.toggle('active',b.dataset.service===activeService));$$('.status-tab').forEach(b=>b.classList.toggle('active',b.dataset.status===activeStatus));}
   function loading(){return '<div class="state"><div class="loader" aria-label="Loading bookings"></div></div>';}
-  function loginState(){return '<div class="state"><div><h2>Please log in</h2><p>Log in with the same TravelYaraa account used for the booking.</p><a data-login href="/index.html?openLogin=1&amp;redirect=%2Fmy-bookings.html">Go to login</a></div></div>';}
+  function loginState(){return '<div class="state"><div><h2>Please log in</h2><p>Log in with the same TravelYaraa account used for the booking.</p><button class="retry" type="button" data-login>Login</button></div></div>';}
+  function updateLoginButton(){
+    const btn=$('#topbarLoginBtn');
+    if(!btn)return;
+    if(loggedIn){btn.hidden=true;return;}
+    btn.hidden=false;
+  }
+  function goToLogin(){
+    rememberLoginRedirect();
+    location.href='/index.html?openLogin=1&redirect=%2Fmy-bookings.html';
+  }
   function emptyState(){return '<div class="state"><div><h2>No bookings found</h2><p>There are no '+esc(activeStatus)+' '+esc(activeService)+' bookings in this account.</p><a href="/index.html">Book a new trip</a></div></div>';}
   function errorState(message){return '<div class="state"><div><h2>Bookings could not be loaded</h2><p>'+esc(message||'Please check your connection and try again.')+'</p><button class="retry" type="button" id="retry">Try again</button></div></div>';}
   async function load(){
@@ -211,6 +254,8 @@
     content.innerHTML=loading();
     try{
       const auth=await ensureToken();
+      loggedIn=!!auth;
+      updateLoginButton();
       if(!auth){content.innerHTML=loginState();return;}
       const query=new URLSearchParams({service:activeService,status:activeStatus});
       let data;
@@ -234,14 +279,14 @@
   }
 
   $('#backButton').onclick=()=>{if(history.length>1)history.back();else location.href='/index.html';};
+  $('#topbarLoginBtn').onclick=goToLogin;
   $$('.service-tab').forEach(button=>button.onclick=()=>{activeService=button.dataset.service;load();});
   $$('.status-tab').forEach(button=>button.onclick=()=>{activeStatus=button.dataset.status;load();});
   document.addEventListener('click',async event=>{
     const login=event.target.closest('[data-login]');
     if(login){
       event.preventDefault();
-      rememberLoginRedirect();
-      location.href=login.href;
+      goToLogin();
       return;
     }
     const copy=event.target.closest('[data-copy]');
@@ -254,12 +299,17 @@
     firebaseUser=user||null;
     if(resolveFirebaseReady){resolveFirebaseReady(firebaseUser);resolveFirebaseReady=null;}
     if(firebaseUser){
-      syncFirebaseUser(firebaseUser).then(load).catch(()=>{clearStoredToken();load();});
-    }else{
+      loggedIn=true;
+      updateLoginButton();
+      syncFirebaseUser(firebaseUser).then(load).catch(()=>{clearStoredToken();loggedIn=false;updateLoginButton();load();});
+    }else if(!hasStoredSession()){
       clearStoredToken();
+      loggedIn=false;
+      updateLoginButton();
       load();
     }
   };
+  updateLoginButton();
   load();
 })();
 </script>
