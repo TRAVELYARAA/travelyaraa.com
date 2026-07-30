@@ -26,6 +26,9 @@ window.tyCurrentFirebaseUser = auth.currentUser || null;
 
 onAuthStateChanged(auth, function(user) {
   window.tyCurrentFirebaseUser = user || null;
+  if (user && typeof window.tySyncFirebaseUserWithBackend === "function") {
+    window.tySyncFirebaseUserWithBackend(user).catch(function(){});
+  }
   if (typeof window.tyApplyAuthUser === "function") {
     window.tyApplyAuthUser(user || null);
   }
