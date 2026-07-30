@@ -1,4 +1,0 @@
-User-agent: *
-Disallow: /assets/booking-partials/
-
-Sitemap: https://www.travelyaraa.com/sitemap.xml
