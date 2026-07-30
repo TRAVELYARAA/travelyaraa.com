@@ -2175,6 +2175,7 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
 </style>
 
+<script src="/assets/js/auth-session.js"></script>
 <script type="module" id="ty-firebase-auth-core">
  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
  import {
@@ -2237,60 +2238,6 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
    where,
    orderBy,
    serverTimestamp
- };
-
- let tyBackendAuthSyncPromise = null;
- let tyBackendAuthSyncUid = "";
-
- window.tySyncFirebaseUserWithBackend = async function(user, extraPayload){
-   if(!user) return null;
-   const existingToken = localStorage.getItem("ty_user_auth_token") || "";
-   const existingProfile = JSON.parse(localStorage.getItem("ty_user_profile") || "null");
-   if(existingToken && existingProfile && String(existingProfile.uid || existingProfile.userId || "") === String(user.uid || "")){
-     return {authToken:existingToken, user:existingProfile, reused:true};
-   }
-   if(tyBackendAuthSyncPromise && tyBackendAuthSyncUid === String(user.uid || "")) return tyBackendAuthSyncPromise;
-
-   tyBackendAuthSyncUid = String(user.uid || "");
-   tyBackendAuthSyncPromise = (async function(){
-     const idToken = await user.getIdToken(true);
-     const base = String(window.TRAVELYARAA_API_BASE || "https://api.travelyaraa.com").replace(/\/$/,"");
-     const body = Object.assign({
-       provider:(user.providerData && user.providerData[0] && user.providerData[0].providerId) || "firebase",
-       firebaseIdToken:idToken,
-       email:user.email || "",
-       phone:user.phoneNumber || "",
-       name:user.displayName || "",
-       service:"account"
-     }, extraPayload || {});
-     const response = await fetch(base + "/api/bookings/guest-auth/firebase-login", {
-       method:"POST",
-       headers:{"Content-Type":"application/json","Accept":"application/json"},
-       body:JSON.stringify(body),
-       cache:"no-store"
-     });
-     const data = await response.json().catch(function(){ return {}; });
-     if(!response.ok || data.success === false || !data.authToken){
-       const error = new Error(data.message || "TravelYaraa login could not be completed.");
-       error.code = data.code || "LOGIN_BACKEND_FAILED";
-       throw error;
-     }
-     const profile = data.user || {
-       uid:user.uid || "",
-       userId:user.uid || "",
-       email:user.email || "",
-       phone:user.phoneNumber || "",
-       name:user.displayName || ""
-     };
-     localStorage.setItem("ty_user_auth_token", data.authToken);
-     localStorage.setItem("ty_user_profile", JSON.stringify(profile));
-     localStorage.setItem("travelYaraaUser", JSON.stringify(profile));
-     localStorage.setItem("tyUserLoggedIn", "true");
-     return Object.assign({}, data, {user:profile});
-   })();
-
-   try{ return await tyBackendAuthSyncPromise; }
-   finally{ tyBackendAuthSyncPromise = null; }
  };
 
  onAuthStateChanged(auth, function(user){
@@ -3774,6 +3721,7 @@ support_title:"TravelYaraaサポート",
           phone:user.phoneNumber || "",
           name:user.displayName || ""
         }));
+        if(typeof window.tyAuthSession !== "undefined") window.tyAuthSession.broadcastAuth(true);
       }catch(e){}
       if(!tyMyBookingLoginQueryOpen()){
         closeLogin();
@@ -3781,7 +3729,11 @@ support_title:"TravelYaraaサポート",
       }
     }else{
       try{
-        ["tyUserLoggedIn","travelYaraaUser","ty_user_profile","ty_user_auth_token","authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
+        if(typeof window.tyAuthSession !== "undefined"){
+          window.tyAuthSession.clearSession();
+        }else{
+          ["tyUserLoggedIn","travelYaraaUser","ty_user_profile","ty_user_auth_token","authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
+        }
       }catch(e){}
     }
   };

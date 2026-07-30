@@ -20,9 +20,7 @@
     .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:68px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--line)}
     .back{position:relative;flex:0 0 42px;width:42px;height:42px;border:0;border-radius:13px;background:#f5f9ff;color:var(--blue);font-size:0}
     .back:before{content:"";position:absolute;left:16px;top:13px;width:13px;height:13px;border-left:3px solid currentColor;border-bottom:3px solid currentColor;transform:rotate(45deg)}
-    .topbar h1{margin:0;flex:1;color:var(--navy);font-size:25px;line-height:1.1;font-weight:900}
-    .topbar-login{border:0;border-radius:12px;background:var(--blue);color:#fff;padding:10px 16px;font-weight:900;font-size:14px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,98,227,.18)}
-    .topbar-login[hidden]{display:none!important}
+    .topbar h1{margin:0;color:var(--navy);font-size:25px;line-height:1.1;font-weight:900}
     .service-tabs,.status-tabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:12px 14px 4px}
     .service-tabs::-webkit-scrollbar,.status-tabs::-webkit-scrollbar{display:none}
     .service-tab{flex:1 0 112px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--navy);padding:11px 12px;font-weight:850;box-shadow:0 5px 18px rgba(7,29,73,.04)}
@@ -62,7 +60,7 @@
     .manage{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:13px 16px;text-align:center;text-decoration:none;font-weight:900;box-shadow:0 7px 16px rgba(0,98,227,.18)}
     .manage:active{transform:translateY(1px)}
     .state{display:grid;place-items:center;min-height:260px;padding:30px 22px;border:1px solid var(--line);border-radius:19px;background:#fff;text-align:center;box-shadow:0 9px 25px rgba(7,29,73,.05)}
-    .state h2{margin:0;color:var(--navy);font-size:20px}.state p{max-width:480px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55;font-weight:650}.state a,.retry{display:inline-block;margin-top:15px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:11px 18px;text-decoration:none;font-weight:900}
+    .state h2{margin:0;color:var(--navy);font-size:20px}.state p{max-width:480px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55;font-weight:650}.state .login-btn,.state a,.retry{display:inline-block;margin-top:15px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:11px 18px;text-decoration:none;font-weight:900}
     .loader{width:46px;height:46px;border:4px solid #dce8f7;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     .opening{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:rgba(7,29,73,.62);backdrop-filter:blur(2px)}
@@ -75,7 +73,6 @@
     <header class="topbar">
       <button class="back" id="backButton" type="button" aria-label="Go back"></button>
       <h1>My Bookings</h1>
-      <button class="topbar-login" id="topbarLoginBtn" type="button" hidden>Login</button>
     </header>
 
     <nav class="service-tabs" aria-label="Booking services">
@@ -95,23 +92,20 @@
   </main>
   <div class="opening" id="opening" hidden><div class="loader" aria-label="Opening booking"></div></div>
 
+<script>window.TRAVELYARAA_API_BASE="https://api.travelyaraa.com";</script>
+<script src="/assets/js/auth-session.js"></script>
 <script type="module" src="/assets/js/firebase-auth.js"></script>
 <script>
 (function(){
   'use strict';
-  const API_BASE=String(window.TRAVELYARAA_API_BASE||window.TY_API_BASE||'https://api.travelyaraa.com').replace(/\/+$/,'');
-  const TOKEN_KEY='ty_user_auth_token';
-  const LOGIN_FLOW_KEY='ty_mybooking_login_flow';
-  const LOGIN_ACTION_KEY='ty_mybooking_login_user_action';
-  const LOGIN_REDIRECT_KEY='ty_login_redirect';
+  const authSession=window.tyAuthSession;
+  const API_BASE=String(window.TRAVELYARAA_API_BASE||'https://api.travelyaraa.com').replace(/\/+$/,'');
   let activeService='flight';
   let activeStatus='upcoming';
   let firebaseResolved=false;
   let firebaseUser=null;
-  let loggedIn=false;
   let resolveFirebaseReady;
   const firebaseReady=new Promise(resolve=>{resolveFirebaseReady=resolve;});
-  let firebaseSyncPromise=null;
 
   const $=(s,p=document)=>p.querySelector(s);
   const $$=(s,p=document)=>Array.from(p.querySelectorAll(s));
@@ -119,72 +113,25 @@
   const esc=v=>text(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const attr=esc;
   const arr=v=>!v?[]:(Array.isArray(v)?v:[v]);
-  function token(){try{return text(localStorage.getItem(TOKEN_KEY));}catch(_){return '';}}
   function getPath(obj,path){let value=obj;for(const key of path){if(value===undefined||value===null)return undefined;value=value[key];}return value;}
   function firstValue(){for(const v of arguments){if(v===undefined||v===null||typeof v==='object')continue;const s=text(v);if(s)return s;}return '';}
   function deepFind(obj,names){const wanted=new Set(names.map(x=>String(x).toLowerCase()));const seen=new Set();function walk(v){if(!v||typeof v!=='object'||seen.has(v))return '';seen.add(v);for(const key of Object.keys(v)){const value=v[key];if(wanted.has(key.toLowerCase())&&value!==undefined&&value!==null&&typeof value!=='object'&&text(value))return value;}for(const key of Object.keys(v)){const found=walk(v[key]);if(text(found))return found;}return '';}return walk(obj);}
   function deepArray(obj,names){const wanted=new Set(names.map(x=>String(x).toLowerCase()));const seen=new Set();function walk(v){if(!v||typeof v!=='object'||seen.has(v))return [];seen.add(v);for(const key of Object.keys(v)){if(wanted.has(key.toLowerCase())&&Array.isArray(v[key])&&v[key].length)return v[key];}for(const key of Object.keys(v)){const found=walk(v[key]);if(found.length)return found;}return [];}return walk(obj);}
   function api(path){return API_BASE+(String(path).startsWith('/')?path:'/'+path);}
-  function clearStoredToken(){try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem('ty_user_profile');localStorage.removeItem('travelYaraaUser');localStorage.removeItem('tyUserLoggedIn');}catch(_){}}
-  function rememberLoginRedirect(){
-    try{
-      localStorage.setItem(LOGIN_REDIRECT_KEY,'/my-bookings.html');
-      sessionStorage.setItem(LOGIN_FLOW_KEY,'1');
-      sessionStorage.setItem(LOGIN_ACTION_KEY,'1');
-    }catch(_){}
+
+  function isAuthenticated(){
+    return !!(firebaseUser||authSession.isLoggedIn());
   }
-  async function syncFirebaseUser(user){
-    if(!user||typeof user.getIdToken!=='function')return '';
-    if(firebaseSyncPromise)return firebaseSyncPromise;
-    firebaseSyncPromise=(async()=>{
-      const idToken=await user.getIdToken(true);
-      const provider=firstValue(user.providerData&&user.providerData[0]&&user.providerData[0].providerId,'firebase');
-      const response=await fetch(api('/api/bookings/guest-auth/firebase-login'),{
-        method:'POST',
-        headers:{'Content-Type':'application/json',Accept:'application/json'},
-        body:JSON.stringify({provider,firebaseIdToken:idToken,email:user.email||'',phone:user.phoneNumber||'',name:user.displayName||'',service:'account'}),
-        cache:'no-store'
-      });
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||data.success===false||!data.authToken){
-        const error=new Error('Your TravelYaraa login session could not be refreshed. Please try again.');
-        error.status=response.status;
-        throw error;
-      }
-      const profile=data.user||{uid:user.uid||'',userId:user.uid||'',email:user.email||'',phone:user.phoneNumber||'',name:user.displayName||''};
-      localStorage.setItem(TOKEN_KEY,data.authToken);
-      localStorage.setItem('ty_user_profile',JSON.stringify(profile));
-      localStorage.setItem('travelYaraaUser',JSON.stringify(profile));
-      localStorage.setItem('tyUserLoggedIn','true');
-      return data.authToken;
-    })();
-    try{return await firebaseSyncPromise;}finally{firebaseSyncPromise=null;}
+
+  async function resolveAuthToken(){
+    return authSession.ensureToken({
+      firebaseUser:firebaseUser,
+      firebaseReady:firebaseReady,
+      firebaseResolved:firebaseResolved,
+      waitMs:1500
+    });
   }
-  function hasStoredSession(){
-    const authToken=token();
-    if(!authToken)return false;
-    try{
-      const flag=localStorage.getItem('tyUserLoggedIn');
-      if(flag==='true')return true;
-      const profile=JSON.parse(localStorage.getItem('ty_user_profile')||localStorage.getItem('travelYaraaUser')||'null');
-      return !!(profile&& (profile.uid||profile.userId||profile.email||profile.phone));
-    }catch(_){return !!authToken;}
-  }
-  async function ensureToken(){
-    const existing=token();
-    if(existing&&hasStoredSession()){
-      if(firebaseUser&&!firebaseSyncPromise){
-        syncFirebaseUser(firebaseUser).catch(()=>{});
-      }
-      return existing;
-    }
-    if(!firebaseResolved){
-      await Promise.race([firebaseReady,new Promise(resolve=>setTimeout(resolve,2500))]);
-    }
-    if(!firebaseUser)return existing&&hasStoredSession()?existing:'';
-    if(firebaseSyncPromise)return firebaseSyncPromise;
-    return existing||syncFirebaseUser(firebaseUser);
-  }
+
   function isDummyBooking(booking){
     if(!booking||typeof booking!=='object')return true;
     if(booking.isDummy===true||booking.dummy===true||booking.isTest===true||booking.testBooking===true||booking.sample===true)return true;
@@ -195,7 +142,16 @@
     if(/^(dummy|test|sample|mock|demo|row-|placeholder)/.test(id))return true;
     return false;
   }
-  async function request(path){const auth=token();if(!auth){const error=new Error('AUTH_REQUIRED');error.status=401;throw error;}const response=await fetch(api(path),{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+auth},cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false){const error=new Error(data.message||data.error||('Request failed '+response.status));error.status=response.status;throw error;}return data;}
+
+  async function request(path){
+    const auth=authSession.getToken();
+    if(!auth){const error=new Error('AUTH_REQUIRED');error.status=401;throw error;}
+    const response=await fetch(api(path),{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+auth},cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.success===false){const error=new Error(data.message||data.error||('Request failed '+response.status));error.status=response.status;throw error;}
+    return data;
+  }
+
   function rowsFrom(data){
     let rows=[];
     if(Array.isArray(data)) rows=data;
@@ -235,58 +191,54 @@
 
   function setActive(){$$('.service-tab').forEach(b=>b.classList.toggle('active',b.dataset.service===activeService));$$('.status-tab').forEach(b=>b.classList.toggle('active',b.dataset.status===activeStatus));}
   function loading(){return '<div class="state"><div class="loader" aria-label="Loading bookings"></div></div>';}
-  function loginState(){return '<div class="state"><div><h2>Please log in</h2><p>Log in with the same TravelYaraa account used for the booking.</p><button class="retry" type="button" data-login>Login</button></div></div>';}
-  function updateLoginButton(){
-    const btn=$('#topbarLoginBtn');
-    if(!btn)return;
-    if(loggedIn){btn.hidden=true;return;}
-    btn.hidden=false;
-  }
-  function goToLogin(){
-    rememberLoginRedirect();
-    location.href='/index.html?openLogin=1&redirect=%2Fmy-bookings.html';
-  }
+  function loginState(){return '<div class="state"><div><h2>My Bookings</h2><p>Sign in to view your flights, hotels, and cab bookings.</p><button class="login-btn" type="button" data-login>Login</button></div></div>';}
   function emptyState(){return '<div class="state"><div><h2>No bookings found</h2><p>There are no '+esc(activeStatus)+' '+esc(activeService)+' bookings in this account.</p><a href="/index.html">Book a new trip</a></div></div>';}
-  function errorState(message){return '<div class="state"><div><h2>Bookings could not be loaded</h2><p>'+esc(message||'Please check your connection and try again.')+'</p><button class="retry" type="button" id="retry">Try again</button></div></div>';}
+
+  async function fetchBookings(){
+    const query=new URLSearchParams({service:activeService,status:activeStatus});
+    try{
+      return await request('/api/bookings/my?'+query.toString());
+    }catch(error){
+      if(error.status!==401)throw error;
+      if(firebaseUser){
+        await authSession.syncFirebaseUserWithBackend(firebaseUser).catch(()=>{});
+        return await request('/api/bookings/my?'+query.toString());
+      }
+      throw error;
+    }
+  }
+
   async function load(){
     setActive();
     const content=$('#content');
     content.innerHTML=loading();
+    const auth=await resolveAuthToken();
+    if(!auth&&!isAuthenticated()){
+      content.innerHTML=loginState();
+      return;
+    }
     try{
-      const auth=await ensureToken();
-      loggedIn=!!auth;
-      updateLoginButton();
-      if(!auth){content.innerHTML=loginState();return;}
-      const query=new URLSearchParams({service:activeService,status:activeStatus});
-      let data;
-      try{
-        data=await request('/api/bookings/my?'+query.toString());
-      }catch(error){
-        if(error.status!==401)throw error;
-        clearStoredToken();
-        const refreshed=firebaseUser?await syncFirebaseUser(firebaseUser):'';
-        if(!refreshed){content.innerHTML=loginState();return;}
-        data=await request('/api/bookings/my?'+query.toString());
-      }
+      const data=await fetchBookings();
       const rows=rowsFrom(data);
       content.innerHTML=rows.length?'<div class="list">'+rows.map(card).join('')+'</div>':emptyState();
     }catch(error){
-      if(error.status===401&&!firebaseUser){content.innerHTML=loginState();return;}
-      content.innerHTML=errorState(error.message);
-      const retry=$('#retry');
-      if(retry)retry.onclick=load;
+      if(error.status===401){
+        authSession.clearSession();
+        content.innerHTML=loginState();
+        return;
+      }
+      content.innerHTML=emptyState();
     }
   }
 
   $('#backButton').onclick=()=>{if(history.length>1)history.back();else location.href='/index.html';};
-  $('#topbarLoginBtn').onclick=goToLogin;
   $$('.service-tab').forEach(button=>button.onclick=()=>{activeService=button.dataset.service;load();});
   $$('.status-tab').forEach(button=>button.onclick=()=>{activeStatus=button.dataset.status;load();});
   document.addEventListener('click',async event=>{
     const login=event.target.closest('[data-login]');
     if(login){
       event.preventDefault();
-      goToLogin();
+      authSession.goToLogin('/my-bookings.html');
       return;
     }
     const copy=event.target.closest('[data-copy]');
@@ -299,17 +251,20 @@
     firebaseUser=user||null;
     if(resolveFirebaseReady){resolveFirebaseReady(firebaseUser);resolveFirebaseReady=null;}
     if(firebaseUser){
-      loggedIn=true;
-      updateLoginButton();
-      syncFirebaseUser(firebaseUser).then(load).catch(()=>{clearStoredToken();loggedIn=false;updateLoginButton();load();});
-    }else if(!hasStoredSession()){
-      clearStoredToken();
-      loggedIn=false;
-      updateLoginButton();
+      authSession.syncFirebaseUserWithBackend(firebaseUser).catch(()=>{}).finally(load);
+    }else if(!authSession.isLoggedIn()){
+      authSession.clearSession();
+      load();
+    }else{
       load();
     }
   };
-  updateLoginButton();
+
+  window.addEventListener(authSession.AUTH_EVENT,load);
+  window.addEventListener('storage',event=>{
+    if(event.key===authSession.TOKEN_KEY||event.key==='tyUserLoggedIn')load();
+  });
+
   load();
 })();
 </script>
