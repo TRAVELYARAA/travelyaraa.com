@@ -29,6 +29,11 @@
     }catch(_){ return null; }
   }
 
+  function profileUid(profile){
+    if(!profile || typeof profile !== 'object') return '';
+    return text(profile.uid || profile.userId || profile.id || '');
+  }
+
   function currentFirebaseUser(){
     try{
       return global.tyCurrentFirebaseUser || (global.auth && global.auth.currentUser) || null;
@@ -38,7 +43,7 @@
   function isLoggedIn(){
     if(currentFirebaseUser()) return true;
     var profile = getProfile();
-    var hasProfile = !!(profile && (profile.uid || profile.userId || profile.email || profile.phone));
+    var hasProfile = !!(profile && (profileUid(profile) || profile.email || profile.phone));
     var hasFlag = false;
     try{ hasFlag = global.localStorage.getItem(LOGIN_FLAG) === 'true'; }catch(_){}
     if(getToken() && (hasFlag || hasProfile)) return true;
@@ -46,11 +51,23 @@
     return false;
   }
 
+  function tokenBelongsToUser(user){
+    var token = getToken();
+    if(!token || !user) return false;
+    var profile = getProfile();
+    var storedUid = profileUid(profile);
+    if(!storedUid) return !!token;
+    return storedUid === text(user.uid || '');
+  }
+
   function persistSession(authToken, profile){
+    if(!authToken) return;
     try{
       global.localStorage.setItem(TOKEN_KEY, authToken);
-      global.localStorage.setItem('ty_user_profile', JSON.stringify(profile));
-      global.localStorage.setItem('travelYaraaUser', JSON.stringify(profile));
+      if(profile){
+        global.localStorage.setItem('ty_user_profile', JSON.stringify(profile));
+        global.localStorage.setItem('travelYaraaUser', JSON.stringify(profile));
+      }
       global.localStorage.setItem(LOGIN_FLAG, 'true');
     }catch(_){}
     broadcastAuth(true);
@@ -87,26 +104,35 @@
   async function syncFirebaseUserWithBackend(user, extraPayload){
     if(!user || typeof user.getIdToken !== 'function') return null;
 
+    var force = !!(extraPayload && extraPayload.force);
     var existingToken = getToken();
     var existingProfile = getProfile();
-    if(existingToken && existingProfile && String(existingProfile.uid || existingProfile.userId || '') === String(user.uid || '')){
-      return { authToken: existingToken, user: existingProfile, reused: true };
+
+    // Reuse the existing account token. Never mint a guest/temp token on refresh/navigation.
+    if(!force && tokenBelongsToUser(user)){
+      return { authToken: existingToken, user: existingProfile || { uid: user.uid || '' }, reused: true };
     }
 
     if(syncPromise && syncUid === String(user.uid || '')) return syncPromise;
 
     syncUid = String(user.uid || '');
     syncPromise = (async function(){
-      var idToken = await user.getIdToken(true);
+      var idToken = await user.getIdToken(!!force);
       var provider = (user.providerData && user.providerData[0] && user.providerData[0].providerId) || 'firebase';
-      var body = Object.assign({
+      var body = {
         provider: provider,
         firebaseIdToken: idToken,
         email: user.email || '',
         phone: user.phoneNumber || '',
         name: user.displayName || '',
         service: 'account'
-      }, extraPayload || {});
+      };
+      if(extraPayload && typeof extraPayload === 'object'){
+        Object.keys(extraPayload).forEach(function(key){
+          if(key === 'force') return;
+          body[key] = extraPayload[key];
+        });
+      }
 
       var response = await fetch(apiBase() + '/api/bookings/guest-auth/firebase-login', {
         method: 'POST',
@@ -117,6 +143,10 @@
 
       var data = await response.json().catch(function(){ return {}; });
       if(!response.ok || data.success === false || !data.authToken){
+        // Keep existing account token if exchange fails.
+        if(existingToken && tokenBelongsToUser(user)){
+          return { authToken: existingToken, user: existingProfile, reused: true, syncFailed: true };
+        }
         var error = new Error(data.message || 'Login sync failed');
         error.status = response.status;
         error.code = data.code || 'LOGIN_BACKEND_FAILED';
@@ -132,7 +162,7 @@
       };
 
       persistSession(data.authToken, profile);
-      return Object.assign({}, data, { user: profile });
+      return Object.assign({}, data, { user: profile, reused: false });
     })();
 
     try{ return await syncPromise; }
@@ -144,10 +174,7 @@
     var existing = getToken();
     var user = options.firebaseUser || currentFirebaseUser();
 
-    if(existing && (options.firebaseUser || isLoggedIn())){
-      if(user){
-        syncFirebaseUserWithBackend(user).catch(function(){});
-      }
+    if(existing && (!user || tokenBelongsToUser(user) || isLoggedIn())){
       return existing;
     }
 
@@ -158,12 +185,12 @@
       ]);
       user = options.firebaseUser || currentFirebaseUser();
       existing = getToken();
-      if(existing) return existing;
+      if(existing && (!user || tokenBelongsToUser(user) || isLoggedIn())) return existing;
     }
 
     if(user){
       try{
-        var result = await syncFirebaseUserWithBackend(user);
+        var result = await syncFirebaseUserWithBackend(user, options.force ? { force: true } : null);
         return (result && result.authToken) || getToken() || '';
       }catch(_){
         return getToken() || '';
@@ -180,6 +207,7 @@
     getProfile: getProfile,
     isLoggedIn: isLoggedIn,
     currentFirebaseUser: currentFirebaseUser,
+    tokenBelongsToUser: tokenBelongsToUser,
     persistSession: persistSession,
     clearSession: clearSession,
     syncFirebaseUserWithBackend: syncFirebaseUserWithBackend,
