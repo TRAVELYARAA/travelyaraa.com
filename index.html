@@ -2253,7 +2253,7 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
    tyBackendAuthSyncUid = String(user.uid || "");
    tyBackendAuthSyncPromise = (async function(){
-     const idToken = await user.getIdToken(true);
+     const idToken = await user.getIdToken(false);
      const base = String(window.TRAVELYARAA_API_BASE || "https://api.travelyaraa.com").replace(/\/$/,"");
      const body = Object.assign({
        provider:(user.providerData && user.providerData[0] && user.providerData[0].providerId) || "firebase",
@@ -3896,7 +3896,10 @@ support_title:"TravelYaraaã‚µãƒãƒ¼ãƒˆ",
   document.addEventListener("DOMContentLoaded", function(){
     initPreferences();
     handleLoginIdentifierInput();
-    if(!window.tyCurrentFirebaseUser) tyApplyAuthUser(null);
+    if(window.tyCurrentFirebaseUser) return;
+    try{
+      if(localStorage.getItem("ty_user_auth_token") || localStorage.getItem("tyUserLoggedIn") === "true") return;
+    }catch(e){}
   });
 })();
 </script>

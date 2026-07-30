@@ -26,10 +26,6 @@ window.tyCurrentFirebaseUser = auth.currentUser || null;
 
 onAuthStateChanged(auth, function(user) {
   window.tyCurrentFirebaseUser = user || null;
-  if (user && typeof window.tySyncFirebaseUserWithBackend === "function") {
-    // Reuse existing account token; do not force a new token on every page load.
-    window.tySyncFirebaseUserWithBackend(user).catch(function(){});
-  }
   if (typeof window.tyApplyAuthUser === "function") {
     window.tyApplyAuthUser(user || null);
   }
