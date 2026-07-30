@@ -2175,7 +2175,6 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
 </style>
 
-<script src="/assets/js/auth-session.js"></script>
 <script type="module" id="ty-firebase-auth-core">
  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
  import {
@@ -2240,11 +2239,62 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
    serverTimestamp
  };
 
+ let tyBackendAuthSyncPromise = null;
+ let tyBackendAuthSyncUid = "";
+
+ window.tySyncFirebaseUserWithBackend = async function(user, extraPayload){
+   if(!user) return null;
+   const existingToken = localStorage.getItem("ty_user_auth_token") || "";
+   const existingProfile = JSON.parse(localStorage.getItem("ty_user_profile") || "null");
+   if(existingToken && existingProfile && String(existingProfile.uid || existingProfile.userId || "") === String(user.uid || "")){
+     return {authToken:existingToken, user:existingProfile, reused:true};
+   }
+   if(tyBackendAuthSyncPromise && tyBackendAuthSyncUid === String(user.uid || "")) return tyBackendAuthSyncPromise;
+
+   tyBackendAuthSyncUid = String(user.uid || "");
+   tyBackendAuthSyncPromise = (async function(){
+     const idToken = await user.getIdToken(true);
+     const base = String(window.TRAVELYARAA_API_BASE || "https://api.travelyaraa.com").replace(/\/$/,"");
+     const body = Object.assign({
+       provider:(user.providerData && user.providerData[0] && user.providerData[0].providerId) || "firebase",
+       firebaseIdToken:idToken,
+       email:user.email || "",
+       phone:user.phoneNumber || "",
+       name:user.displayName || "",
+       service:"account"
+     }, extraPayload || {});
+     const response = await fetch(base + "/api/bookings/guest-auth/firebase-login", {
+       method:"POST",
+       headers:{"Content-Type":"application/json","Accept":"application/json"},
+       body:JSON.stringify(body),
+       cache:"no-store"
+     });
+     const data = await response.json().catch(function(){ return {}; });
+     if(!response.ok || data.success === false || !data.authToken){
+       const error = new Error(data.message || "TravelYaraa login could not be completed.");
+       error.code = data.code || "LOGIN_BACKEND_FAILED";
+       throw error;
+     }
+     const profile = data.user || {
+       uid:user.uid || "",
+       userId:user.uid || "",
+       email:user.email || "",
+       phone:user.phoneNumber || "",
+       name:user.displayName || ""
+     };
+     localStorage.setItem("ty_user_auth_token", data.authToken);
+     localStorage.setItem("ty_user_profile", JSON.stringify(profile));
+     localStorage.setItem("travelYaraaUser", JSON.stringify(profile));
+     localStorage.setItem("tyUserLoggedIn", "true");
+     return Object.assign({}, data, {user:profile});
+   })();
+
+   try{ return await tyBackendAuthSyncPromise; }
+   finally{ tyBackendAuthSyncPromise = null; }
+ };
+
  onAuthStateChanged(auth, function(user){
    window.tyCurrentFirebaseUser = user || null;
-   if(user && typeof window.tySyncFirebaseUserWithBackend === "function"){
-     window.tySyncFirebaseUserWithBackend(user).catch(function(){});
-   }
    if(typeof window.tyApplyAuthUser === "function") window.tyApplyAuthUser(user || null);
  });
 </script>
@@ -2488,7 +2538,7 @@ html.ty-ui-overlay-open-v69 .slide-page.active {
 
   /* correct front-facing horizontal swap arrow */
   .ty-flight-grid-v5 .ty-swap-v5{position:absolute!important;top:33px!important;left:50%!important;width:28px!important;height:28px!important;min-width:28px!important;min-height:28px!important;border-radius:10px!important;transform:translate(-50%,-50%)!important;background:#fff!important;border:1px solid #dfe7f1!important;box-shadow:0 5px 12px rgba(7,29,73,.11)!important;color:var(--ty-v128-blue)!important;font-size:0!important;z-index:6!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;}
-  .ty-flight-grid-v5 .ty-swap-v5::before{content:"⇄"!important;font-size:15px!important;font-weight:950!important;line-height:1!important;display:block!important;color:var(--ty-v128-blue)!important;transform:none!important;}
+  .ty-flight-grid-v5 .ty-swap-v5::before{content:"â‡„"!important;font-size:15px!important;font-weight:950!important;line-height:1!important;display:block!important;color:var(--ty-v128-blue)!important;transform:none!important;}
 
   #flightReturnBoxV5.ty-return-empty-v5 .ty-box-main-v5,#flightReturnBoxV5.ty-return-empty-v5 #flightReturnTextV5{font-size:15px!important;color:#0f766e!important;font-weight:950!important;}
   #flightReturnBoxV5.ty-return-empty-v5 #flightReturnLabelV5{color:var(--ty-v128-blue)!important;font-size:12px!important;}
@@ -2720,7 +2770,7 @@ html.ty-ui-overlay-open-v69 .slide-page.active {
     justify-content:center!important;
     overflow:hidden!important;
   }
-  body #search-area .ty-flight-grid-v5 .ty-swap-v5::before{content:"⇄"!important;font-size:13px!important;font-weight:950!important;line-height:1!important;color:var(--ty-v132-blue)!important;transform:none!important;}
+  body #search-area .ty-flight-grid-v5 .ty-swap-v5::before{content:"â‡„"!important;font-size:13px!important;font-weight:950!important;line-height:1!important;color:var(--ty-v132-blue)!important;transform:none!important;}
 
   body #search-area .ty-mobile-fare-type-v128{display:block!important;margin:10px 0 8px!important;overflow:hidden!important;}
   body #search-area .ty-mobile-fare-title-v128{font-size:13px!important;font-weight:950!important;color:rgba(7,29,73,.62)!important;margin:0 0 7px!important;}
@@ -2834,7 +2884,7 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
   body #search-area #flightFromCodeV5,body #search-area #flightToCodeV5{order:1!important;display:inline-block!important;margin:0!important;padding:0!important;font-size:24px!important;line-height:1!important;font-weight:950!important;color:#000!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:62px!important}
   body #search-area #flightFromCityV5,body #search-area #flightToCityV5{order:2!important;display:inline-block!important;margin:0!important;padding:0!important;font-size:13px!important;line-height:1!important;font-weight:800!important;color:#5b6470!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;min-width:0!important;max-width:calc(100% - 68px)!important}
   body #search-area form[data-v5-panel="flight"] #flightNormalV5 .ty-flight-grid-v5 .ty-swap-v5{top:32px!important;left:50%!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;border-radius:9px!important;border:1px solid rgba(0,98,227,.22)!important;background:#fff!important;box-shadow:0 4px 10px rgba(7,29,73,.10)!important;z-index:6!important;transform:translate(-50%,-50%)!important;font-size:0!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;padding:0!important}
-  body #search-area form[data-v5-panel="flight"] #flightNormalV5 .ty-flight-grid-v5 .ty-swap-v5::before{content:"⇄"!important;font-size:13px!important;line-height:1!important;font-weight:950!important;color:#0062E3!important;transform:none!important}
+  body #search-area form[data-v5-panel="flight"] #flightNormalV5 .ty-flight-grid-v5 .ty-swap-v5::before{content:"â‡„"!important;font-size:13px!important;line-height:1!important;font-weight:950!important;color:#0062E3!important;transform:none!important}
   body #search-area .ty-multi-row-v5{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}
   body #search-area .ty-multi-box-v5{display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;min-width:0!important}
   body #search-area .ty-multi-box-v5:first-child .ty-multi-main-v5::before,body #search-area .ty-multi-box-v5:nth-child(2) .ty-multi-main-v5::before{content:"\f072"!important;font-family:"Font Awesome 6 Free"!important;font-weight:900!important;display:inline-block!important;color:#8a929b!important;font-size:12px!important;line-height:1!important;margin-right:4px!important;vertical-align:baseline!important}
@@ -2860,11 +2910,11 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
     <div class="ty-offer-marquee" aria-label="TravelYaraa offers">
       <div class="ty-offer-track">
         <span class="offer-blue">TY0FEES - Zero TravelYaraa convenience fee on flights</span>
-        <span class="offer-green">🏨 TYHOTELWELCOME - Save on your first hotel booking</span>
-        <span class="offer-red">🚕 TYCABWELCOME - Cab welcome offer available</span>
-        <span class="offer-orange">🔐 Secure booking with verified payment</span>
+        <span class="offer-green">ðŸ¨ TYHOTELWELCOME - Save on your first hotel booking</span>
+        <span class="offer-red">ðŸš• TYCABWELCOME - Cab welcome offer available</span>
+        <span class="offer-orange">ðŸ” Secure booking with verified payment</span>
         <span class="offer-blue">TY0FEES - Zero TravelYaraa convenience fee on flights</span>
-        <span class="offer-green">🏨 TYHOTELWELCOME - Save on your first hotel booking</span>
+        <span class="offer-green">ðŸ¨ TYHOTELWELCOME - Save on your first hotel booking</span>
       </div>
     </div>
 
@@ -2990,7 +3040,7 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
             <span class="ty-box-sub-v5" id="flightToAirportV5">Indira Gandhi International Airport</span>
           </button>
 
-          <button class="ty-swap-v5" type="button" onclick="swapFlightCitiesV5()">⇄</button>
+          <button class="ty-swap-v5" type="button" onclick="swapFlightCitiesV5()">â‡„</button>
 
           <button class="ty-box-v5" type="button" onclick="openCalendarV5('flightDepart')">
             <span class="ty-box-label-v5">Departure Date</span>
@@ -3406,8 +3456,8 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
     lang: [
       { value:"en", label:"English" },
       { value:"hi", label:"Hindi" },
-      { value:"ur", label:"اردو" },
-      { value:"ja", label:"日本語" }
+      { value:"ur", label:"Ø§Ø±Ø¯Ùˆ" },
+      { value:"ja", label:"æ—¥æœ¬èªž" }
     ],
     country: [
       "India","Japan","United States","United Kingdom","United Arab Emirates","Saudi Arabia","Singapore","Thailand","Malaysia","Indonesia",
@@ -3493,76 +3543,76 @@ support_title:"TravelYaraa Support",
       mobile_number:"Mobile Number"
     },
     ur: {
-      menu_subtitle:"اپنا اکاؤنٹ اور پسند سیٹ کریں",
-      login_signup:"لاگ اِن / سائن اَپ",
-      login_signup_sub:"اپنا TravelYaraa اکاؤنٹ کھولیں",
-      language:"زبان",
-      country:"ملک",
-      currency:"کرنسی",
-      support_help:"مدد اور سپورٹ",
-      support_help_sub:"سپورٹ ٹیم سے رابطہ کریں",
-      logout:"لاگ آؤٹ",
-      logout_sub:"اس ڈیوائس سے سائن آؤٹ کریں",
-      login_signup_title:"TravelYaraa میں لاگ اِن / سائن اَپ",
-      login_subtitle:"موبائل نمبر سے لاگ اِن کریں یا Google سے جاری رکھیں۔",
-      continue:"جاری رکھیں",
-      enter_otp:"OTP درج کریں",
-      otp_sent:"OTP آپ کے موبائل نمبر پر بھیج دیا گیا",
-      verify_login:"تصدیق اور لاگ اِن",
-      or_login_signup:"یا اس سے لاگ اِن / سائن اَپ کریں",
-      terms_text:"جاری رکھتے ہوئے، آپ TravelYaraa کی Terms & Conditions, Privacy Policy, Refund Policy اور Cancellation Policy سے اتفاق کرتے ہیں۔",
-      select_preferred:"اپنا پسندیدہ آپشن منتخب کریں اور محفوظ کریں۔",
-      save:"محفوظ کریں",
-            profile:"پروفائل",
-      profile_sub:"پروفائل دیکھیں اور ایڈٹ کریں",
-      profile_title:"پروفائل ایڈٹ کریں",
-      personal_details:"ذاتی تفصیلات",
-      first_name:"پہلا نام",
-      last_name:"آخری نام",
-      date_of_birth:"تاریخ پیدائش",
-      marital_status:"ازدواجی حیثیت",
-      gmail_email:"جی میل / ای میل",
-      save_profile:"پروفائل محفوظ کریں",
-support_title:"TravelYaraa سپورٹ",
-      support_subtitle:"بکنگ مدد کے لیے ہماری سپورٹ ٹیم سے رابطہ کریں۔",
-      email_support:"ای میل سپورٹ",
-      mobile_number:"موبائل نمبر"
+      menu_subtitle:"Ø§Ù¾Ù†Ø§ Ø§Ú©Ø§Ø¤Ù†Ù¹ Ø§ÙˆØ± Ù¾Ø³Ù†Ø¯ Ø³ÛŒÙ¹ Ú©Ø±ÛŒÚº",
+      login_signup:"Ù„Ø§Ú¯ Ø§ÙÙ† / Ø³Ø§Ø¦Ù† Ø§ÙŽÙ¾",
+      login_signup_sub:"Ø§Ù¾Ù†Ø§ TravelYaraa Ø§Ú©Ø§Ø¤Ù†Ù¹ Ú©Ú¾ÙˆÙ„ÛŒÚº",
+      language:"Ø²Ø¨Ø§Ù†",
+      country:"Ù…Ù„Ú©",
+      currency:"Ú©Ø±Ù†Ø³ÛŒ",
+      support_help:"Ù…Ø¯Ø¯ Ø§ÙˆØ± Ø³Ù¾ÙˆØ±Ù¹",
+      support_help_sub:"Ø³Ù¾ÙˆØ±Ù¹ Ù¹ÛŒÙ… Ø³Û’ Ø±Ø§Ø¨Ø·Û Ú©Ø±ÛŒÚº",
+      logout:"Ù„Ø§Ú¯ Ø¢Ø¤Ù¹",
+      logout_sub:"Ø§Ø³ ÚˆÛŒÙˆØ§Ø¦Ø³ Ø³Û’ Ø³Ø§Ø¦Ù† Ø¢Ø¤Ù¹ Ú©Ø±ÛŒÚº",
+      login_signup_title:"TravelYaraa Ù…ÛŒÚº Ù„Ø§Ú¯ Ø§ÙÙ† / Ø³Ø§Ø¦Ù† Ø§ÙŽÙ¾",
+      login_subtitle:"Ù…ÙˆØ¨Ø§Ø¦Ù„ Ù†Ù…Ø¨Ø± Ø³Û’ Ù„Ø§Ú¯ Ø§ÙÙ† Ú©Ø±ÛŒÚº ÛŒØ§ Google Ø³Û’ Ø¬Ø§Ø±ÛŒ Ø±Ú©Ú¾ÛŒÚºÛ”",
+      continue:"Ø¬Ø§Ø±ÛŒ Ø±Ú©Ú¾ÛŒÚº",
+      enter_otp:"OTP Ø¯Ø±Ø¬ Ú©Ø±ÛŒÚº",
+      otp_sent:"OTP Ø¢Ù¾ Ú©Û’ Ù…ÙˆØ¨Ø§Ø¦Ù„ Ù†Ù…Ø¨Ø± Ù¾Ø± Ø¨Ú¾ÛŒØ¬ Ø¯ÛŒØ§ Ú¯ÛŒØ§",
+      verify_login:"ØªØµØ¯ÛŒÙ‚ Ø§ÙˆØ± Ù„Ø§Ú¯ Ø§ÙÙ†",
+      or_login_signup:"ÛŒØ§ Ø§Ø³ Ø³Û’ Ù„Ø§Ú¯ Ø§ÙÙ† / Ø³Ø§Ø¦Ù† Ø§ÙŽÙ¾ Ú©Ø±ÛŒÚº",
+      terms_text:"Ø¬Ø§Ø±ÛŒ Ø±Ú©Ú¾ØªÛ’ ÛÙˆØ¦Û’ØŒ Ø¢Ù¾ TravelYaraa Ú©ÛŒ Terms & Conditions, Privacy Policy, Refund Policy Ø§ÙˆØ± Cancellation Policy Ø³Û’ Ø§ØªÙØ§Ù‚ Ú©Ø±ØªÛ’ ÛÛŒÚºÛ”",
+      select_preferred:"Ø§Ù¾Ù†Ø§ Ù¾Ø³Ù†Ø¯ÛŒØ¯Û Ø¢Ù¾Ø´Ù† Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚº Ø§ÙˆØ± Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚºÛ”",
+      save:"Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚº",
+            profile:"Ù¾Ø±ÙˆÙØ§Ø¦Ù„",
+      profile_sub:"Ù¾Ø±ÙˆÙØ§Ø¦Ù„ Ø¯ÛŒÚ©Ú¾ÛŒÚº Ø§ÙˆØ± Ø§ÛŒÚˆÙ¹ Ú©Ø±ÛŒÚº",
+      profile_title:"Ù¾Ø±ÙˆÙØ§Ø¦Ù„ Ø§ÛŒÚˆÙ¹ Ú©Ø±ÛŒÚº",
+      personal_details:"Ø°Ø§ØªÛŒ ØªÙØµÛŒÙ„Ø§Øª",
+      first_name:"Ù¾ÛÙ„Ø§ Ù†Ø§Ù…",
+      last_name:"Ø¢Ø®Ø±ÛŒ Ù†Ø§Ù…",
+      date_of_birth:"ØªØ§Ø±ÛŒØ® Ù¾ÛŒØ¯Ø§Ø¦Ø´",
+      marital_status:"Ø§Ø²Ø¯ÙˆØ§Ø¬ÛŒ Ø­ÛŒØ«ÛŒØª",
+      gmail_email:"Ø¬ÛŒ Ù…ÛŒÙ„ / Ø§ÛŒ Ù…ÛŒÙ„",
+      save_profile:"Ù¾Ø±ÙˆÙØ§Ø¦Ù„ Ù…Ø­ÙÙˆØ¸ Ú©Ø±ÛŒÚº",
+support_title:"TravelYaraa Ø³Ù¾ÙˆØ±Ù¹",
+      support_subtitle:"Ø¨Ú©Ù†Ú¯ Ù…Ø¯Ø¯ Ú©Û’ Ù„ÛŒÛ’ ÛÙ…Ø§Ø±ÛŒ Ø³Ù¾ÙˆØ±Ù¹ Ù¹ÛŒÙ… Ø³Û’ Ø±Ø§Ø¨Ø·Û Ú©Ø±ÛŒÚºÛ”",
+      email_support:"Ø§ÛŒ Ù…ÛŒÙ„ Ø³Ù¾ÙˆØ±Ù¹",
+      mobile_number:"Ù…ÙˆØ¨Ø§Ø¦Ù„ Ù†Ù…Ø¨Ø±"
     },
     ja: {
-      menu_subtitle:"アカウントと設定を管理",
-      login_signup:"ログイン / 登録",
-      login_signup_sub:"TravelYaraaアカウントにアクセス",
-      language:"言語",
-      country:"国",
-      currency:"通貨",
-      support_help:"ヘルプとサポート",
-      support_help_sub:"サポートチームに連絡",
-      logout:"ログアウト",
-      logout_sub:"この端末からサインアウト",
-      login_signup_title:"TravelYaraaにログイン / 登録",
-      login_subtitle:"携帯番号でログイン、またはGoogleで続行。",
-      continue:"続ける",
-      enter_otp:"OTPを入力",
-      otp_sent:"OTPを携帯番号に送信しました",
-      verify_login:"確認してログイン",
-      or_login_signup:"またはログイン / 登録",
-      terms_text:"続行すると、TravelYaraaの利用規約、プライバシーポリシー、返金ポリシー、キャンセルポリシーに同意したことになります。",
-      select_preferred:"希望するオプションを選択して保存してください。",
-      save:"保存",
-            profile:"プロフィール",
-      profile_sub:"プロフィールを表示・編集",
-      profile_title:"プロフィール編集",
-      personal_details:"個人情報",
-      first_name:"名",
-      last_name:"姓",
-      date_of_birth:"生年月日",
-      marital_status:"婚姻状況",
-      gmail_email:"Gmail / メール",
-      save_profile:"プロフィールを保存",
-support_title:"TravelYaraaサポート",
-      support_subtitle:"予約サポートについてお問い合わせください。",
-      email_support:"メールサポート",
-      mobile_number:"携帯番号"
+      menu_subtitle:"ã‚¢ã‚«ã‚¦ãƒ³ãƒˆã¨è¨­å®šã‚’ç®¡ç†",
+      login_signup:"ãƒ­ã‚°ã‚¤ãƒ³ / ç™»éŒ²",
+      login_signup_sub:"TravelYaraaã‚¢ã‚«ã‚¦ãƒ³ãƒˆã«ã‚¢ã‚¯ã‚»ã‚¹",
+      language:"è¨€èªž",
+      country:"å›½",
+      currency:"é€šè²¨",
+      support_help:"ãƒ˜ãƒ«ãƒ—ã¨ã‚µãƒãƒ¼ãƒˆ",
+      support_help_sub:"ã‚µãƒãƒ¼ãƒˆãƒãƒ¼ãƒ ã«é€£çµ¡",
+      logout:"ãƒ­ã‚°ã‚¢ã‚¦ãƒˆ",
+      logout_sub:"ã“ã®ç«¯æœ«ã‹ã‚‰ã‚µã‚¤ãƒ³ã‚¢ã‚¦ãƒˆ",
+      login_signup_title:"TravelYaraaã«ãƒ­ã‚°ã‚¤ãƒ³ / ç™»éŒ²",
+      login_subtitle:"æºå¸¯ç•ªå·ã§ãƒ­ã‚°ã‚¤ãƒ³ã€ã¾ãŸã¯Googleã§ç¶šè¡Œã€‚",
+      continue:"ç¶šã‘ã‚‹",
+      enter_otp:"OTPã‚’å…¥åŠ›",
+      otp_sent:"OTPã‚’æºå¸¯ç•ªå·ã«é€ä¿¡ã—ã¾ã—ãŸ",
+      verify_login:"ç¢ºèªã—ã¦ãƒ­ã‚°ã‚¤ãƒ³",
+      or_login_signup:"ã¾ãŸã¯ãƒ­ã‚°ã‚¤ãƒ³ / ç™»éŒ²",
+      terms_text:"ç¶šè¡Œã™ã‚‹ã¨ã€TravelYaraaã®åˆ©ç”¨è¦ç´„ã€ãƒ—ãƒ©ã‚¤ãƒã‚·ãƒ¼ãƒãƒªã‚·ãƒ¼ã€è¿”é‡‘ãƒãƒªã‚·ãƒ¼ã€ã‚­ãƒ£ãƒ³ã‚»ãƒ«ãƒãƒªã‚·ãƒ¼ã«åŒæ„ã—ãŸã“ã¨ã«ãªã‚Šã¾ã™ã€‚",
+      select_preferred:"å¸Œæœ›ã™ã‚‹ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã‚’é¸æŠžã—ã¦ä¿å­˜ã—ã¦ãã ã•ã„ã€‚",
+      save:"ä¿å­˜",
+            profile:"ãƒ—ãƒ­ãƒ•ã‚£ãƒ¼ãƒ«",
+      profile_sub:"ãƒ—ãƒ­ãƒ•ã‚£ãƒ¼ãƒ«ã‚’è¡¨ç¤ºãƒ»ç·¨é›†",
+      profile_title:"ãƒ—ãƒ­ãƒ•ã‚£ãƒ¼ãƒ«ç·¨é›†",
+      personal_details:"å€‹äººæƒ…å ±",
+      first_name:"å",
+      last_name:"å§“",
+      date_of_birth:"ç”Ÿå¹´æœˆæ—¥",
+      marital_status:"å©šå§»çŠ¶æ³",
+      gmail_email:"Gmail / ãƒ¡ãƒ¼ãƒ«",
+      save_profile:"ãƒ—ãƒ­ãƒ•ã‚£ãƒ¼ãƒ«ã‚’ä¿å­˜",
+support_title:"TravelYaraaã‚µãƒãƒ¼ãƒˆ",
+      support_subtitle:"äºˆç´„ã‚µãƒãƒ¼ãƒˆã«ã¤ã„ã¦ãŠå•ã„åˆã‚ã›ãã ã•ã„ã€‚",
+      email_support:"ãƒ¡ãƒ¼ãƒ«ã‚µãƒãƒ¼ãƒˆ",
+      mobile_number:"æºå¸¯ç•ªå·"
     }
   };
 
@@ -3721,7 +3771,6 @@ support_title:"TravelYaraaサポート",
           phone:user.phoneNumber || "",
           name:user.displayName || ""
         }));
-        if(typeof window.tyAuthSession !== "undefined") window.tyAuthSession.broadcastAuth(true);
       }catch(e){}
       if(!tyMyBookingLoginQueryOpen()){
         closeLogin();
@@ -3729,11 +3778,7 @@ support_title:"TravelYaraaサポート",
       }
     }else{
       try{
-        if(typeof window.tyAuthSession !== "undefined"){
-          window.tyAuthSession.clearSession();
-        }else{
-          ["tyUserLoggedIn","travelYaraaUser","ty_user_profile","ty_user_auth_token","authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
-        }
+        ["tyUserLoggedIn","travelYaraaUser","ty_user_profile","ty_user_auth_token","authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
       }catch(e){}
     }
   };
@@ -3851,12 +3896,7 @@ support_title:"TravelYaraaサポート",
   document.addEventListener("DOMContentLoaded", function(){
     initPreferences();
     handleLoginIdentifierInput();
-    if(window.tyCurrentFirebaseUser) return;
-    try{
-      if(window.tyAuthSession && window.tyAuthSession.isLoggedIn()) return;
-      if(localStorage.getItem("ty_user_auth_token") || localStorage.getItem("tyUserLoggedIn") === "true") return;
-    }catch(e){}
-    tyApplyAuthUser(null);
+    if(!window.tyCurrentFirebaseUser) tyApplyAuthUser(null);
   });
 })();
 </script>
@@ -5795,9 +5835,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     if(wantsLogin(params)){
       try{
         sessionStorage.setItem(FLOW_KEY, "1");
-        if(sessionStorage.getItem(ACTION_KEY) !== "1"){
-          sessionStorage.removeItem(ACTION_KEY);
-        }
+        sessionStorage.removeItem(ACTION_KEY);
       }catch(e){}
     }
   }
@@ -5855,18 +5893,11 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     persistQuickProfile(user);
     var redirect = "";
     try{ redirect = safeRedirectPath(localStorage.getItem(REDIRECT_KEY) || ""); }catch(e){}
-    var go = function(){
-      clearLoginFlow();
-      try{ localStorage.removeItem(REDIRECT_KEY); }catch(e){}
-      if(!redirect) return;
-      if(location.pathname !== redirect){
-        location.replace(redirect);
-      }
-    };
-    if(typeof window.tySyncFirebaseUserWithBackend === "function"){
-      window.tySyncFirebaseUserWithBackend(user).finally(go);
-    }else{
-      go();
+    clearLoginFlow();
+    try{ localStorage.removeItem(REDIRECT_KEY); }catch(e){}
+    if(!redirect) return;
+    if(location.pathname !== redirect){
+      location.replace(redirect);
     }
   }
 
