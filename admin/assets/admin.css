@@ -1,0 +1,286 @@
+:root{--navy:#071d49;--blue:#0062e3;--orange:#eb814b;--bg:#f5f8fc;--card:#fff;--line:#e4ebf5;--text:#101828;--muted:#667085;--green:#067647;--red:#b42318;--amber:#b54708;--shadow:0 18px 44px rgba(7,29,73,.09)}*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}button,input,select,textarea{font:inherit}button{cursor:pointer}.hide{display:none!important}.ty-auth-page{min-height:100vh;background:radial-gradient(circle at 12% 8%,rgba(96,165,250,.42),transparent 32%),linear-gradient(135deg,#071d49 0,#0d3578 54%,#0062e3 100%)}.ty-auth-shell{min-height:100vh;display:grid;grid-template-columns:minmax(420px,.9fr) minmax(420px,1.1fr)}.ty-auth-visual{padding:42px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}.ty-auth-brand img,.ty-mobile-logo img{max-width:170px;max-height:76px;object-fit:contain;background:rgba(255,255,255,.94);border-radius:20px;padding:8px}.ty-auth-copy h2{font-size:44px;line-height:1.05;margin:0 0 14px;font-weight:950;letter-spacing:-1.4px}.ty-auth-copy p{max-width:530px;line-height:1.65;color:#dceaff;font-weight:750}.ty-trust-row{display:flex;flex-wrap:wrap;gap:10px}.ty-trust-pill{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:10px 13px;font-weight:900}.ty-auth-form-zone{display:grid;place-items:center;padding:28px}.ty-login-card{width:min(475px,100%);background:#fff;border:1px solid rgba(255,255,255,.7);border-radius:30px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.22)}.ty-mobile-logo{display:none;text-align:center;margin-bottom:12px}.ty-login-head h1{margin:0;color:var(--navy);font-size:31px;font-weight:950;letter-spacing:-.6px}.ty-login-head p{margin:5px 0 0;color:var(--muted);font-weight:800}.ty-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#eef4fb;border-radius:16px;padding:6px;margin:20px 0}.ty-tabs button{border:0;border-radius:12px;background:transparent;color:var(--navy);min-height:44px;font-weight:950}.ty-tabs button.active{background:#fff;color:var(--blue);box-shadow:0 6px 18px rgba(7,29,73,.07)}.ty-field{margin:13px 0}.ty-field label{display:block;font-size:12px;font-weight:950;color:var(--navy);margin:0 0 7px}.ty-input-wrap{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:15px;background:#fff;min-height:54px;padding:0 12px}.ty-input-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,98,227,.1)}.ty-input-wrap input{flex:1;min-width:0;border:0;outline:0;font-weight:850;color:var(--navy);background:transparent}.ico{display:grid;place-items:center;color:var(--blue)}.ty-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.ty-eye{border:0;background:transparent;color:var(--muted);display:grid;place-items:center}.ty-helper-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}.ty-check{display:flex;align-items:center;gap:7px;color:var(--muted);font-weight:850}.ty-forgot{border:0;background:transparent;color:var(--blue);font-weight:900}.ty-btn{min-height:46px;border:0;border-radius:14px;background:var(--blue);color:#fff;font-weight:950;padding:0 15px;box-shadow:0 12px 26px rgba(0,98,227,.18)}.ty-btn.full{width:100%;min-height:52px}.ty-btn.ghost,.ty-btn.slim{background:#fff;color:var(--navy);border:1px solid var(--line);box-shadow:none}.ty-btn.orange{background:var(--orange);color:#fff;border:0}.ty-btn.danger{background:var(--red);color:#fff}.ty-btn.warn{background:var(--orange);color:#fff}.ty-msg{min-height:22px;margin-top:12px;color:var(--red);font-weight:850}.ty-msg.ok{color:var(--green)}.ty-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:#111827;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 18px 36px rgba(0,0,0,.22);z-index:99999;max-width:min(92vw,520px);font-weight:850;transition:.2s}.ty-toast.show{opacity:1;transform:translate(-50%,0)}.ty-toast.ok{background:var(--green)}.ty-side-overlay{display:none}.ty-side{position:fixed;left:0;top:0;bottom:0;width:294px;background:#071d49;color:#fff;z-index:50;box-shadow:12px 0 28px rgba(7,29,73,.14)}.ty-side-inner{height:100%;display:flex;flex-direction:column;justify-content:space-between;padding:18px}.ty-side-close{display:none}.ty-side-brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}.ty-side-brand img{width:54px;height:54px;object-fit:contain;background:#fff;border-radius:16px;padding:6px}.ty-side-brand strong{display:block;font-size:18px;font-weight:950}.ty-side-brand span{display:block;color:rgba(255,255,255,.7);font-size:12px;font-weight:800}.ty-admin-profile{padding:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);border-radius:18px;margin-bottom:16px}.ty-admin-profile strong,.ty-admin-profile span{display:block}.ty-admin-profile span{font-size:12px;color:rgba(255,255,255,.72);margin-top:4px;word-break:break-word}.ty-nav{display:grid;gap:6px}.ty-nav a{display:flex;align-items:center;gap:9px;text-decoration:none;color:rgba(255,255,255,.84);padding:12px 13px;border-radius:14px;font-weight:850}.ty-nav a.active,.ty-nav a:hover{background:rgba(255,255,255,.13);color:#fff}.ty-side-bottom{display:grid;gap:8px}.ty-logout{width:100%;min-height:48px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:15px;font-weight:950}.ty-main{margin-left:294px;min-height:100vh}.ty-topbar{min-height:84px;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:18px 28px;position:sticky;top:0;z-index:20}.ty-menu-btn{display:none;border:0;background:var(--navy);color:#fff;border-radius:14px;min-width:46px;min-height:46px;font-size:22px}.ty-title-wrap h1{margin:0;color:var(--navy);font-size:26px;font-weight:950}.ty-title-wrap p{margin:2px 0 0;color:var(--muted);font-weight:750}.ty-page{padding:24px;display:grid;gap:18px;max-width:1480px;margin:0 auto}.ty-card,.ty-panel{background:#fff;border:1px solid var(--line);border-radius:24px;padding:22px;box-shadow:var(--shadow)}.ty-card h2,.ty-panel h3{margin:0 0 14px;color:var(--navy);font-weight:950}.ty-error{border-color:#fecaca;background:#fff7f7}.ty-error h2,.ty-error p{color:var(--red)}.ty-error pre{white-space:pre-wrap;background:#fff;border:1px solid #fecaca;border-radius:14px;padding:12px;color:#7f1d1d}.ty-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.ty-tile{background:#fff;border:1px solid var(--line);border-radius:22px;padding:18px;box-shadow:0 10px 24px rgba(15,23,42,.04)}.ty-tile span{display:block;color:var(--muted);font-weight:850}.ty-tile strong{display:block;margin-top:8px;color:var(--navy);font-size:28px;font-weight:950}.ty-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px}.ty-table{width:100%;border-collapse:collapse;min-width:820px;background:#fff}.ty-table th,.ty-table td{text-align:left;border-bottom:1px solid var(--line);padding:13px 12px;vertical-align:top;font-size:13px}.ty-table th{color:var(--navy);background:#f8fbff;font-weight:950}.ty-table td{color:#344054;font-weight:650}.ty-table small{color:var(--muted);font-weight:750}.pill{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:950;background:#fff7ed;color:#9a3412}.pill.ok{background:#ecfdf3;color:#067647}.pill.off{background:#fef3f2;color:#b42318}.pill.warn{background:#fffaeb;color:#b54708}.empty{padding:22px;border:1px dashed var(--line);border-radius:18px;color:var(--muted);background:#fbfdff;text-align:center;font-weight:850}.safe-list{display:grid;gap:10px}.safe-item{display:flex;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:16px;padding:12px 14px;background:#fbfdff}.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;margin-right:6px}.status-dot.on{background:#16a34a}.ty-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end}.ty-row .ty-field{margin:0}.ty-row input,.ty-row select,.ty-search-row input,.ty-search-row select{min-height:48px;border:1px solid var(--line);border-radius:14px;padding:0 12px;outline:0;background:#fff;color:var(--navy);font-weight:850}.ty-search-row{display:grid;grid-template-columns:1.3fr .8fr .8fr auto;gap:10px;margin-bottom:14px}.ty-actions{display:flex;flex-wrap:wrap;gap:8px}.ty-drawer{position:fixed;inset:0;z-index:100;display:none;background:rgba(7,29,73,.42)}.ty-drawer.show{display:block}.ty-drawer-panel{position:absolute;right:0;top:0;height:100%;width:min(780px,100%);background:#fff;overflow:auto;padding:20px;box-shadow:-20px 0 60px rgba(7,29,73,.18)}.ty-drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;position:sticky;top:0;background:#fff;padding-bottom:12px;border-bottom:1px solid var(--line);z-index:1}.ty-drawer-head h3{margin:0;color:var(--navy)}.ty-close{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;font-weight:900}.ty-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}.ty-kv{border:1px solid var(--line);border-radius:14px;padding:12px;background:#f9fbff}.ty-kv span{display:block;font-size:11px;font-weight:950;color:var(--muted);margin-bottom:4px;text-transform:uppercase}.ty-kv b{color:var(--navy);font-size:13px;word-break:break-word}.ty-section-title{margin:18px 0 10px;color:var(--navy);font-size:15px}.ty-json{white-space:pre-wrap;background:#0b1220;color:#e5e7eb;border-radius:16px;padding:14px;overflow:auto;max-height:360px;font-size:12px}.ty-bottom-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.ty-note{color:var(--muted);font-weight:750;line-height:1.55}@media(max-width:980px){.ty-auth-shell{display:block;min-height:100vh;padding:16px}.ty-auth-visual{display:none}.ty-auth-form-zone{min-height:100vh;padding:8px 0;place-items:start center}.ty-login-card{border-radius:26px;padding:22px 18px;margin:0 auto;box-shadow:0 16px 42px rgba(11,34,101,.12)}.ty-mobile-logo{display:block}.ty-login-head{text-align:center;margin-bottom:18px}.ty-login-head h1{font-size:28px}.ty-tabs button{min-height:48px;font-size:14px}.ty-side{transform:translateX(-105%);transition:.24s;width:min(86vw,320px)}.ty-side.open{transform:translateX(0)}.ty-side-overlay.open{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:49}.ty-side-close{display:grid;place-items:center;position:absolute;right:12px;top:12px;border:0;background:rgba(255,255,255,.12);color:white;width:38px;height:38px;border-radius:12px;font-size:24px}.ty-main{margin-left:0}.ty-menu-btn{display:grid;place-items:center}.ty-topbar{padding:14px 16px;min-height:74px}.ty-title-wrap h1{font-size:20px}.ty-page{padding:16px}.ty-grid{grid-template-columns:repeat(2,1fr);gap:12px}.ty-row,.ty-search-row{grid-template-columns:1fr}.ty-detail-grid{grid-template-columns:1fr}.ty-actions .ty-btn,.ty-bottom-actions .ty-btn{width:100%}}@media(max-width:480px){.ty-auth-shell{padding:10px}.ty-login-card{padding:20px 16px;border-radius:24px}.ty-login-head h1{font-size:25px}.ty-mobile-logo img{max-width:145px;max-height:64px}.ty-helper-row{font-size:13px}.ty-grid{grid-template-columns:1fr}.ty-card,.ty-panel{padding:16px;border-radius:20px}.ty-drawer-panel{padding:16px}.ty-table{min-width:760px}}
+
+
+/* TY ADMIN LOGIN MOBILE FULLSCREEN FIT V2
+   Mobile screenshot fix:
+   - No right-side overflow.
+   - No left-side empty blue gap.
+   - Page/card fits full mobile screen width.
+   - Top/bottom/left/right spacing is controlled equally.
+   - Icons remain clean SVG, no emoji/cartoon.
+   - JS/login IDs untouched.
+*/
+html,
+body{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:hidden!important;
+  box-sizing:border-box;
+}
+
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+}
+
+.ty-admin-login-page .ico,
+.ty-admin-login-page .ty-eye{
+  color:var(--blue);
+}
+
+.ty-admin-login-page .ico svg,
+.ty-admin-login-page .ty-eye svg{
+  width:22px;
+  height:22px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2.05;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.ty-admin-login-page .ty-eye{
+  width:38px;
+  min-width:38px;
+  height:38px;
+  border-radius:12px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+@media(max-width:980px){
+  html,
+  body{
+    margin:0!important;
+    padding:0!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-height:100dvh!important;
+    overflow-x:hidden!important;
+    background:#fff!important;
+  }
+
+  .ty-auth-page.ty-admin-login-page{
+    width:100%!important;
+    max-width:100%!important;
+    min-height:100dvh!important;
+    margin:0!important;
+    padding:0!important;
+    overflow-x:hidden!important;
+    background:#fff!important;
+  }
+
+  .ty-admin-login-page .ty-auth-shell{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:100dvh!important;
+    margin:0!important;
+    padding:0!important;
+    display:block!important;
+    overflow-x:hidden!important;
+    background:#fff!important;
+  }
+
+  .ty-admin-login-page .ty-auth-visual{
+    display:none!important;
+  }
+
+  .ty-admin-login-page .ty-auth-form-zone{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:100dvh!important;
+    margin:0!important;
+    padding:0!important;
+    display:block!important;
+    overflow-x:hidden!important;
+    background:#fff!important;
+  }
+
+  .ty-admin-login-page .ty-login-card{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:100dvh!important;
+    margin:0!important;
+    left:0!important;
+    right:auto!important;
+    top:auto!important;
+    transform:none!important;
+    border-radius:0!important;
+    border:0!important;
+    box-shadow:none!important;
+    padding:calc(18px + env(safe-area-inset-top)) 22px calc(22px + env(safe-area-inset-bottom))!important;
+    overflow-x:hidden!important;
+    background:#fff!important;
+  }
+
+  .ty-admin-login-page .ty-mobile-logo{
+    margin:0 0 14px!important;
+    padding:0!important;
+    width:100%!important;
+    text-align:center!important;
+  }
+
+  .ty-admin-login-page .ty-mobile-logo img,
+  .ty-admin-login-page .ty-auth-brand img{
+    max-width:190px!important;
+    height:auto!important;
+    display:inline-block!important;
+  }
+
+  .ty-admin-login-page .ty-login-head{
+    width:100%!important;
+    margin:0 0 18px!important;
+    padding:0!important;
+    text-align:center!important;
+  }
+
+  .ty-admin-login-page .ty-login-head h1{
+    margin:0!important;
+    line-height:1.08!important;
+    word-break:normal!important;
+  }
+
+  .ty-admin-login-page .ty-login-head p{
+    margin:8px 0 0!important;
+    line-height:1.25!important;
+  }
+
+  .ty-admin-login-page .ty-tabs{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:6px!important;
+    margin:18px 0 20px!important;
+    padding:6px!important;
+    border-radius:18px!important;
+    overflow:hidden!important;
+  }
+
+  .ty-admin-login-page .ty-tabs button{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    padding:0 8px!important;
+    white-space:normal!important;
+    overflow:hidden!important;
+    text-align:center!important;
+    line-height:1.15!important;
+  }
+
+  .ty-admin-login-page form,
+  .ty-admin-login-page .ty-field,
+  .ty-admin-login-page .ty-helper-row,
+  .ty-admin-login-page .ty-btn.full{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+  }
+
+  .ty-admin-login-page .ty-field{
+    margin:14px 0!important;
+  }
+
+  .ty-admin-login-page .ty-field label{
+    display:block!important;
+    margin:0 0 8px!important;
+  }
+
+  .ty-admin-login-page .ty-input-wrap{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:56px!important;
+    padding:0 14px!important;
+    gap:10px!important;
+    overflow:hidden!important;
+  }
+
+  .ty-admin-login-page .ty-input-wrap input{
+    flex:1 1 auto!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+  }
+
+  .ty-admin-login-page .ty-helper-row{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:10px!important;
+    overflow:hidden!important;
+  }
+
+  .ty-admin-login-page .ty-check,
+  .ty-admin-login-page .ty-forgot{
+    min-width:0!important;
+    max-width:100%!important;
+  }
+
+  .ty-admin-login-page .ty-btn.full{
+    margin-top:16px!important;
+    min-height:56px!important;
+  }
+}
+
+@media(max-width:430px){
+  .ty-admin-login-page .ty-login-card{
+    padding-left:18px!important;
+    padding-right:18px!important;
+  }
+}
+
+@media(max-width:375px){
+  .ty-admin-login-page .ty-login-card{
+    padding-left:14px!important;
+    padding-right:14px!important;
+  }
+
+  .ty-admin-login-page .ty-login-head h1{
+    font-size:24px!important;
+  }
+
+  .ty-admin-login-page .ty-tabs button{
+    font-size:13px!important;
+  }
+}
+/* END TY ADMIN LOGIN MOBILE FULLSCREEN FIT */
+
+
+/* TY ADMIN OLD EMOJI ICON PERMANENT CLEAN V1
+   Removes old emoji/cartoon icon rendering permanently.
+   Only SVG line icons inside .ico and .ty-eye should display. */
+.ty-admin-login-page .ico{
+  font-size:0!important;
+  line-height:0!important;
+}
+.ty-admin-login-page .ico svg,
+.ty-admin-login-page .ty-eye svg{
+  width:22px!important;
+  height:22px!important;
+  display:block!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:2.1!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+.ty-admin-login-page .ty-eye{
+  font-size:0!important;
+  line-height:0!important;
+  color:#667085!important;
+}
+.ty-admin-login-page .ty-eye svg{
+  width:24px!important;
+  height:24px!important;
+}
+/* END TY ADMIN OLD EMOJI ICON PERMANENT CLEAN */
+

@@ -1,0 +1,42 @@
+{
+  "product": "TravelYaraa",
+  "apiBase": "https://api.travelyaraa.com",
+  "sourceOfTruth": "TravelYaraa Node.js backend and MySQL",
+  "supplier": "Tripjack",
+  "paymentGateway": "Razorpay",
+  "services": {
+    "flight": {
+      "search": "POST /api/flights/search",
+      "review": "POST /api/flights/review",
+      "fareRules": "POST /api/flights/fare-rules",
+      "seatMap": "POST /api/flights/seat-map"
+    },
+    "hotel": {
+      "cities": "GET /api/hotels/static-cities",
+      "search": "POST /api/hotels/search",
+      "detail": "POST /api/hotels/detail",
+      "review": "POST /api/hotels/review"
+    },
+    "cab": {
+      "search": "POST /api/cabs/search",
+      "availability": "Requires an authorised supplier API before live inventory can be returned"
+    },
+    "booking": {
+      "createOrder": "POST /api/bookings/create-order",
+      "verifyPayment": "POST /api/bookings/verify-payment",
+      "myBookings": "GET /api/bookings/my",
+      "status": "GET /api/bookings/:bookingId/status"
+    }
+  },
+  "travelInsurance": {
+    "placement": "Optional selection inside flight traveller details",
+    "supplierQuote": "Not called until authorised insurance API documentation and credentials are configured",
+    "flightBookingBlockedWhenNotSelected": false
+  },
+  "rules": {
+    "dummyInventory": false,
+    "duplicateBookingLogic": false,
+    "clientSideSupplierSecrets": false,
+    "bookingAndPaymentMutationsThroughBackendOnly": true
+  }
+}
