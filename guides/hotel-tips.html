@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hotel Booking Tips | TravelYaraa.com</title>
+<style>
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{margin:0;background:#f5f8fc;color:#071d49;font-family:Arial,Helvetica,sans-serif}
+.topbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5edf8;z-index:20}.topbar-inner{max-width:1160px;margin:auto;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.back{background:#eff6ff;border:1px solid #bfdbfe;color:#0b63f6;text-decoration:none;border-radius:999px;padding:9px 13px;font-weight:950}.logo-img{height:42px;width:auto}
+.hero{min-height:450px;background:linear-gradient(110deg,rgba(7,29,73,.72),rgba(11,99,246,.27)),url('https://commons.wikimedia.org/wiki/Special:FilePath/Hotel_Room.jpg') center/cover no-repeat;display:flex;align-items:end}.hero-inner{max-width:1160px;margin:auto;width:100%;padding:0 16px 48px;color:#fff}
+.hero h1{font-size:54px;margin:0 0 12px;line-height:1.05;font-weight:950;letter-spacing:-.04em}.hero p{font-size:18px;line-height:1.7;max-width:850px;margin:0;color:#eef6ff}
+.wrap{max-width:1160px;margin:auto;padding:34px 16px 60px}.card{background:#fff;border:1px solid #e5edf8;border-radius:25px;box-shadow:0 14px 36px rgba(15,23,42,.06);overflow:hidden;margin-bottom:22px}.pad{padding:25px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.place{cursor:pointer;transition:.2s}.place:hover{transform:translateY(-3px)}.place img{width:100%;height:285px;object-fit:cover;display:block;background:#dbeafe}.wide img{height:380px}
+h2{font-size:30px;margin:0 0 12px;font-weight:950}h3{font-size:21px;margin:10px 0;font-weight:950}p,li{font-size:16px;line-height:1.86;color:#334155}.cap{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#0b63f6;font-weight:950}.hint{display:inline-block;margin-top:8px;background:#071d49;color:#fff;border-radius:999px;padding:10px 14px;font-size:12px;font-weight:950}
+.tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.tag{background:#eff6ff;color:#0b63f6;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:950}
+@media(max-width:760px){.logo-img{height:34px}.back{font-size:12px;padding:7px 10px}.hero{min-height:330px}.hero h1{font-size:34px}.hero p{font-size:15px}.wrap{padding:20px 12px 42px}.grid{grid-template-columns:1fr;gap:15px}.card{border-radius:18px;margin-bottom:15px}.pad{padding:18px}.place img{height:220px}.wide img{height:250px}h2{font-size:23px}h3{font-size:19px}p,li{font-size:14.5px;line-height:1.75}}
+</style>
+<script>
+function openHotelSearch(city){try{localStorage.setItem('ty_guide_hotel_city',city||'');}catch(e){}location.href='/?service=hotel&city='+encodeURIComponent(city||'');}
+</script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner"><a class="back" href="/">← Back to Home</a><a href="/"><img class="logo-img" src="/travelyaraa-logo-transparent.png" alt="TravelYaraa"></a></div></header>
+<section class="hero"><div class="hero-inner"><h1>Hotel Booking Tips</h1><p>Smart hotel booking advice to avoid hidden charges and choose better stays.</p></div></section>
+<main class="wrap">
+<section class="card"><div class="pad"><p>Hotel booking should be based on location, reviews, room type, cancellation rule, final payable amount and guest policy, not only the lowest price.</p><div class='tags'><span class='tag'>Location First</span><span class='tag'>Check Reviews</span></div></div></section>
+<section class="card wide place" onclick="openHotelSearch('Hotel')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Hotel_Room.jpg" alt="Hotel Booking Tips"><div class="pad"><div class="cap">Photo: Hotel Booking Tips</div><h2>Plan with TravelYaraa</h2><p>Choose the right location, compare hotels carefully and continue to hotel search directly from these guide cards.</p><span class="hint">Search hotels</span></div></section>
+<div class="grid"><article class="card place" onclick="openHotelSearch('Hotel')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Hotel_lobby.jpg" alt="Hotel Lobby" loading="lazy"><div class="pad"><div class="cap">Photo: Hotel Lobby</div><h3>Location First</h3><p>Hotel location matters more than only cheap price because transport cost and time can increase later.</p><span class="hint">Search hotels in Hotel</span></div></article>
+<article class="card place" onclick="openHotelSearch('Hotel')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Hotel_room_2.jpg" alt="Hotel Room" loading="lazy"><div class="pad"><div class="cap">Photo: Hotel Room</div><h3>Room Category</h3><p>Check room size, bed type, extra bed policy, breakfast inclusion and cancellation rule before booking.</p><span class="hint">Search hotels in Hotel</span></div></article>
+<article class="card place" onclick="openHotelSearch('Hotel')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Breakfast_buffet.jpg" alt="Hotel Breakfast" loading="lazy"><div class="pad"><div class="cap">Photo: Hotel Breakfast</div><h3>Breakfast & Meals</h3><p>Breakfast and meal plan should be checked before payment to avoid surprise charges.</p><span class="hint">Search hotels in Hotel</span></div></article>
+<article class="card place" onclick="openHotelSearch('Hotel')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Hotel_lobby.jpg" alt="Hotel Reception" loading="lazy"><div class="pad"><div class="cap">Photo: Hotel Reception</div><h3>Recent Reviews</h3><p>Recent reviews reveal cleanliness, staff behaviour, safety, hidden charges and check-in issues.</p><span class="hint">Search hotels in Hotel</span></div></article></div>
+</main>
+<footer style="background:#071d49;color:#bfdbfe;text-align:center;padding:18px 12px;font-size:13px">© 2026 TravelYaraa.com. All rights reserved.</footer>
+</body></html>

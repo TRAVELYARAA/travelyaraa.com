@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goa Travel Guide | TravelYaraa.com</title>
+<style>
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{margin:0;background:#f5f8fc;color:#071d49;font-family:Arial,Helvetica,sans-serif}
+.topbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5edf8;z-index:20}.topbar-inner{max-width:1160px;margin:auto;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.back{background:#eff6ff;border:1px solid #bfdbfe;color:#0b63f6;text-decoration:none;border-radius:999px;padding:9px 13px;font-weight:950}.logo-img{height:42px;width:auto}
+.hero{min-height:450px;background:linear-gradient(110deg,rgba(7,29,73,.72),rgba(11,99,246,.27)),url('https://commons.wikimedia.org/wiki/Special:FilePath/Palolem_Beach_Goa.jpg') center/cover no-repeat;display:flex;align-items:end}.hero-inner{max-width:1160px;margin:auto;width:100%;padding:0 16px 48px;color:#fff}
+.hero h1{font-size:54px;margin:0 0 12px;line-height:1.05;font-weight:950;letter-spacing:-.04em}.hero p{font-size:18px;line-height:1.7;max-width:850px;margin:0;color:#eef6ff}
+.wrap{max-width:1160px;margin:auto;padding:34px 16px 60px}.card{background:#fff;border:1px solid #e5edf8;border-radius:25px;box-shadow:0 14px 36px rgba(15,23,42,.06);overflow:hidden;margin-bottom:22px}.pad{padding:25px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.place{cursor:pointer;transition:.2s}.place:hover{transform:translateY(-3px)}.place img{width:100%;height:285px;object-fit:cover;display:block;background:#dbeafe}.wide img{height:380px}
+h2{font-size:30px;margin:0 0 12px;font-weight:950}h3{font-size:21px;margin:10px 0;font-weight:950}p,li{font-size:16px;line-height:1.86;color:#334155}.cap{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#0b63f6;font-weight:950}.hint{display:inline-block;margin-top:8px;background:#071d49;color:#fff;border-radius:999px;padding:10px 14px;font-size:12px;font-weight:950}
+.tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.tag{background:#eff6ff;color:#0b63f6;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:950}
+@media(max-width:760px){.logo-img{height:34px}.back{font-size:12px;padding:7px 10px}.hero{min-height:330px}.hero h1{font-size:34px}.hero p{font-size:15px}.wrap{padding:20px 12px 42px}.grid{grid-template-columns:1fr;gap:15px}.card{border-radius:18px;margin-bottom:15px}.pad{padding:18px}.place img{height:220px}.wide img{height:250px}h2{font-size:23px}h3{font-size:19px}p,li{font-size:14.5px;line-height:1.75}}
+</style>
+<script>
+function openHotelSearch(city){try{localStorage.setItem('ty_guide_hotel_city',city||'');}catch(e){}location.href='/?service=hotel&city='+encodeURIComponent(city||'');}
+</script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner"><a class="back" href="/">← Back to Home</a><a href="/"><img class="logo-img" src="/travelyaraa-logo-transparent.png" alt="TravelYaraa"></a></div></header>
+<section class="hero"><div class="hero-inner"><h1>Goa Travel Guide</h1><p>Discover beaches, churches, forts, nightlife, cruises and the best stay areas in Goa.</p></div></section>
+<main class="wrap">
+<section class="card"><div class="pad"><p>Goa offers both lively North Goa and peaceful South Goa. Choose your hotel area based on nightlife, beach comfort, family travel or heritage sightseeing.</p><div class='tags'><span class='tag'>Best Season: Nov-Feb</span><span class='tag'>Ideal Trip: 3-5 Days</span></div></div></section>
+<section class="card wide place" onclick="openHotelSearch('Goa')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Palolem_Beach_Goa.jpg" alt="Goa Travel Guide"><div class="pad"><div class="cap">Photo: Goa Travel Guide</div><h2>Plan with TravelYaraa</h2><p>Choose the right location, compare hotels carefully and continue to hotel search directly from these guide cards.</p><span class="hint">Search hotels</span></div></section>
+<div class="grid"><article class="card place" onclick="openHotelSearch('North Goa')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Baga_Beach_Goa.jpg" alt="Baga Beach, Goa" loading="lazy"><div class="pad"><div class="cap">Photo: Baga Beach, Goa</div><h3>North Goa Beaches</h3><p>North Goa is best for nightlife, shacks, cafes, clubs, markets and active beach holidays.</p><span class="hint">Search hotels in North Goa</span></div></article>
+<article class="card place" onclick="openHotelSearch('South Goa')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Palolem_Beach_Goa.jpg" alt="Palolem Beach, Goa" loading="lazy"><div class="pad"><div class="cap">Photo: Palolem Beach, Goa</div><h3>South Goa Beaches</h3><p>South Goa is peaceful and better for families, honeymoon trips and premium resort stays.</p><span class="hint">Search hotels in South Goa</span></div></article>
+<article class="card place" onclick="openHotelSearch('Old Goa')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Basilica_of_Bom_Jesus%2C_Goa.jpg" alt="Basilica of Bom Jesus" loading="lazy"><div class="pad"><div class="cap">Photo: Basilica of Bom Jesus</div><h3>Old Goa Churches</h3><p>Old Goa is important for heritage, churches, architecture and cultural sightseeing.</p><span class="hint">Search hotels in Old Goa</span></div></article>
+<article class="card place" onclick="openHotelSearch('Aguada')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Fort_Aguada_Goa.jpg" alt="Fort Aguada" loading="lazy"><div class="pad"><div class="cap">Photo: Fort Aguada</div><h3>Goa Forts</h3><p>Goa forts offer sea views, sunset stops and Portuguese-era history near popular beach areas.</p><span class="hint">Search hotels in Aguada</span></div></article>
+<article class="card place" onclick="openHotelSearch('Mandovi River')"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Mandovi_River_Goa.jpg" alt="Mandovi River" loading="lazy"><div class="pad"><div class="cap">Photo: Mandovi River</div><h3>Mandovi River Cruise</h3><p>Mandovi cruises and Panjim evenings are useful for relaxed family sightseeing.</p><span class="hint">Search hotels in Mandovi River</span></div></article></div>
+</main>
+<footer style="background:#071d49;color:#bfdbfe;text-align:center;padding:18px 12px;font-size:13px">© 2026 TravelYaraa.com. All rights reserved.</footer>
+</body></html>

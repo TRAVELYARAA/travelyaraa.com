@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>TravelYaraa Admin Login</title>
+  <link rel="preconnect" href="https://api.travelyaraa.com">
+  <link rel="stylesheet" href="assets/admin.css">
+  <script src="assets/admin-api-config.js"></script>
+</head>
+<body class="ty-auth-page ty-admin-login-page" data-admin-login="true">
+  <main class="ty-auth-shell">
+    <section class="ty-auth-visual" aria-label="TravelYaraa secure admin">
+      <div class="ty-auth-brand"><img src="../travelyaraa-logo-transparent.png" alt="TravelYaraa"></div>
+      <div class="ty-auth-copy"><h2>Manage travel operations with confidence.</h2><p>Secure owner and employee access for bookings, customers, payments, refunds, support, offers and role-based TravelYaraa controls.</p></div>
+      <div class="ty-trust-row"><div class="ty-trust-pill">Secure OTP</div><div class="ty-trust-pill">Role Based</div><div class="ty-trust-pill">Live API Connected</div></div>
+    </section>
+    <section class="ty-auth-form-zone">
+      <div class="ty-login-card">
+        <div class="ty-mobile-logo"><img src="../travelyaraa-logo-transparent.png" alt="TravelYaraa"></div>
+        <div class="ty-login-head"><h1>TravelYaraa Admin</h1><p>Secure owner and employee login</p></div>
+        <div class="ty-tabs" role="tablist" aria-label="Admin mode"><button id="loginTab" class="active" type="button" role="tab">Login</button><button id="setupTab" type="button" role="tab">First Owner Setup</button></div>
+        <form id="loginForm" novalidate>
+          <div class="ty-field"><label for="loginEmail">Email</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span><input id="loginEmail" type="email" placeholder="Enter your email" autocomplete="username" inputmode="email" required></div></div>
+          <div class="ty-field"><label for="loginPassword">Password</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required><button id="loginPasswordToggle" class="ty-eye" type="button" aria-label="Show password"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+          <div id="otpBlock" class="hide"><div class="ty-field"><label for="loginOtp">OTP</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span><input id="loginOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Enter OTP"></div></div><button id="verifyOtpSubmit" class="ty-btn full" type="button">Verify OTP & Open Dashboard</button></div>
+          <div class="ty-helper-row"><label class="ty-check"><input id="rememberMe" type="checkbox"><span>Remember Me</span></label><button id="forgotPassword" class="ty-forgot" type="button">Forgot Password?</button></div>
+          <button id="loginSubmit" class="ty-btn full" type="submit">Send OTP / Login</button><div id="loginMsg" class="ty-msg" aria-live="polite"></div>
+        </form>
+        <form id="setupForm" class="hide" novalidate>
+          <div class="ty-field"><label for="ownerName">Owner Name</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg></span><input id="ownerName" placeholder="Enter owner name" autocomplete="name" required></div></div>
+          <div class="ty-field"><label for="ownerPhone">Phone</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 1.9Z"/></svg></span><input id="ownerPhone" placeholder="Enter phone number" inputmode="tel" autocomplete="tel"></div></div>
+          <div class="ty-field"><label for="ownerEmail">Owner Email</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span><input id="ownerEmail" type="email" placeholder="Enter owner email" autocomplete="username" inputmode="email" required></div></div>
+          <div class="ty-field"><label for="ownerPassword">Create Password</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><input id="ownerPassword" type="password" placeholder="Minimum 10 characters" autocomplete="new-password" minlength="10" required><button id="ownerPasswordToggle" class="ty-eye" type="button" aria-label="Show password"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+          <div class="ty-field"><label for="setupSecret">One-time Setup Secret</label><div class="ty-input-wrap"><span class="ico"><svg class="ty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span><input id="setupSecret" type="password" placeholder="Enter setup secret" required></div></div>
+          <button id="setupSubmit" class="ty-btn full" type="submit">Create Owner Super Admin</button><div id="setupMsg" class="ty-msg" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script src="assets/admin.js"></script>
+</body>
+</html>
