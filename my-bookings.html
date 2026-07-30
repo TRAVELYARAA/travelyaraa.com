@@ -134,14 +134,8 @@
   }
 
   function isDummyBooking(booking){
-    if(!booking||typeof booking!=='object')return true;
-    if(booking.isDummy===true||booking.dummy===true||booking.isTest===true||booking.testBooking===true||booking.sample===true)return true;
-    const marker=text(booking.source||booking.origin||booking.bookingSource||booking.createdBy).toLowerCase();
-    if(/dummy|sample|test|placeholder|mock|demo/.test(marker))return true;
-    const id=text(firstValue(booking.bookingId,booking.id,booking.razorpayOrderId,booking.razorpay_order_id)).toLowerCase();
-    if(!id)return true;
-    if(/^(dummy|test|sample|mock|demo|row-|placeholder)/.test(id))return true;
-    return false;
+    // Keep only empty/invalid objects out of the list. Never hide real/test bookings.
+    return !booking || typeof booking !== 'object';
   }
 
   async function request(path){
@@ -202,7 +196,7 @@
     }catch(error){
       if(error.status!==401)throw error;
       if(firebaseUser){
-        await authSession.syncFirebaseUserWithBackend(firebaseUser).catch(()=>{});
+        await authSession.syncFirebaseUserWithBackend(firebaseUser,{force:true}).catch(()=>{});
         return await request('/api/bookings/my?'+query.toString());
       }
       throw error;
