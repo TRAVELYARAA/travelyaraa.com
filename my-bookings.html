@@ -120,16 +120,17 @@
   function api(path){return API_BASE+(String(path).startsWith('/')?path:'/'+path);}
 
   function isAuthenticated(){
-    return !!(firebaseUser||authSession.isLoggedIn());
+    return !!(firebaseUser||authSession.currentFirebaseUser()||authSession.isLoggedIn());
   }
 
   async function resolveAuthToken(){
-    return authSession.ensureToken({
-      firebaseUser:firebaseUser,
+    const token=await authSession.ensureToken({
+      firebaseUser:firebaseUser||authSession.currentFirebaseUser(),
       firebaseReady:firebaseReady,
       firebaseResolved:firebaseResolved,
       waitMs:1500
     });
+    return text(token);
   }
 
   function isDummyBooking(booking){
@@ -213,8 +214,12 @@
     const content=$('#content');
     content.innerHTML=loading();
     const auth=await resolveAuthToken();
-    if(!auth&&!isAuthenticated()){
+    if(!isAuthenticated()){
       content.innerHTML=loginState();
+      return;
+    }
+    if(!auth){
+      content.innerHTML=emptyState();
       return;
     }
     try{
@@ -223,6 +228,10 @@
       content.innerHTML=rows.length?'<div class="list">'+rows.map(card).join('')+'</div>':emptyState();
     }catch(error){
       if(error.status===401){
+        if(firebaseUser||authSession.currentFirebaseUser()){
+          content.innerHTML=emptyState();
+          return;
+        }
         authSession.clearSession();
         content.innerHTML=loginState();
         return;
@@ -252,12 +261,10 @@
     if(resolveFirebaseReady){resolveFirebaseReady(firebaseUser);resolveFirebaseReady=null;}
     if(firebaseUser){
       authSession.syncFirebaseUserWithBackend(firebaseUser).catch(()=>{}).finally(load);
-    }else if(!authSession.isLoggedIn()){
-      authSession.clearSession();
-      load();
-    }else{
-      load();
+      return;
     }
+    if(!authSession.isLoggedIn()) authSession.clearSession();
+    load();
   };
 
   window.addEventListener(authSession.AUTH_EVENT,load);

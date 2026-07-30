@@ -3853,6 +3853,7 @@ support_title:"TravelYaraaサポート",
     handleLoginIdentifierInput();
     if(window.tyCurrentFirebaseUser) return;
     try{
+      if(window.tyAuthSession && window.tyAuthSession.isLoggedIn()) return;
       if(localStorage.getItem("ty_user_auth_token") || localStorage.getItem("tyUserLoggedIn") === "true") return;
     }catch(e){}
     tyApplyAuthUser(null);

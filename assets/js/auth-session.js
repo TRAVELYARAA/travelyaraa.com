@@ -29,13 +29,21 @@
     }catch(_){ return null; }
   }
 
-  function isLoggedIn(){
-    if(!getToken()) return false;
+  function currentFirebaseUser(){
     try{
-      if(global.localStorage.getItem(LOGIN_FLAG) === 'true') return true;
-      var profile = getProfile();
-      return !!(profile && (profile.uid || profile.userId || profile.email || profile.phone));
-    }catch(_){ return !!getToken(); }
+      return global.tyCurrentFirebaseUser || (global.auth && global.auth.currentUser) || null;
+    }catch(_){ return null; }
+  }
+
+  function isLoggedIn(){
+    if(currentFirebaseUser()) return true;
+    var profile = getProfile();
+    var hasProfile = !!(profile && (profile.uid || profile.userId || profile.email || profile.phone));
+    var hasFlag = false;
+    try{ hasFlag = global.localStorage.getItem(LOGIN_FLAG) === 'true'; }catch(_){}
+    if(getToken() && (hasFlag || hasProfile)) return true;
+    if(hasFlag && hasProfile) return true;
+    return false;
   }
 
   function persistSession(authToken, profile){
@@ -134,10 +142,11 @@
   async function ensureToken(options){
     options = options || {};
     var existing = getToken();
+    var user = options.firebaseUser || currentFirebaseUser();
 
-    if(existing && isLoggedIn()){
-      if(options.firebaseUser){
-        syncFirebaseUserWithBackend(options.firebaseUser).catch(function(){});
+    if(existing && (options.firebaseUser || isLoggedIn())){
+      if(user){
+        syncFirebaseUserWithBackend(user).catch(function(){});
       }
       return existing;
     }
@@ -147,18 +156,21 @@
         options.firebaseReady,
         new Promise(function(resolve){ setTimeout(resolve, options.waitMs || 1500); })
       ]);
+      user = options.firebaseUser || currentFirebaseUser();
+      existing = getToken();
+      if(existing) return existing;
     }
 
-    if(options.firebaseUser){
-      if(syncPromise) return syncPromise;
-      return existing || syncFirebaseUserWithBackend(options.firebaseUser).then(function(result){
-        return result && result.authToken ? result.authToken : '';
-      }).catch(function(){
-        return existing && isLoggedIn() ? existing : '';
-      });
+    if(user){
+      try{
+        var result = await syncFirebaseUserWithBackend(user);
+        return (result && result.authToken) || getToken() || '';
+      }catch(_){
+        return getToken() || '';
+      }
     }
 
-    return existing && isLoggedIn() ? existing : '';
+    return getToken() || '';
   }
 
   global.tyAuthSession = {
@@ -167,6 +179,7 @@
     getToken: getToken,
     getProfile: getProfile,
     isLoggedIn: isLoggedIn,
+    currentFirebaseUser: currentFirebaseUser,
     persistSession: persistSession,
     clearSession: clearSession,
     syncFirebaseUserWithBackend: syncFirebaseUserWithBackend,
