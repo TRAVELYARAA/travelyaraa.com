@@ -107,7 +107,6 @@
   let firebaseUser=null;
   let resolveFirebaseReady;
   const firebaseReady=new Promise(resolve=>{resolveFirebaseReady=resolve;});
-  let firebaseSyncPromise=null;
 
   const $=(s,p=document)=>p.querySelector(s);
   const $$=(s,p=document)=>Array.from(p.querySelectorAll(s));
@@ -130,38 +129,15 @@
     }catch(_){}
   }
   async function syncFirebaseUser(user){
-    if(!user||typeof user.getIdToken!=='function')return '';
-    if(firebaseSyncPromise)return firebaseSyncPromise;
-    firebaseSyncPromise=(async()=>{
-      const idToken=await user.getIdToken(true);
-      const provider=firstValue(user.providerData&&user.providerData[0]&&user.providerData[0].providerId,'firebase');
-      const response=await fetch(api('/api/bookings/guest-auth/firebase-login'),{
-        method:'POST',
-        headers:{'Content-Type':'application/json',Accept:'application/json'},
-        body:JSON.stringify({provider,firebaseIdToken:idToken,email:user.email||'',phone:user.phoneNumber||'',name:user.displayName||'',service:'account'}),
-        cache:'no-store'
-      });
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||data.success===false||!data.authToken){
-        const error=new Error('Your TravelYaraa login session could not be refreshed. Please try again.');
-        error.status=response.status;
-        throw error;
-      }
-      const profile=data.user||{uid:user.uid||'',userId:user.uid||'',email:user.email||'',phone:user.phoneNumber||'',name:user.displayName||''};
-      localStorage.setItem(TOKEN_KEY,data.authToken);
-      localStorage.setItem('ty_user_profile',JSON.stringify(profile));
-      localStorage.setItem('travelYaraaUser',JSON.stringify(profile));
-      localStorage.setItem('tyUserLoggedIn','true');
-      return data.authToken;
-    })();
-    try{return await firebaseSyncPromise;}finally{firebaseSyncPromise=null;}
+    if(!user||typeof window.tySyncFirebaseUserWithBackend!=='function')return '';
+    const result=await window.tySyncFirebaseUserWithBackend(user,{service:'account'});
+    return result&&result.authToken||'';
   }
   async function ensureToken(){
     if(!firebaseResolved){
       await Promise.race([firebaseReady,new Promise(resolve=>setTimeout(resolve,2500))]);
     }
     if(!firebaseUser)return '';
-    if(firebaseSyncPromise)return firebaseSyncPromise;
     const existing=token();
     return existing||syncFirebaseUser(firebaseUser);
   }

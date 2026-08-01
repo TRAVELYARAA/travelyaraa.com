@@ -6,7 +6,6 @@
 (function(){
   "use strict";
 
-  const DEFAULT_TEXT = "Please Wait, We are searching for the flights on this route";
   const LOADER_ID = "tyFlightApiLoader";
 
   function isFlightContext(options){
@@ -31,34 +30,18 @@
 
     el = document.createElement("div");
     el.id = LOADER_ID;
-    el.className = "ty-flight-api-loader";
+    el.className = "ty-results-flight-loader";
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
     el.innerHTML =
-      '<div class="ty-flight-api-loader__box">' +
-        '<div class="ty-flight-api-loader__ring" aria-hidden="true">' +
-          '<span class="ty-flight-api-loader__plane"></span>' +
+      '<div class="ty-results-flight-loader__box">' +
+        '<div class="ty-results-flight-loader__ring" aria-hidden="true">' +
+          '<span class="ty-results-flight-loader__plane"></span>' +
         '</div>' +
-        '<p class="ty-flight-api-loader__text">' + DEFAULT_TEXT + '</p>' +
       '</div>';
 
     document.body.appendChild(el);
     return el;
-  }
-
-  function setText(el, options){
-    const node = el.querySelector(".ty-flight-api-loader__text");
-    if(!node) return;
-    if(options && options.hideText === true){
-      node.textContent = "";
-      node.hidden = true;
-      return;
-    }
-    node.hidden = false;
-    const hasText = options && (Object.prototype.hasOwnProperty.call(options, "text") || Object.prototype.hasOwnProperty.call(options, "message"));
-    const text = hasText ? (options.text || options.message || "") : DEFAULT_TEXT;
-    node.textContent = text;
-    node.hidden = !text;
   }
 
   function show(options){
@@ -66,7 +49,6 @@
     if(!isFlightContext(options)) return false;
 
     const el = ensureLoader();
-    setText(el, options);
     el.classList.add("is-active");
     document.documentElement.classList.add("ty-flight-loader-active");
     document.body.classList.add("ty-flight-loader-active");
@@ -94,8 +76,8 @@
     hide: hide,
     remove: remove,
     ensure: ensureLoader,
-    showFlight: function(text){
-      return show({service:"flight", text:text || DEFAULT_TEXT, force:true});
+    showFlight: function(){
+      return show({service:"flight", force:true});
     }
   };
 })();
