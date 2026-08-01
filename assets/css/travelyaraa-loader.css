@@ -1,0 +1,22 @@
+/* TravelYaraa loaders: one source for flight result loader and passport scan loader. */
+:root{--ty-loader-plane:#22b7ff;--ty-loader-plane-dark:#0b5fd7;--ty-loader-white:#fff;--ty-loader-orbit:clamp(58px,14vw,66px)}
+.ty-results-flight-loader{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;text-align:center;padding:clamp(18px,5vw,24px);pointer-events:auto;background:linear-gradient(135deg,rgba(7,29,73,.34),rgba(0,98,227,.18));-webkit-backdrop-filter:blur(2.5px);backdrop-filter:blur(2.5px)}
+.ty-results-flight-loader.is-active{display:flex}
+.ty-results-flight-loader__box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;width:min(94vw,640px);background:transparent;border:0;box-shadow:none}
+.ty-results-flight-loader__ring{position:relative;width:clamp(196px,52vw,210px);height:clamp(196px,52vw,210px);display:block;background:transparent;border:0;border-radius:0;box-shadow:none;overflow:visible}
+.ty-results-flight-loader__ring::before,.ty-results-flight-loader__ring::after,.ty-results-flight-loader__plane::before{content:none;display:none}
+.ty-results-flight-loader__plane{position:absolute;left:50%;top:50%;width:70px;height:70px;display:block;transform-origin:center center;will-change:transform;animation:tyResultsFlightOrbit 1.45s linear infinite;filter:drop-shadow(0 10px 18px rgba(0,0,0,.24))}
+.ty-results-flight-loader__plane::after{content:"";position:absolute;left:50%;top:50%;width:clamp(54px,14vw,58px);height:clamp(28px,7vw,30px);transform:translate(-50%,-50%);background:linear-gradient(90deg,var(--ty-loader-plane-dark),var(--ty-loader-plane));clip-path:polygon(0 43%,58% 43%,44% 4%,57% 4%,79% 43%,100% 43%,100% 57%,79% 57%,57% 96%,44% 96%,58% 57%,0 57%);filter:drop-shadow(0 8px 18px rgba(7,29,73,.28))}
+.ty-results-flight-loader__text{margin:0;max-width:min(92vw,650px);color:var(--ty-loader-white);font-size:clamp(17px,4vw,22px);font-weight:850;line-height:1.45;letter-spacing:.01em;white-space:normal;overflow:visible;text-overflow:clip;text-shadow:0 5px 18px rgba(0,0,0,.46);background:transparent;border:0;box-shadow:none}
+.ty-passport-scan-loader{position:fixed;inset:0;z-index:2147482990;display:none;align-items:flex-start;justify-content:center;padding:clamp(86px,24vh,190px) 18px 18px;background:rgba(7,29,73,.08);-webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);pointer-events:auto;text-align:center}
+.ty-passport-scan-loader.is-active{display:flex}
+.ty-passport-scan-loader__box{width:min(92vw,380px);border:1px solid rgba(218,229,244,.92);border-radius:clamp(16px,4vw,18px);background:rgba(255,255,255,.88);box-shadow:0 18px 48px rgba(7,29,73,.20);padding:clamp(16px,4vw,18px) 20px;display:grid;gap:12px;justify-items:center}
+.ty-passport-scan-loader__dots{display:flex;gap:9px;align-items:center;justify-content:center;height:24px}
+.ty-passport-scan-loader__dots i{width:10px;height:10px;border-radius:50%;background:#0062e3;display:block;animation:tyPassportScanDot 1s ease-in-out infinite;opacity:.35;transform:translateY(0) scale(.78)}
+.ty-passport-scan-loader__dots i:nth-child(2){animation-delay:.12s}
+.ty-passport-scan-loader__dots i:nth-child(3){animation-delay:.24s}
+.ty-passport-scan-loader__dots i:nth-child(4){animation-delay:.36s}
+.ty-passport-scan-loader__dots i:nth-child(5){animation-delay:.48s}
+.ty-passport-scan-loader__text{margin:0;color:#071d49;font-size:clamp(13px,3.5vw,14px);line-height:1.45;font-weight:900}
+@keyframes tyResultsFlightOrbit{0%{transform:translate(-50%,-50%) rotate(0deg) translateX(var(--ty-loader-orbit)) rotate(90deg)}100%{transform:translate(-50%,-50%) rotate(360deg) translateX(var(--ty-loader-orbit)) rotate(90deg)}}
+@keyframes tyPassportScanDot{0%,100%{opacity:.28;transform:translateY(0) scale(.78)}50%{opacity:1;transform:translateY(-8px) scale(1.08)}}

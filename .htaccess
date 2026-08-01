@@ -1,0 +1,42 @@
+DirectoryIndex index.html
+Options -MultiViews
+
+<IfModule mod_headers.c>
+  # HTML and active booking JavaScript must be revalidated so an old confirmation page
+  # cannot remain active after deployment.
+  <FilesMatch "\.(?:html?)$">
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+  </FilesMatch>
+  <FilesMatch "^(?:flight-results|hotel-results|travelyaraa-loader|modules|offers)\.js$">
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+
+# Force HTTPS.
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Permanently retire old booking/confirmation URLs. The obsolete files are deleted.
+RewriteRule ^review\.html$ /my-bookings.html [R=301,L,NE]
+RewriteRule ^pages/booking(?:/.*)?$ /index.html?service=flight [R=301,L,NE]
+
+# The website and mobile app use the same backend API. 307 preserves request methods.
+RewriteRule ^api(/.*)?$ https://api.travelyaraa.com/api$1 [R=307,L,QSA]
+RewriteRule ^health$ https://api.travelyaraa.com/health [R=307,L,QSA]
+
+# Keep existing files and directories reachable.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Website page fallback only; API requests were handled above.
+RewriteRule ^.*$ /index.html [L]
+</IfModule>
+
+ErrorDocument 404 /index.html
