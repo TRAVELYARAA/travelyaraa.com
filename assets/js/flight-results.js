@@ -40,6 +40,7 @@
     savedTravellers: [],
     savedTravellersLoaded: false,
     savedTravellersLoading: false,
+    savedTravellersAuthError: "",
     selectedSavedTravellerByPassenger: {},
     passportScanByPassenger: {}
   };
@@ -1746,15 +1747,6 @@
     }catch(e){ return false; }
   }
 
-  function tyRemoveExtraResultLoaders(){
-    try{
-      const loaders = Array.from(document.querySelectorAll('#tyResultsFlightApiLoader, .ty-results-flight-loader'));
-      loaders.forEach(function(el, index){
-        if(index > 0 && el) el.remove();
-      });
-    }catch(e){}
-  }
-
   let tyPassportScanBusy = false;
   let tyPassportUploadIntentUntil = 0;
   const TY_PASSPORT_SCAN_LOCK_KEY = 'ty_passport_scan_lock_until';
@@ -1855,72 +1847,13 @@
     }, 250);
   }
 
-  let tyResultsFlightLoaderCssPromise = null;
-  let tyResultsFlightLoaderCssReady = false;
-
-  function injectResultsFlightLoaderCss(){
-    const existing = document.getElementById('ty-results-flight-loader-css') ||
-      document.querySelector('link[rel="stylesheet"][href*="travelyaraa-loader.css"]');
-
-    if(existing){
-      if(existing.tagName === 'LINK' && !existing.sheet){
-        if(!tyResultsFlightLoaderCssPromise){
-          tyResultsFlightLoaderCssPromise = new Promise(function(resolve){
-            existing.addEventListener('load', function(){ tyResultsFlightLoaderCssReady = true; resolve(true); }, { once:true });
-            existing.addEventListener('error', function(){ resolve(false); }, { once:true });
-            setTimeout(function(){ resolve(false); }, 1200);
-          });
-        }
-        return tyResultsFlightLoaderCssPromise;
-      }
-      tyResultsFlightLoaderCssReady = true;
-      return Promise.resolve(true);
-    }
-
-    if(tyResultsFlightLoaderCssPromise) return tyResultsFlightLoaderCssPromise;
-
-    const link = document.createElement('link');
-    link.id = 'ty-results-flight-loader-css';
-    link.rel = 'stylesheet';
-    link.href = window.TY_RESULTS_LOADER_CSS_URL || '/assets/css/travelyaraa-loader.css';
-    tyResultsFlightLoaderCssPromise = new Promise(function(resolve){
-      link.addEventListener('load', function(){ tyResultsFlightLoaderCssReady = true; resolve(true); }, { once:true });
-      link.addEventListener('error', function(){ resolve(false); }, { once:true });
-      setTimeout(function(){ resolve(false); }, 1200);
-    });
-    document.head.appendChild(link);
-    return tyResultsFlightLoaderCssPromise;
-  }
-
-  function renderApiLoader(){
+  function showFlightSearchLoader(){
     if(tyIsBackForwardNavigation()) return;
-    const cssReady = injectResultsFlightLoaderCss();
-    tyRemoveExtraResultLoaders();
     hideBookingLoader();
-    let loader = document.getElementById('tyResultsFlightApiLoader');
-    if(!loader){
-      loader = document.createElement('div');
-      loader.id = 'tyResultsFlightApiLoader';
-      loader.className = 'ty-results-flight-loader';
-      loader.hidden = true;
-      loader.innerHTML = '<div class="ty-results-flight-loader__box"><div class="ty-results-flight-loader__ring" aria-hidden="true"><span class="ty-results-flight-loader__plane"></span></div><p class="ty-results-flight-loader__text">Please Wait, We are searching for the flights on this route</p></div>';
-      document.body.appendChild(loader);
-    }
-
-    const activate = function(){
-      loader.hidden = false;
-      requestAnimationFrame(function(){ loader.classList.add('is-active'); });
-    };
-
-    if(tyResultsFlightLoaderCssReady) activate();
-    else Promise.resolve(cssReady).then(activate).catch(activate);
+    try{ window.TravelYaraaLoader && window.TravelYaraaLoader.show({service:'flight', force:true}); }catch(e){}
   }
-  function hideApiLoader(){
-    const loader = document.getElementById('tyResultsFlightApiLoader');
-    if(loader){
-      loader.classList.remove('is-active');
-      loader.hidden = true;
-    }
+  function hideFlightSearchLoader(){
+    try{ window.TravelYaraaLoader && window.TravelYaraaLoader.hide(); }catch(e){}
   }
 
   function showBookingLoader(){
@@ -3368,12 +3301,19 @@ function normalizeCabin(value){
     return list.map((item, index) => normalizeFlight(item, index, leg)).filter(tyRealFlightCard);
   }
 
-  async function loadFlights(){
-    const cached = readCachedFlightResults();
+  async function loadFlights(forceFresh){
+    const cached = forceFresh ? [] : readCachedFlightResults();
     const showLoader = !tyIsBackForwardNavigation() && !cached.length;
+    state.searchError = '';
     try{
       if(!ROOT.querySelector('.ty-fr-page')) renderShell('', { skipDateFares: true });
-      if(showLoader) renderApiLoader(); else hideApiLoader();
+      if(showLoader){
+        state.rawFlights = [];
+        state.legFlights = {};
+        state.flights = [];
+        renderShell('', { skipDateFares: true });
+        showFlightSearchLoader();
+      }else hideFlightSearchLoader();
       const legs = routeLegs();
       state.legFlights = {};
       if(cached.length){
@@ -3392,7 +3332,7 @@ function normalizeCabin(value){
           state.rawFlights = await fetchLeg(leg);
           state.legFlights[leg.key] = state.rawFlights.slice();
         }else if(state.search.tripType === "roundtrip"){
-          const combined = await postFlightSearch(buildApiPayload()).catch(() => ({}));
+          const combined = await postFlightSearch(buildApiPayload());
           const combinedList = extractArray(combined);
           if(combinedList.length){
             const onwardList = combinedList.map((item,index) => normalizeFlight(item,index,legs[0])).filter(tyRealFlightCard);
@@ -3422,12 +3362,13 @@ function normalizeCabin(value){
       const maxPrice = Math.max(100000, ...state.rawFlights.map(f => Number(f.price || 0)));
       state.filters.maxPrice = maxPrice;
       applyFilters();
-      hideApiLoader();
+      hideFlightSearchLoader();
     }catch(error){
       state.rawFlights = [];
       state.legFlights = {};
+      state.searchError = error && error.message ? error.message : '';
       applyFilters();
-      hideApiLoader();
+      hideFlightSearchLoader();
     }
   }
 
@@ -3616,7 +3557,7 @@ function renderShell(content, opts){
       const displayFlights = (state.flights || []).filter(tyRealFlightCard);
       listHtml = displayFlights.length
         ? displayFlights.map(f => renderFlightCard(f, "onward")).join("")
-        : renderNoFlightsFound();
+        : renderNoFlightsFound(state.searchError);
     }
 
     renderShell(listHtml);
@@ -3868,7 +3809,7 @@ function renderShell(content, opts){
   function bindStaticEvents(){
     ROOT.querySelectorAll("[data-result-back]").forEach(function(btn){
       btn.onclick = function(){
-        hideApiLoader();
+        hideFlightSearchLoader();
         hideBookingLoader();
         try{
           if(window.history && window.history.length > 1){ window.history.back(); return; }
@@ -3999,11 +3940,13 @@ function renderShell(content, opts){
       if(d){
         const picked = normalizeFutureYmd(d);
         state.search.departureDate = picked;
+        state.searchError = '';
         try{
           sessionStorage.setItem("tySearchContext", JSON.stringify(state.search));
           sessionStorage.setItem("ty_last_search_payload", JSON.stringify(Object.assign({}, state.search, {departureDate:picked,date:picked})));
+          sessionStorage.removeItem("ty_live_results_flight");
         }catch(e){}
-        loadFlights();
+        loadFlights(true);
       }
     });
     ROOT.querySelectorAll("[data-chip-sort]").forEach(btn => btn.onclick = () => { state.sort=btn.getAttribute("data-chip-sort") || "priceLow"; applyFilters(); });
@@ -4474,6 +4417,20 @@ function renderShell(content, opts){
     return Boolean(tyGuestAuthToken());
   }
 
+  async function tyEnsureSavedTravellerAuth(){
+    if(tyCanLoadSavedTravellers()) return true;
+    const firebaseUser = window.tyCurrentFirebaseUser || (window.auth && window.auth.currentUser) || null;
+    if(!firebaseUser || typeof window.tySyncFirebaseUserWithBackend !== 'function') return false;
+    try{
+      await window.tySyncFirebaseUserWithBackend(firebaseUser, {service:'flight'});
+      state.savedTravellersAuthError = '';
+      return tyCanLoadSavedTravellers();
+    }catch(error){
+      state.savedTravellersAuthError = (error && error.message) || 'Saved travellers could not be loaded.';
+      return false;
+    }
+  }
+
   function tyActivePassengerIndex(form){
     const active = form && form.querySelector('.ty-pax-panel.active');
     const v = active && active.getAttribute('data-pax-panel');
@@ -4800,6 +4757,10 @@ function renderShell(content, opts){
     }
     box.hidden = false;
     if(!tyCanLoadSavedTravellers(form)){
+      if(state.savedTravellersAuthError){
+        box.innerHTML = '<p class="ty-muted">'+esc(state.savedTravellersAuthError)+'</p>';
+        return;
+      }
       box.innerHTML = '<p class="ty-muted">Login to load your saved travellers.</p>';
       return;
     }
@@ -4829,7 +4790,7 @@ function renderShell(content, opts){
   }
 
   async function tyLoadSavedTravellers(form, force){
-    if(!tyCanLoadSavedTravellers(form)){ tyRenderSavedTravellerList(form); return; }
+    if(!await tyEnsureSavedTravellerAuth()){ tyRenderSavedTravellerList(form); return; }
     if(state.savedTravellersLoaded && !force){ tyRenderSavedTravellerList(form); return; }
     state.savedTravellersLoading = true;
     tyRenderSavedTravellerList(form);
@@ -4861,8 +4822,8 @@ function renderShell(content, opts){
       return;
     }
 
-    if(!tyCanLoadSavedTravellers(form)){
-      tySetSaveTravellerStatus('Login required to save traveller details.', 'off');
+    if(!await tyEnsureSavedTravellerAuth()){
+      tySetSaveTravellerStatus(state.savedTravellersAuthError || 'Login required to save traveller details.', 'off');
       return;
     }
 
@@ -8926,7 +8887,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
 
 
   window.handleSelectFlight = handleSelectFlight;
-  window.addEventListener("pageshow", function(ev){ if(ev.persisted || tyIsBackForwardNavigation()){ hideApiLoader(); hideBookingLoader(); } });
+  window.addEventListener("pageshow", function(ev){ if(ev.persisted || tyIsBackForwardNavigation()){ hideFlightSearchLoader(); hideBookingLoader(); } });
 
   loadLookups().finally(function(){
     const params = new URLSearchParams(location.search);
