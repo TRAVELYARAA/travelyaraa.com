@@ -3277,23 +3277,18 @@ function normalizeCabin(value){
 
   async function searchLegThroughAvailableRoutes(from, to, date){
     const payload = buildSingleLegPayload(from, to, date);
-    const routes = [
-      {url:"/api/flights/search", method:"POST", body:payload}
-    ];
-    for(const r of routes){
-      try{
-        const res = await fetch(API_BASE + r.url, {
-          method:r.method,
-          headers:r.method === "POST" ? {"Content-Type":"application/json"} : undefined,
-          body:r.method === "POST" ? JSON.stringify(r.body) : undefined,
-          cache:"no-store"
-        });
-        const data = await res.json().catch(()=>({}));
-        const list = extractArray(data);
-        if(res.ok && list.length) return list;
-      }catch(e){}
+    const res = await fetch(API_BASE + "/api/flights/search", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+      cache:"no-store"
+    });
+    const data = await res.json().catch(function(){ return {}; });
+    if(!res.ok || data.success === false){
+      const msg = String(data.message || data.code || ("Flight search request failed (" + res.status + ")")).trim();
+      throw new Error(msg || "Flight search request failed.");
     }
-    return [];
+    return extractArray(data);
   }
 
   async function fetchLeg(leg){
@@ -3306,6 +3301,13 @@ function normalizeCabin(value){
     const showLoader = !tyIsBackForwardNavigation() && !cached.length;
     state.searchError = '';
     try{
+      try{
+        const priorErr = sessionStorage.getItem("ty_flight_search_error");
+        if(priorErr){
+          state.searchError = String(priorErr);
+          sessionStorage.removeItem("ty_flight_search_error");
+        }
+      }catch(e){}
       if(!ROOT.querySelector('.ty-fr-page')) renderShell('', { skipDateFares: true });
       if(showLoader){
         state.rawFlights = [];
@@ -3545,7 +3547,7 @@ function renderShell(content, opts){
       const pairs = roundTripPairs();
       listHtml = pairs.length
         ? pairs.map(renderRoundTripPairCard).join("")
-        : renderNoFlightsFound();
+        : renderNoFlightsFound(state.searchError);
     }else if(state.search.tripType === "multicity"){
       routeLegs().forEach(function(leg){
         const list = filteredForLeg(leg.key);
