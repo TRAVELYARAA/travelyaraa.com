@@ -3538,10 +3538,10 @@ function renderShell(content, opts){
 
 
   function renderNoFlightsFound(message){
-    const msg = String(message || "There were no flights found for this date & route combination")
-      .replace(/\b[A-Z]{2,8}_[A-Z0-9]{2,16}\b/g, "")
-      .replace(/\s+/g, " ")
-      .trim() || "There were no flights found for this date & route combination";
+    /* Keep the real supplier/API error in state/logs, but never show Tripjack,
+       HTTP codes, or other technical text in the customer-facing empty state. */
+    void message;
+    const msg = "There were no flights found for this date & route combination";
     return `<section class="ty-empty ty-no-flights"><h2>Oops! No flights found</h2><p>${esc(msg)}</p><button type="button" data-modify-search>Modify Search & Try Again</button></section>`;
   }
 
@@ -5525,6 +5525,10 @@ function renderShell(content, opts){
   }
 
   function removeDesktopContinueButtonsOnMobile(){
+    /* Do not delete the existing Continue buttons from the DOM. Booking CSS
+       already hides desktop Continue controls on mobile and shows the sticky
+       Continue. Removing nodes permanently broke both continue buttons on
+       touch-capable desktops. */
     if(isDesktopView()){
       document.body.classList.remove('ty-mobile-booking-view');
       document.body.classList.add('ty-desktop-booking-view');
@@ -5532,17 +5536,6 @@ function renderShell(content, opts){
     }
     document.body.classList.add('ty-mobile-booking-view');
     document.body.classList.remove('ty-desktop-booking-view');
-    ROOT.querySelectorAll(desktopContinueSelectors()).forEach(function(btn){
-      if(btn.closest('.ty-mobile-sticky') || btn.closest('.ty-mobile-sheet')) return;
-      btn.remove();
-    });
-    ROOT.querySelectorAll('button').forEach(function(btn){
-      if(btn.closest('.ty-mobile-sticky') || btn.closest('.ty-mobile-sheet')) return;
-      const text = String(btn.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
-      if(text === 'continue booking' || text === 'continue payment'){
-        btn.remove();
-      }
-    });
   }
 
 
@@ -5550,18 +5543,6 @@ function renderShell(content, opts){
     const mobile = isMobileView();
     document.body.classList.toggle('ty-mobile-booking-view', mobile);
     document.body.classList.toggle('ty-desktop-booking-view', !mobile);
-
-    if(mobile){
-      ROOT.querySelectorAll('button,input[type="button"],input[type="submit"],a').forEach(function(el){
-        if(el.closest && (el.closest('.ty-mobile-sticky') || el.closest('.ty-mobile-sheet'))) return;
-        const text = String((el.textContent || el.value || '')).replace(/\s+/g,' ').trim().toLowerCase();
-        const isContinue = text === 'continue booking' || text === 'continue payment';
-        const isDesktopSelector = el.matches && el.matches(desktopContinueSelectors());
-        if(isContinue || isDesktopSelector){
-          if(el.parentNode) el.parentNode.removeChild(el);
-        }
-      });
-    }
 
     ROOT.querySelectorAll('.ty-gst-card').forEach(function(card){
       const gst = card.querySelector('#tyGstUse,[name="gstUse"]');
@@ -6780,16 +6761,18 @@ function mobileFareSheets(flights, fare, options){
     localStorage.setItem("ty_selected_flight", JSON.stringify(payload));
     try{ history.pushState({step:"flight-review"},"","/pages/results/flights.html?service=flight&step=review"); }catch(e){}
     const summary = `${esc(state.search.origin)} → ${esc(state.search.destination)} • ${esc(dateText(firstSegment(flights[0]).depDate || state.search.departureDate))} • ${esc(normalizeCabin(state.search.cabinClass).replace(/_/g," "))}`;
-    const mobileReview = isMobileView();
-    const desktopLeftContinueHtml = mobileReview ? '' : '<button type="button" class="ty-payment-btn ty-left-continue ty-desktop-continue" data-desktop-continue="true" id="tyProceedPaymentLeft">Continue Booking</button>';
-    const desktopSideContinueHtml = mobileReview ? '' : '<button type="button" class="ty-payment-btn ty-desktop-continue" data-desktop-continue="true" id="tyProceedPayment">Continue Booking</button>';
+    /* Always keep the original production Continue buttons in markup. Mobile
+       CSS hides them and shows #tyMobileContinue; do not omit them here. */
+    const desktopLeftContinueHtml = '<button type="button" class="ty-payment-btn ty-left-continue ty-desktop-continue" data-desktop-continue="true" id="tyProceedPaymentLeft">Continue Booking</button>';
+    const desktopSideContinueHtml = '<button type="button" class="ty-payment-btn ty-desktop-continue" data-desktop-continue="true" id="tyProceedPayment">Continue Booking</button>';
     const contactOptional = false;
     /* Contact Details always follow the complete traveller list on both
        viewports; they must never sit inside passenger 1's panel. */
     const contactCardHtml = `<article class="ty-contact-card"><div class="ty-section-head"><h2>Contact Details</h2><p>Your ticket & flight details will be shared here</p></div><div class="ty-section-body"><div class="ty-form-grid contact"><label class="ty-form-field"><span>${requiredLabel('Email Address')}</span><input name="email" type="email" required autocomplete="email" placeholder="Enter Email Address"></label><label class="ty-form-field"><span>${requiredLabel('Phone Number')}</span><div class="ty-phone-row"><select name="mobileCountryCode" required aria-label="Country code">${countryCodeOptions()}</select><input name="mobile" type="tel" required inputmode="numeric" autocomplete="tel-national" placeholder="Enter Mobile no."></div><small class="ty-field-note">Use the mobile number linked with this booking.</small></label></div></div></article>`;
-    const reviewTopHtml = mobileReview
-      ? `<button type="button" class="ty-review-back ty-mobile-review-back" data-review-back aria-label="Back">‹</button>`
-      : `<header class="ty-review-top ty-booking-top"><button type="button" class="ty-review-back" data-review-back>‹</button>${travelYaraaLogo()}<div><h1>Flight Review</h1><p>${summary}</p></div></header>`;
+    /* Always restore the original production review header (logo + back +
+       Flight Review + route/date). The mobile-only back button path hid the
+       brand header on misclassified desktop/tablet viewports. */
+    const reviewTopHtml = `<header class="ty-review-top ty-booking-top"><button type="button" class="ty-review-back" data-review-back>‹</button>${travelYaraaLogo()}<div><h1>Flight Review</h1><p>${summary}</p></div></header>`;
     ROOT.innerHTML = `<div class="ty-review-page ty-booking-page">
       ${reviewTopHtml}
       <div class="ty-expire-timer" id="tyBookingTimer">Expires in 10:00</div>
@@ -7250,9 +7233,8 @@ function mobileFareSheets(flights, fare, options){
     saveReviewFormSnapshot(form);
     const travellers=collectTravellers(form);
     const fare=computeFare(flights);
-    const desktopAddOns = isDesktopView();
-    const desktopAddonLeftHtml = desktopAddOns ? '<button type="button" class="ty-payment-btn ty-left-continue ty-desktop-continue" data-desktop-continue="true" id="tyAddonPayLeft">Continue Payment</button>' : "";
-    const desktopAddonSideHtml = desktopAddOns ? '<button type="button" class="ty-payment-btn ty-desktop-continue" data-desktop-continue="true" id="tyAddonPay">Continue Payment</button>' : "";
+    const desktopAddonLeftHtml = '<button type="button" class="ty-payment-btn ty-left-continue ty-desktop-continue" data-desktop-continue="true" id="tyAddonPayLeft">Continue Payment</button>';
+    const desktopAddonSideHtml = '<button type="button" class="ty-payment-btn ty-desktop-continue" data-desktop-continue="true" id="tyAddonPay">Continue Payment</button>';
     sessionStorage.setItem('ty_flight_travellers', JSON.stringify(travellers));
     try{ history.pushState({step:'flight-addons'},'', '/pages/results/flights.html?service=flight&step=addons'); }catch(e){}
     ROOT.innerHTML=`<div class="ty-review-page ty-addon-page"><header class="ty-review-top"><button type="button" class="ty-review-back" data-addon-back>‹</button><div><h1>Add-ons</h1><p>${esc(state.search.origin)} → ${esc(state.search.destination)} • ${esc(dateText(firstSegment(flights[0]).depDate || state.search.departureDate))}</p></div></header><main class="ty-review-shell"><section class="ty-review-left"><article class="ty-review-card ty-flight-review-card"><div class="ty-section-head"><h2>Flight Details</h2></div><div class="ty-section-body">${renderAddOnsFlightDetails(flights)}</div></article>${renderTravellerSummary(travellers)}<article class="ty-review-card ty-addons-card"><div class="ty-section-head"><h2>Add-ons</h2><p>Select available seats, meals, baggage or extra services passenger-wise.</p></div><div class="ty-section-body">${renderAddOnTabs(flights)}</div></article>${desktopAddonLeftHtml}</section><aside class="ty-side">${renderPriceSummaryBox(fare)}${renderOfferBox(fare)}${desktopAddonSideHtml}<p class="ty-pay-msg" id="tyPaymentMsg"></p></aside></main>${mobileFareSheets(flights, fare, {buttonText:"Continue Payment", includeReview:false})}</div>`;
@@ -8802,7 +8784,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       .ty-mobile-sticky,.ty-mobile-sheet{display:none}.ty-pax-tabs{display:flex;flex-wrap:wrap;gap:8px}.ty-pax-tabs button{border:1px solid #dce6f1;background:#fff;color:#071d49;border-radius:12px;padding:9px 12px;font-size:13px;font-weight:950}.ty-pax-tabs button.active{border-color:#0062e3;background:#eef7ff;color:#0062e3}.ty-pax-panel:not(.active){display:none}
       .ty-policy-modal,.ty-promo-modal{position:fixed;inset:0;z-index:10050;background:#f4f7fa;font-family:Inter,Roboto,Arial,sans-serif;color:#111827}.ty-policy-page,.ty-promo-page{height:100%;width:100%;background:#fff;overflow:auto}.ty-policy-page header{position:sticky;top:0;z-index:3;background:#fff;padding:18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5edf7}.ty-policy-page h2,.ty-promo-page h2{margin:0;font-size:22px;line-height:1.2;font-weight:950;color:#111827}.ty-policy-page header button,.ty-promo-close{border:0;background:transparent;font-size:40px;line-height:1;color:#8a8f98}.ty-policy-page nav{position:sticky;top:69px;z-index:2;display:grid;grid-template-columns:1fr 1fr 1fr;background:#fff;border-bottom:10px solid #e5e5e5}.ty-policy-page nav button{border:0;background:#fff;color:#666;font-size:15px;font-weight:900;padding:15px 6px;border-bottom:4px solid transparent}.ty-policy-page nav button.active{color:#111;border-bottom-color:#0062e3}.ty-policy-page main{padding:18px}.ty-policy-pane{display:none}.ty-policy-pane.active{display:block}.ty-policy-route{margin-bottom:22px}.ty-policy-route table{width:100%;border-collapse:collapse;border:1px solid #edf1f6}.ty-policy-route th,.ty-policy-route td{border:1px solid #edf1f6;padding:12px 10px;text-align:left;font-size:14px;line-height:1.35}.ty-policy-text{border:1px solid #edf1f6;border-radius:8px;padding:14px;font-size:14px;line-height:1.45;white-space:pre-wrap}.ty-promo-page{padding:22px 18px}.ty-promo-close{position:absolute;right:18px;top:14px}.ty-promo-input{display:flex;border:1px solid #cfd7e2;border-radius:10px;overflow:hidden;margin:18px 0;background:#fff}.ty-promo-input input{flex:1;min-width:0;border:0;padding:15px 14px;font-size:15px}.ty-promo-input button{border:0;background:#0062e3;color:#fff;font-weight:950;padding:0 20px;min-width:92px;font-size:15px}.ty-promo-list{display:flex;flex-direction:column;gap:12px}.ty-promo-list article{border:1px solid #dce6f1;border-radius:12px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.ty-promo-list article.active{background:#d9fff2;border-color:#97ead0}.ty-promo-list article p{grid-column:1/-1;margin:0;color:#288b78;font-size:13px;line-height:1.35}.ty-promo-list article button{grid-column:1/-1;border:0;border-radius:999px;background:#0062e3;color:#fff;min-height:42px;padding:0 18px;font-size:15px;font-weight:950;width:100%;margin-top:8px}.ty-promo-list article.active button{background:#0f9f6e}.ty-promo-list article button:disabled{opacity:.68}
       @media(max-width:767px){
-        body.travel-page,#travelRoot{margin:0;padding:0;max-width:100vw;overflow-x:hidden}.ty-review-page.ty-booking-page{padding-bottom:118px}.ty-booking-top{display:none}.ty-booking-shell{width:100%;max-width:100%;margin:0;display:block;padding:0}.ty-booking-left{gap:10px}.ty-side{position:static;display:block}.ty-mobile-review-back{position:relative!important;left:auto!important;top:auto!important;z-index:30;width:44px;height:44px;margin:10px 0 8px 14px!important;border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 6px 18px rgba(7,29,73,.12);display:flex;align-items:center;justify-content:center;color:#071d49;font-size:34px;flex:0 0 44px!important}.ty-review-page.ty-booking-page .ty-booking-shell{margin-top:0!important}.ty-review-card,.ty-contact-card,.ty-gst-card{border-radius:0;border-left:0;border-right:0}.ty-section-head,.ty-traveller-head{padding:11px 12px}.ty-section-head h2,.ty-traveller-head h2{font-size:16px}.ty-section-body{padding:12px}.ty-form-grid,.ty-form-grid.two,.ty-form-grid.contact,.ty-form-grid.passenger,.ty-form-grid.passport{display:grid;grid-template-columns:1fr;gap:10px}.ty-phone-row{grid-template-columns:96px minmax(0,1fr)}.ty-policy-open,.ty-promo-card{border-radius:0;margin:0;box-shadow:0 2px 10px rgba(7,29,73,.08)}.ty-price-card,.ty-offer-box{display:none}.ty-mobile-sticky{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:#17202d;color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;align-items:center;padding:13px 20px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(7,29,73,.22)}.ty-mobile-sticky span{display:block;font-size:13px;font-weight:800;color:#e7edf7}.ty-mobile-sticky b{font-size:22px;font-weight:950;color:#fff}.ty-mobile-sticky .ty-total-line{display:flex;align-items:center;gap:6px}.ty-mobile-sticky .ty-info-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;color:#fff;font-weight:950}.ty-mobile-sticky .ty-continue{border:0;border-radius:999px;background:#f56b12;color:#fff;min-height:52px;font-size:16px;font-weight:950}.ty-left-continue,#tyProceedPayment,#tyProceedPaymentLeft,#tyAddonPay,#tyAddonPayLeft{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}.ty-mobile-sheet{position:fixed;inset:0;background:rgba(15,23,42,.56);z-index:1200;align-items:flex-end;justify-content:center;overflow:visible}.ty-mobile-sheet.active{display:flex}.ty-sheet-card{position:relative;width:100%;max-height:58vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:48px 16px calc(22px + env(safe-area-inset-bottom))}.ty-sheet-close{position:absolute;right:14px;top:12px;width:40px;height:40px;border:1px solid #dfe7f1;border-radius:999px;background:#fff;color:#17202d;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 4px 12px rgba(7,29,73,.12)}.ty-sheet-card h2{margin:0 48px 16px 0;color:#071d49}.ty-sheet-pane{display:block}.ty-break-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #e5edf7;font-weight:900}.ty-break-row.total{font-size:18px;color:#0062e3}.ty-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.ty-review-actions button{min-height:50px;border-radius:999px;font-size:15px;font-weight:950}.ty-review-actions .edit{border:1px solid #f56b12;background:#fff;color:#f56b12}.ty-review-actions .confirm{border:0;background:#f56b12;color:#fff}.ty-review-flight{border:1px solid #dfe7f1;border-radius:14px;padding:10px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;margin:10px 0 14px}.ty-policy-page main{padding:16px 14px}.ty-policy-route th,.ty-policy-route td{padding:11px 8px;font-size:13px}.ty-promo-page{padding:22px 14px}}
+        body.travel-page,#travelRoot{margin:0;padding:0;max-width:100vw;overflow-x:hidden}.ty-review-page.ty-booking-page{padding-bottom:118px}.ty-booking-top{display:grid!important;grid-template-columns:42px minmax(72px,110px) minmax(0,1fr)!important;gap:8px!important;align-items:center!important;padding:10px 12px!important;background:#fff!important;border-bottom:1px solid #e5edf7!important}.ty-booking-top .ty-brand-logo img{height:36px!important;max-width:110px!important;width:auto!important;object-fit:contain!important}.ty-booking-top .ty-brand-logo span{display:none!important}.ty-booking-top h1{font-size:18px!important;margin:0!important}.ty-booking-top p{font-size:12px!important;margin:3px 0 0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}.ty-booking-shell{width:100%;max-width:100%;margin:0;display:block;padding:0}.ty-booking-left{gap:10px}.ty-side{position:static;display:block}.ty-mobile-review-back{position:relative!important;left:auto!important;top:auto!important;z-index:30;width:44px;height:44px;margin:10px 0 8px 14px!important;border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 6px 18px rgba(7,29,73,.12);display:flex;align-items:center;justify-content:center;color:#071d49;font-size:34px;flex:0 0 44px!important}.ty-review-page.ty-booking-page .ty-booking-shell{margin-top:0!important}.ty-review-card,.ty-contact-card,.ty-gst-card{border-radius:0;border-left:0;border-right:0}.ty-section-head,.ty-traveller-head{padding:11px 12px}.ty-section-head h2,.ty-traveller-head h2{font-size:16px}.ty-section-body{padding:12px}.ty-form-grid,.ty-form-grid.two,.ty-form-grid.contact,.ty-form-grid.passenger,.ty-form-grid.passport{display:grid;grid-template-columns:1fr;gap:10px}.ty-phone-row{grid-template-columns:96px minmax(0,1fr)}.ty-policy-open,.ty-promo-card{border-radius:0;margin:0;box-shadow:0 2px 10px rgba(7,29,73,.08)}.ty-price-card,.ty-offer-box{display:none}.ty-mobile-sticky{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:#17202d;color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;align-items:center;padding:13px 20px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(7,29,73,.22)}.ty-mobile-sticky span{display:block;font-size:13px;font-weight:800;color:#e7edf7}.ty-mobile-sticky b{font-size:22px;font-weight:950;color:#fff}.ty-mobile-sticky .ty-total-line{display:flex;align-items:center;gap:6px}.ty-mobile-sticky .ty-info-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;color:#fff;font-weight:950}.ty-mobile-sticky .ty-continue{border:0;border-radius:999px;background:#f56b12;color:#fff;min-height:52px;font-size:16px;font-weight:950}.ty-left-continue,#tyProceedPayment,#tyProceedPaymentLeft,#tyAddonPay,#tyAddonPayLeft{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}.ty-mobile-sheet{position:fixed;inset:0;background:rgba(15,23,42,.56);z-index:1200;align-items:flex-end;justify-content:center;overflow:visible}.ty-mobile-sheet.active{display:flex}.ty-sheet-card{position:relative;width:100%;max-height:58vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:48px 16px calc(22px + env(safe-area-inset-bottom))}.ty-sheet-close{position:absolute;right:14px;top:12px;width:40px;height:40px;border:1px solid #dfe7f1;border-radius:999px;background:#fff;color:#17202d;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 4px 12px rgba(7,29,73,.12)}.ty-sheet-card h2{margin:0 48px 16px 0;color:#071d49}.ty-sheet-pane{display:block}.ty-break-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #e5edf7;font-weight:900}.ty-break-row.total{font-size:18px;color:#0062e3}.ty-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.ty-review-actions button{min-height:50px;border-radius:999px;font-size:15px;font-weight:950}.ty-review-actions .edit{border:1px solid #f56b12;background:#fff;color:#f56b12}.ty-review-actions .confirm{border:0;background:#f56b12;color:#fff}.ty-review-flight{border:1px solid #dfe7f1;border-radius:14px;padding:10px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;margin:10px 0 14px}.ty-policy-page main{padding:16px 14px}.ty-policy-route th,.ty-policy-route td{padding:11px 8px;font-size:13px}.ty-promo-page{padding:22px 14px}}
       @media (max-width:1024px), (hover:none), (pointer:coarse){
         .ty-review-page.ty-booking-page .ty-desktop-continue,
         .ty-review-page.ty-booking-page .ty-left-continue,
