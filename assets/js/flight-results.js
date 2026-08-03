@@ -5486,13 +5486,19 @@ function renderShell(content, opts){
   }
 
   function isMobileView(){
+    /* Keep this aligned with booking CSS media queries:
+         @media (max-width:1024px), (hover:none), (pointer:coarse)
+       Touch-capable laptops still report hover:hover + pointer:fine. Treating
+       any touch/UA signal as mobile emptied desktopLeftContinueHtml /
+       desktopSideContinueHtml and then enforceMobileDesktopBookingLayout()
+       permanently deleted the existing Continue Booking / Continue Payment
+       buttons while CSS also hid the mobile sticky bar — so both continue
+       controls disappeared. */
     const width = bookingViewportWidth();
-    const ua = String(navigator.userAgent || navigator.vendor || '').toLowerCase();
-    const mobileUa = /iphone|ipad|ipod|android|mobile|phone|tablet|wv/.test(ua);
-    const coarsePointer = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || false;
-    const hoverNone = (window.matchMedia && window.matchMedia('(hover: none)').matches) || false;
-    const touchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
-    return width <= 1024 || mobileUa || coarsePointer || hoverNone || touchDevice;
+    if(width <= 1024) return true;
+    const hoverNone = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+    const coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    return hoverNone || coarsePointer;
   }
 
   function isDesktopView(){
