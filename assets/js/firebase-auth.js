@@ -1,3 +1,6 @@
+/* TravelYaraa single Firebase authentication source.
+   A Firebase currentUser on its own is NOT a TravelYaraa login.
+   A page may only show logged-in UI once the backend has issued ty_user_auth_token. */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
  import {
    getAuth,
@@ -5,6 +8,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
    browserLocalPersistence,
    GoogleAuthProvider,
    signInWithPopup,
+   signInWithRedirect,
+   getRedirectResult,
    RecaptchaVerifier,
    signInWithPhoneNumber,
    onAuthStateChanged,
@@ -40,12 +45,21 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
  const googleProvider = new GoogleAuthProvider();
  googleProvider.setCustomParameters({ prompt:"select_account" });
 
+ const TOKEN_KEY = "ty_user_auth_token";
+ const PROFILE_KEY = "ty_user_profile";
+ const LEGACY_PROFILE_KEY = "travelYaraaUser";
+ const LOGGED_IN_KEY = "tyUserLoggedIn";
+ const REDIRECT_GUARD_KEY = "ty_google_redirect_pending";
+
  window.firebaseAuthReady = true;
  window.auth = auth;
  window.db = db;
  window.googleProvider = googleProvider;
  window.firebaseFns = {
    signInWithPopup,
+   signInWithRedirect,
+   getRedirectResult,
+   GoogleAuthProvider,
    RecaptchaVerifier,
    signInWithPhoneNumber,
    onAuthStateChanged,
@@ -61,13 +75,35 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
    serverTimestamp
  };
 
+ function storedToken(){
+   try{ return localStorage.getItem(TOKEN_KEY) || ""; }catch(e){ return ""; }
+ }
+
+ function storedProfile(){
+   try{ return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); }catch(e){ return null; }
+ }
+
+ window.tyStoredAuthToken = storedToken;
+
+ window.tyClearBackendSession = function(){
+   try{
+     [TOKEN_KEY, PROFILE_KEY, LEGACY_PROFILE_KEY, LOGGED_IN_KEY].forEach(function(key){ localStorage.removeItem(key); });
+   }catch(e){}
+ };
+
+ /* Authoritative login condition for every TravelYaraa page. */
+ window.tyIsLoggedIn = function(){
+   const user = window.tyCurrentFirebaseUser || auth.currentUser;
+   return Boolean(user && storedToken());
+ };
+
  let backendAuthSyncPromise = null;
  let backendAuthSyncUid = "";
 
  window.tySyncFirebaseUserWithBackend = async function(user, extraPayload){
    if(!user) return null;
-   const existingToken = localStorage.getItem("ty_user_auth_token") || "";
-   const existingProfile = JSON.parse(localStorage.getItem("ty_user_profile") || "null");
+   const existingToken = storedToken();
+   const existingProfile = storedProfile();
    if(existingToken && existingProfile && String(existingProfile.uid || existingProfile.userId || "") === String(user.uid || "")){
      return {authToken:existingToken, user:existingProfile, reused:true};
    }
@@ -94,21 +130,92 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
      if(!response.ok || !data || data.success === false || !data.authToken){
        const error = new Error((data && data.message) || "TravelYaraa login could not be completed.");
        error.code = (data && data.code) || "LOGIN_BACKEND_FAILED";
+       error.status = response.status;
        throw error;
      }
      const profile = data.user || {};
-     localStorage.setItem("ty_user_auth_token", data.authToken);
-     localStorage.setItem("ty_user_profile", JSON.stringify(profile));
-     localStorage.setItem("travelYaraaUser", JSON.stringify(profile));
-     localStorage.setItem("tyUserLoggedIn", "true");
+     localStorage.setItem(TOKEN_KEY, data.authToken);
+     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+     localStorage.setItem(LEGACY_PROFILE_KEY, JSON.stringify(profile));
+     localStorage.setItem(LOGGED_IN_KEY, "true");
      return Object.assign({}, data, {user:profile});
    })();
 
-   try{ return await backendAuthSyncPromise; }
-   finally{ backendAuthSyncPromise = null; }
+   try{
+     return await backendAuthSyncPromise;
+   }catch(error){
+     /* Never leave a half-logged-in session behind. */
+     window.tyClearBackendSession();
+     throw error;
+   }finally{
+     backendAuthSyncPromise = null;
+   }
  };
+
+ function needsRedirectFallback(error){
+   const code = String((error && error.code) || "");
+   return code === "auth/popup-blocked"
+     || code === "auth/operation-not-supported-in-this-environment"
+     || code === "auth/cancelled-popup-request";
+ }
+
+ function redirectAlreadyAttempted(){
+   try{ return sessionStorage.getItem(REDIRECT_GUARD_KEY) === "1"; }catch(e){ return false; }
+ }
+
+ /* Single Google login entry point: popup first, redirect only when the
+    browser refuses the popup. A popup closed by the user is not retried. */
+ window.tyGoogleLogin = async function(extraPayload){
+   const alreadyRedirected = redirectAlreadyAttempted();
+   try{
+     const credential = await signInWithPopup(auth, googleProvider);
+     return await window.tySyncFirebaseUserWithBackend(credential.user, extraPayload || {service:"account"});
+   }catch(error){
+     if(needsRedirectFallback(error) && !alreadyRedirected){
+       try{ sessionStorage.setItem(REDIRECT_GUARD_KEY, "1"); }catch(e){}
+       await signInWithRedirect(auth, googleProvider);
+       return null;
+     }
+     throw error;
+   }
+ };
+
+ let redirectError = null;
+
+ const redirectSettled = getRedirectResult(auth)
+   .then(function(result){
+     if(result && result.user) return window.tySyncFirebaseUserWithBackend(result.user, {service:"account"});
+     return null;
+   })
+   .catch(function(error){ redirectError = error; return null; })
+   .then(function(value){
+     try{ sessionStorage.removeItem(REDIRECT_GUARD_KEY); }catch(e){}
+     return value;
+   });
+
+ function publishAuthState(user, state){
+   window.tyAuthState = state;
+   if(typeof window.tyApplyAuthUser === "function") window.tyApplyAuthUser(user, state);
+ }
+
+ async function applyBackendAuthState(user){
+   await redirectSettled;
+   if(!user){
+     window.tyClearBackendSession();
+     const pending = redirectError;
+     redirectError = null;
+     publishAuthState(null, {authorized:false, error:pending || null});
+     return;
+   }
+   try{
+     const result = await window.tySyncFirebaseUserWithBackend(user, {service:"account"});
+     publishAuthState(user, {authorized:Boolean(storedToken()), error:null, result:result});
+   }catch(error){
+     publishAuthState(null, {authorized:false, error:error, firebaseUser:user});
+   }
+ }
 
  onAuthStateChanged(auth, function(user){
    window.tyCurrentFirebaseUser = user || null;
-   if(typeof window.tyApplyAuthUser === "function") window.tyApplyAuthUser(user);
+   void applyBackendAuthState(user || null);
  });

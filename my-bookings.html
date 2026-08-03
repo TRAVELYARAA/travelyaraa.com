@@ -225,12 +225,27 @@
     const manage=event.target.closest('[data-manage]');
     if(manage){$('#opening').hidden=false;}
   });
-  window.tyApplyAuthUser=function(user){
+  /* assets/js/firebase-auth.js is the only Firebase implementation on this
+     page; it passes a user only after the backend authToken exists. */
+  window.tyApplyAuthUser=function(user,state){
     firebaseResolved=true;
     firebaseUser=user||null;
     if(resolveFirebaseReady){resolveFirebaseReady(firebaseUser);resolveFirebaseReady=null;}
+    const failure=state&&state.error;
+    if(failure){
+      clearStoredToken();
+      $('#content').innerHTML=errorState(failure.message||'TravelYaraa login could not be completed.');
+      const retry=$('#retry');
+      if(retry)retry.onclick=load;
+      return;
+    }
     if(firebaseUser){
-      syncFirebaseUser(firebaseUser).then(load).catch(()=>{clearStoredToken();load();});
+      syncFirebaseUser(firebaseUser).then(load).catch(error=>{
+        clearStoredToken();
+        $('#content').innerHTML=errorState(error&&error.message);
+        const retry=$('#retry');
+        if(retry)retry.onclick=load;
+      });
     }else{
       clearStoredToken();
       load();
