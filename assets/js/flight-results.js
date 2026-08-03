@@ -7865,84 +7865,54 @@ function mobileFareSheets(flights, fare, options){
     return payload?.passenger?.mobile || payload?.passenger?.mobileFull || payload?.details?.contact?.phone || payload?.details?.phone || payload?.phone || "";
   }
 
-  
-  const TY_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyDbh-qcy3ZiS8azoxbqW3YDwafOq2Owzcw",
-    authDomain: "travelyaraa-b9d83.firebaseapp.com",
-    projectId: "travelyaraa-b9d83",
-    storageBucket: "travelyaraa-b9d83.firebasestorage.app",
-    messagingSenderId: "381036733294",
-    appId: "1:381036733294:web:d36d35e88fed44e2e0d77f",
-    measurementId: "G-3S0SHNRBHY"
-  };
-
-  let tyFirebaseAuthRuntime = null;
-
-  async function tyFirebaseRuntime(){
-    if(tyFirebaseAuthRuntime) return tyFirebaseAuthRuntime;
-
-    const appMod = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js");
-    const authMod = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js");
-
-    /* assets/js/firebase-auth.js owns the only Firebase app on this page. */
-    const app = appMod.getApps && appMod.getApps().length ? appMod.getApps()[0] : appMod.initializeApp(TY_FIREBASE_CONFIG);
-    const auth = window.auth || authMod.getAuth(app);
-    try{ await authMod.setPersistence(auth, authMod.browserLocalPersistence); }catch(e){}
-
-    tyFirebaseAuthRuntime = {appMod, authMod, auth};
-    return tyFirebaseAuthRuntime;
+  /* Payment popup uses the shared Firebase module only. No second initializeApp. */
+  async function tyAwaitSharedFirebaseAuth(){
+    if(!window.tyFirebaseAuthReady){
+      throw new Error("Login module could not be loaded. Please refresh the page and try again.");
+    }
+    await window.tyFirebaseAuthReady;
+    if(typeof window.tySyncFirebaseUserWithBackend !== "function"){
+      throw new Error("Login module is outdated in your browser. Please reload the page to continue.");
+    }
   }
 
   async function tyFirebaseSocialLogin(providerName, payload){
-    const rt = await tyFirebaseRuntime();
-    const provider = String(providerName || "google").toLowerCase() === "facebook"
-      ? new rt.authMod.FacebookAuthProvider()
-      : new rt.authMod.GoogleAuthProvider();
+    await tyAwaitSharedFirebaseAuth();
+    const provider = String(providerName || "google").toLowerCase();
+    let data;
 
-    if(provider.setCustomParameters) provider.setCustomParameters({prompt:"select_account"});
+    if(provider === "google"){
+      if(typeof window.tyGoogleLogin !== "function"){
+        throw new Error("Login module is outdated in your browser. Please reload the page to continue.");
+      }
+      data = await window.tyGoogleLogin({provider:"google", service:"flight"});
+    }else if(provider === "facebook"){
+      const authMod = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js");
+      if(!window.auth) throw new Error("Login module could not be loaded. Please refresh the page and try again.");
+      const fbProvider = new authMod.FacebookAuthProvider();
+      if(fbProvider.setCustomParameters) fbProvider.setCustomParameters({prompt:"select_account"});
+      const credential = await authMod.signInWithPopup(window.auth, fbProvider);
+      const fbUser = credential && credential.user;
+      if(!fbUser) throw new Error("Social login did not return a user.");
+      data = await window.tySyncFirebaseUserWithBackend(fbUser, {provider:"facebook", service:"flight"});
+    }else{
+      throw new Error("Unsupported login provider.");
+    }
 
-    const credential = await rt.authMod.signInWithPopup(rt.auth, provider);
-    const fbUser = credential && credential.user;
-    if(!fbUser) throw new Error("Social login did not return a user.");
+    if(!data || !data.authToken){
+      throw new Error("TravelYaraa login token was not returned by backend.");
+    }
 
-    const firebaseIdToken = await fbUser.getIdToken(true);
-    const email = fbUser.email || tyGuestEmail(payload);
-    const phone = fbUser.phoneNumber || tyGuestPhone(payload);
-    const name = fbUser.displayName || [payload?.passenger?.title, payload?.passenger?.firstName, payload?.passenger?.lastName].filter(Boolean).join(" ");
-
+    const profile = data.user || {};
+    const email = profile.email || tyGuestEmail(payload);
+    const phone = profile.phone || profile.phoneNumber || tyGuestPhone(payload);
+    const name = profile.name || profile.displayName || [payload?.passenger?.title, payload?.passenger?.firstName, payload?.passenger?.lastName].filter(Boolean).join(" ");
     payload.passenger = Object.assign({}, payload.passenger || {});
     if(email) payload.passenger.email = email;
     if(phone) payload.passenger.mobile = phone;
     if(name && !payload.passenger.firstName) payload.passenger.firstName = name;
 
-    const fallbackProfile = {
-      userId: fbUser.uid,
-      uid: fbUser.uid,
-      email,
-      phone,
-      name,
-      provider: providerName
-    };
-
-    const data = typeof window.tySyncFirebaseUserWithBackend === 'function'
-      ? await window.tySyncFirebaseUserWithBackend(fbUser, {provider:providerName, service:'flight'})
-      : await tyGuestPost("/api/bookings/guest-auth/firebase-login", {
-          provider: providerName,
-          firebaseIdToken,
-          email,
-          phone,
-          name,
-          service: "flight",
-          payload
-        }, "");
-    if(!data || !data.authToken) throw new Error("TravelYaraa login token was not returned by backend.");
-    localStorage.setItem("ty_user_auth_token", data.authToken);
-
-    const profile = data.user || fallbackProfile;
-    localStorage.setItem("ty_user_profile", JSON.stringify(profile));
-    localStorage.setItem("travelYaraaUser", JSON.stringify(profile));
-    localStorage.setItem("tyUserLoggedIn", "true");
-    return Object.assign({authToken: localStorage.getItem("ty_user_auth_token"), user: profile}, data);
+    return Object.assign({authToken: data.authToken, user: profile}, data);
   }
 
 
@@ -8029,13 +7999,11 @@ function mobileFareSheets(flights, fare, options){
     return data;
   }
 
-  function tySafeLoginError(error){
-    const code = String(error && error.code || '');
-    const text = String(error && error.message || '');
-    if(/^FIREBASE_/i.test(code) || /Firebase Admin|service-account|firebase-admin/i.test(text)){
-      return 'Login service is temporarily unavailable. Please contact TravelYaraa support.';
-    }
-    return text || 'Login could not be completed. Please try again.';
+  function tyLoginErrorText(error){
+    const text = String((error && error.message) || '').trim();
+    const code = String((error && error.code) || '').trim();
+    if(text && code && !text.includes(code)) return text + ' (' + code + ')';
+    return text || code || 'Login could not be completed. Please try again.';
   }
 
   async function requireGuestOtpBeforePayment(payload, msg){
@@ -8096,7 +8064,7 @@ function mobileFareSheets(flights, fare, options){
           message.textContent = "Login successful. Continuing payment...";
           finish(ok);
         }catch(e){
-          message.textContent = tySafeLoginError(e);
+          message.textContent = tyLoginErrorText(e);
           if(msg){ msg.classList.add("error"); msg.textContent = message.textContent; }
         }finally{
           if(provider === "facebook") facebookBtn.disabled = false; else googleBtn.disabled = false;

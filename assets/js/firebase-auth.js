@@ -40,7 +40,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
 
  const app = initializeApp(firebaseConfig);
  const auth = getAuth(app);
- await setPersistence(auth, browserLocalPersistence);
  const db = getFirestore(app);
  const googleProvider = new GoogleAuthProvider();
  googleProvider.setCustomParameters({ prompt:"select_account" });
@@ -165,7 +164,20 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
 
  /* Single Google login entry point: popup first, redirect only when the
     browser refuses the popup. A popup closed by the user is not retried. */
- window.tyGoogleLogin = async function(extraPayload){
+ let googleLoginInFlight = null;
+
+ window.tyGoogleLogin = function(extraPayload){
+   /* A second click must join the running attempt: two concurrent popup
+      requests make Firebase raise auth/cancelled-popup-request, which would
+      otherwise push a desktop user through the redirect fallback. */
+   if(googleLoginInFlight) return googleLoginInFlight;
+   googleLoginInFlight = runGoogleLogin(extraPayload).finally(function(){
+     googleLoginInFlight = null;
+   });
+   return googleLoginInFlight;
+ };
+
+ async function runGoogleLogin(extraPayload){
    const alreadyRedirected = redirectAlreadyAttempted();
    try{
      const credential = await signInWithPopup(auth, googleProvider);
@@ -178,11 +190,25 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
      }
      throw error;
    }
- };
+ }
+
+ /* Persistence is applied here rather than at module top level: a browser that
+    blocks storage would otherwise abort the whole module and leave every global
+    above undefined, which is what made the login button answer "Firebase is
+    still loading" forever. Losing persistence only shortens the session. */
+ window.tyFirebaseAuthReady = (async function(){
+   try{
+     await setPersistence(auth, browserLocalPersistence);
+   }catch(error){
+     window.tyAuthPersistenceError = error;
+   }
+   return auth;
+ })();
 
  let redirectError = null;
 
- const redirectSettled = getRedirectResult(auth)
+ const redirectSettled = window.tyFirebaseAuthReady
+   .then(function(){ return getRedirectResult(auth); })
    .then(function(result){
      if(result && result.user) return window.tySyncFirebaseUserWithBackend(result.user, {service:"account"});
      return null;
@@ -215,7 +241,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
    }
  }
 
- onAuthStateChanged(auth, function(user){
-   window.tyCurrentFirebaseUser = user || null;
-   void applyBackendAuthState(user || null);
+ window.tyFirebaseAuthReady.then(function(){
+   onAuthStateChanged(auth, function(user){
+     window.tyCurrentFirebaseUser = user || null;
+     void applyBackendAuthState(user || null);
+   });
  });

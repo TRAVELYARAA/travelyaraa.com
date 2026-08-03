@@ -2177,7 +2177,7 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>window.TRAVELYARAA_API_BASE="https://api.travelyaraa.com";</script>
-<script type="module" id="ty-firebase-auth-core" src="/assets/js/firebase-auth.js"></script>
+<script type="module" id="ty-firebase-auth-core" src="/assets/js/firebase-auth.js?v=20260803b"></script>
 
 
 
@@ -3536,6 +3536,19 @@ support_title:"TravelYaraaサポート",
     return (error && error.message) ? error.message : "Something went wrong. Please try again.";
   }
 
+  /* Waits for the shared Firebase module instead of polling a flag, so a browser
+     running a stale cached copy of firebase-auth.js reports the real problem
+     rather than a permanent "still loading". */
+  async function awaitFirebaseAuthCore(){
+    if(!window.tyFirebaseAuthReady){
+      throw new Error("Login module could not be loaded. Please refresh the page and try again.");
+    }
+    await window.tyFirebaseAuthReady;
+    if(typeof window.tyGoogleLogin !== "function" || typeof window.tySyncFirebaseUserWithBackend !== "function"){
+      throw new Error("Login module is outdated in your browser. Please reload the page to continue.");
+    }
+  }
+
   function closeAllSlides(){
     ["login-page","selection-page","support-page"].forEach(id => {
       const el = $(id);
@@ -3583,7 +3596,7 @@ support_title:"TravelYaraaサポート",
 
   async function sendOTPFromIdentifier(value){
     try{
-      if(!window.firebaseFns || !window.auth) return setStatus("auth-status","Firebase is still loading. Please try again.","info");
+      await awaitFirebaseAuthCore();
       const phone = normalizePhoneNumber(value);
       if(!phone.startsWith("+") || phone.replace(/\D/g,"").length < 10){
         return setStatus("auth-status","Enter valid mobile number with country code or 10 digit Indian number.","err");
@@ -3602,8 +3615,8 @@ support_title:"TravelYaraaサポート",
 
   window.googleLogin = async function(){
     try{
-      if(!window.firebaseAuthReady || typeof window.tyGoogleLogin !== "function") return setStatus("auth-status","Firebase is still loading. Please try again.","info");
       setStatus("auth-status","Opening Google login...","info");
+      await awaitFirebaseAuthCore();
       await window.tyGoogleLogin({service:"account"});
     }catch(error){
       setStatus("auth-status", firebaseErrorMessage(error), "err");
