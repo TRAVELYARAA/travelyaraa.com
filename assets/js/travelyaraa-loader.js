@@ -6,6 +6,7 @@
 (function(){
   "use strict";
 
+  const DEFAULT_TEXT = "Please Wait, We are searching for the flights on this route";
   const LOADER_ID = "tyFlightApiLoader";
 
   function isFlightContext(options){
@@ -38,10 +39,27 @@
         '<div class="ty-results-flight-loader__ring" aria-hidden="true">' +
           '<span class="ty-results-flight-loader__plane"></span>' +
         '</div>' +
+        '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
       '</div>';
 
     document.body.appendChild(el);
     return el;
+  }
+
+  function setText(el, options){
+    const node = el.querySelector(".ty-results-flight-loader__text");
+    if(!node) return;
+    if(options && options.hideText === true){
+      node.textContent = "";
+      node.hidden = true;
+      return;
+    }
+    node.hidden = false;
+    const hasText = options && (Object.prototype.hasOwnProperty.call(options, "text") || Object.prototype.hasOwnProperty.call(options, "message"));
+    const raw = hasText ? (options.text || options.message || "") : DEFAULT_TEXT;
+    const text = raw && typeof raw === "object" ? String(raw.message || raw.code || DEFAULT_TEXT) : String(raw);
+    node.textContent = text;
+    node.hidden = !text;
   }
 
   function show(options){
@@ -49,6 +67,7 @@
     if(!isFlightContext(options)) return false;
 
     const el = ensureLoader();
+    setText(el, options);
     el.classList.add("is-active");
     document.documentElement.classList.add("ty-flight-loader-active");
     document.body.classList.add("ty-flight-loader-active");
