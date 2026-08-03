@@ -11,8 +11,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="description" content="TravelYaraa.com - Clean travel booking website for flights, hotels and cabs." />
   <link rel="icon" href="/images/favicon.png" type="image/png" />
-  <link rel="stylesheet" href="/assets/css/travelyaraa-loader.css?v=196" />
-  <script src="/assets/js/travelyaraa-loader.js?v=196" defer></script>
+  <link rel="stylesheet" href="/assets/css/travelyaraa-loader.css?v=20260803" />
+  <script src="/assets/js/travelyaraa-loader.js?v=20260803" defer></script>
 
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -2175,132 +2175,9 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
 </style>
 
-<script type="module" id="ty-firebase-auth-core">
- import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
- import {
-   getAuth,
-   setPersistence,
-   browserLocalPersistence,
-   GoogleAuthProvider,
-   signInWithPopup,
-   RecaptchaVerifier,
-   signInWithPhoneNumber,
-   onAuthStateChanged,
-   signOut
- } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
- import {
-   getFirestore,
-   doc,
-   getDoc,
-   setDoc,
-   collection,
-   getDocs,
-   query,
-   where,
-   orderBy,
-   serverTimestamp
- } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
-
- const firebaseConfig = {
-   apiKey: "AIzaSyDbh-qcy3ZiS8azoxbqW3YDwafOq2Owzcw",
-   authDomain: "travelyaraa-b9d83.firebaseapp.com",
-   projectId: "travelyaraa-b9d83",
-   storageBucket: "travelyaraa-b9d83.firebasestorage.app",
-   messagingSenderId: "381036733294",
-   appId: "1:381036733294:web:d36d35e88fed44e2e0d77f",
-   measurementId: "G-3S0SHNRBHY"
- };
-
- const app = initializeApp(firebaseConfig);
- const auth = getAuth(app);
- await setPersistence(auth, browserLocalPersistence);
- const db = getFirestore(app);
- const googleProvider = new GoogleAuthProvider();
- googleProvider.setCustomParameters({ prompt:"select_account" });
-
- window.firebaseAuthReady = true;
- window.auth = auth;
- window.db = db;
- window.googleProvider = googleProvider;
- window.firebaseFns = {
-   signInWithPopup,
-   RecaptchaVerifier,
-   signInWithPhoneNumber,
-   onAuthStateChanged,
-   signOut,
-   doc,
-   getDoc,
-   setDoc,
-   collection,
-   getDocs,
-   query,
-   where,
-   orderBy,
-   serverTimestamp
- };
-
- let tyBackendAuthSyncPromise = null;
- let tyBackendAuthSyncUid = "";
-
- window.tySyncFirebaseUserWithBackend = async function(user, extraPayload){
-   if(!user) return null;
-   const existingToken = localStorage.getItem("ty_user_auth_token") || "";
-   const existingProfile = JSON.parse(localStorage.getItem("ty_user_profile") || "null");
-   if(existingToken && existingProfile && String(existingProfile.uid || existingProfile.userId || "") === String(user.uid || "")){
-     return {authToken:existingToken, user:existingProfile, reused:true};
-   }
-   if(tyBackendAuthSyncPromise && tyBackendAuthSyncUid === String(user.uid || "")) return tyBackendAuthSyncPromise;
-
-   tyBackendAuthSyncUid = String(user.uid || "");
-   tyBackendAuthSyncPromise = (async function(){
-     const idToken = await user.getIdToken(true);
-     const base = String(window.TRAVELYARAA_API_BASE || "https://api.travelyaraa.com").replace(/\/$/,"");
-     const body = Object.assign({
-       provider:(user.providerData && user.providerData[0] && user.providerData[0].providerId) || "firebase",
-       firebaseIdToken:idToken,
-       email:user.email || "",
-       phone:user.phoneNumber || "",
-       name:user.displayName || "",
-       service:"account"
-     }, extraPayload || {});
-     const response = await fetch(base + "/api/bookings/guest-auth/firebase-login", {
-       method:"POST",
-       headers:{"Content-Type":"application/json","Accept":"application/json"},
-       body:JSON.stringify(body),
-       cache:"no-store"
-     });
-     const data = await response.json().catch(function(){ return {}; });
-     if(!response.ok || data.success === false || !data.authToken){
-       const error = new Error(data.message || "TravelYaraa login could not be completed.");
-       error.code = data.code || "LOGIN_BACKEND_FAILED";
-       throw error;
-     }
-     const profile = data.user || {
-       uid:user.uid || "",
-       userId:user.uid || "",
-       email:user.email || "",
-       phone:user.phoneNumber || "",
-       name:user.displayName || ""
-     };
-     localStorage.setItem("ty_user_auth_token", data.authToken);
-     localStorage.setItem("ty_user_profile", JSON.stringify(profile));
-     localStorage.setItem("travelYaraaUser", JSON.stringify(profile));
-     localStorage.setItem("tyUserLoggedIn", "true");
-     return Object.assign({}, data, {user:profile});
-   })();
-
-   try{ return await tyBackendAuthSyncPromise; }
-   finally{ tyBackendAuthSyncPromise = null; }
- };
-
- onAuthStateChanged(auth, function(user){
-   window.tyCurrentFirebaseUser = user || null;
-   if(typeof window.tyApplyAuthUser === "function") window.tyApplyAuthUser(user || null);
- });
-</script>
-
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>window.TRAVELYARAA_API_BASE="https://api.travelyaraa.com";</script>
+<script type="module" id="ty-firebase-auth-core" src="/assets/js/firebase-auth.js"></script>
 
 
 
@@ -2329,8 +2206,7 @@ html,body{max-width:100%!important;overflow-x:hidden!important}*,*:before,*:afte
   .ty-header-logo-img,
   .site-header img[alt*="Travel"],
   .logo img,
-  img[src*="travelyaraa-logo"],
-  img[src*="images/logo"]{
+  img[src*="travelyaraa-logo"]{
     width:156px!important;
     max-width:156px!important;
     height:auto!important;
@@ -2341,8 +2217,7 @@ html,body{max-width:100%!important;overflow-x:hidden!important}*,*:before,*:afte
   .ty-header-logo-img,
   .site-header img[alt*="Travel"],
   .logo img,
-  img[src*="travelyaraa-logo"],
-  img[src*="images/logo"]{
+  img[src*="travelyaraa-logo"]{
     width:106px!important;
     max-width:106px!important;
     height:auto!important;
@@ -2378,8 +2253,7 @@ html,body{max-width:100%!important;overflow-x:hidden!important}*,*:before,*:afte
   .ty-header-logo-img,
   .site-header img[alt*="Travel"],
   .logo img,
-  img[src*="travelyaraa-logo"],
-  img[src*="images/logo"]{
+  img[src*="travelyaraa-logo"]{
     width:156px!important;
     max-width:156px!important;
     height:auto!important;
@@ -2390,8 +2264,7 @@ html,body{max-width:100%!important;overflow-x:hidden!important}*,*:before,*:afte
   .ty-header-logo-img,
   .site-header img[alt*="Travel"],
   .logo img,
-  img[src*="travelyaraa-logo"],
-  img[src*="images/logo"]{
+  img[src*="travelyaraa-logo"]{
     width:106px!important;
     max-width:106px!important;
     height:auto!important;
@@ -3729,9 +3602,9 @@ support_title:"TravelYaraaサポート",
 
   window.googleLogin = async function(){
     try{
-      if(!window.firebaseFns || !window.auth || !window.googleProvider) return setStatus("auth-status","Firebase is still loading. Please try again.","info");
+      if(!window.firebaseAuthReady || typeof window.tyGoogleLogin !== "function") return setStatus("auth-status","Firebase is still loading. Please try again.","info");
       setStatus("auth-status","Opening Google login...","info");
-      await window.firebaseFns.signInWithPopup(window.auth, window.googleProvider);
+      await window.tyGoogleLogin({service:"account"});
     }catch(error){
       setStatus("auth-status", firebaseErrorMessage(error), "err");
     }
@@ -3763,23 +3636,17 @@ support_title:"TravelYaraaサポート",
     $("menuLogoutBtn")?.classList.toggle("hidden-hard", !loggedIn);
     $("menuLoginSignupBtn")?.classList.toggle("hidden-hard", loggedIn);
     if(loggedIn){
-      try{
-        localStorage.setItem("tyUserLoggedIn","true");
-        localStorage.setItem("travelYaraaUser", JSON.stringify({
-          uid:user.uid || "",
-          email:user.email || "",
-          phone:user.phoneNumber || "",
-          name:user.displayName || ""
-        }));
-      }catch(e){}
+      /* Session keys are written only by assets/js/firebase-auth.js after the
+         backend has issued ty_user_auth_token. */
       if(!tyMyBookingLoginFlowActive()){
         closeLogin();
         if(typeof window.closeMenu === "function") window.closeMenu();
       }
     }else{
       try{
-        ["tyUserLoggedIn","travelYaraaUser","ty_user_profile","ty_user_auth_token","authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
+        ["authToken","token","jwt","ty_guest_otp_verified_at"].forEach(function(k){ localStorage.removeItem(k); });
       }catch(e){}
+      if(typeof window.tyClearBackendSession === "function") window.tyClearBackendSession();
     }
   };
 
@@ -4763,7 +4630,10 @@ async function postSearch(path,body){const r=await fetch(apiRoot()+path,{method:
 function showTYLoaderV184(service){if(String(service||"flight").toLowerCase()==="flight"&&window.TravelYaraaLoader)window.TravelYaraaLoader.show({service:"flight",force:true})}
 function hideTYLoaderV184(){if(window.TravelYaraaLoader)window.TravelYaraaLoader.hide()}
 function supplierPayload(s,ctx){const st=S(),f=st.flight||{},h=st.hotel||{},c=st.cab||{};if(s==="flight"){const fareType=String(f.fareType||sessionStorage.getItem("ty_flight_fare_type_v128")||"REGULAR").toUpperCase();return{from:(f.from&&f.from.code)||ctx.from||"",to:(f.to&&f.to.code)||ctx.to||"",departureDate:isoDate(f.depart)||ctx.depart||"",returnDate:(function(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)?d:""})(isoDate(f.ret)),tripType:st.trip||trip(),passengers:{adults:Number(f.adults||ctx.flight?.adults||1),children:Number(f.children||ctx.flight?.children||0),infants:Number(f.infants||ctx.flight?.infants||0)},cabin:f.cabin||ctx.flight?.cabin||"",fareType:fareType,pft:fareType,searchModifiers:{pft:(fareType==="STUDENT"||fareType==="SENIOR_CITIZEN")?fareType:"REGULAR"}}}if(s==="hotel"){return{city:h.city||ctx.hotelCity||"",cityId:h.cityId||h.hotelCityId||"",latitude:h.lat||h.latitude||"",longitude:h.lng||h.longitude||"",nearMe:Boolean(h.lat&&h.lng),checkIn:isoDate(h.checkin)||ctx.hotel?.checkIn||"",checkOut:isoDate(h.checkout)||ctx.hotel?.checkOut||"",rooms:[{adults:Number(h.adults||1),children:Number(h.children||0),childAge:h.childAge||[]}],adults:Number(h.adults||1),children:Number(h.children||0)}}return{source:c.pickup||ctx.cabPickup||"",destination:c.drop||ctx.cabDrop||"",scheduledDate:isoDate(c.date)||ctx.cab?.date||"",scheduledTime:c.time||ctx.cab?.time||"",cabType:c.type||""}}
-async function go(s){s=String(s||"flight").toLowerCase();if(!PAGES[s])s="flight";if(s==="flight")showTYLoaderV184(s);else hideTYLoaderV184();const ctx=payload(s);const live=supplierPayload(s,ctx);save("tySearchPayload",{service:s,search:ctx,livePayload:live,createdAt:new Date().toISOString()});save("tySearchContext",ctx);try{sessionStorage.removeItem("ty_flight_search_error");sessionStorage.setItem("ty_last_search_payload",JSON.stringify(Object.assign({type:s,service:s},live)));sessionStorage.removeItem("ty_live_results_"+s)}catch(e){}sessionStorage.setItem("tySelectedService",s);const paths={flight:"/api/flights/search",hotel:"/api/hotels/search",cab:"/api/cabs/search"};try{const data=await postSearch(paths[s],live);try{const cached=JSON.stringify(data);if(cached.length<=4500000)sessionStorage.setItem("ty_live_results_"+s,cached);else sessionStorage.removeItem("ty_live_results_"+s)}catch(e){sessionStorage.removeItem("ty_live_results_"+s)}}catch(err){try{sessionStorage.removeItem("ty_live_results_"+s);sessionStorage.setItem("ty_flight_search_error",String(err&&err.message||"Search request failed."))}catch(e){}}finally{hideTYLoaderV184()}location.href=PAGES[s]+"?service="+encodeURIComponent(s)}
+async function go(s){s=String(s||"flight").toLowerCase();if(!PAGES[s])s="flight";if(s==="flight")showTYLoaderV184(s);else hideTYLoaderV184();const ctx=payload(s);const live=supplierPayload(s,ctx);save("tySearchPayload",{service:s,search:ctx,livePayload:live,createdAt:new Date().toISOString()});save("tySearchContext",ctx);try{sessionStorage.removeItem("ty_flight_search_error");sessionStorage.setItem("ty_last_search_payload",JSON.stringify(Object.assign({type:s,service:s},live)));sessionStorage.removeItem("ty_live_results_"+s)}catch(e){}sessionStorage.setItem("tySelectedService",s);const paths={flight:"/api/flights/search",hotel:"/api/hotels/search",cab:"/api/cabs/search"};try{const data=await postSearch(paths[s],live);try{const cached=JSON.stringify(data);if(cached.length<=4500000)sessionStorage.setItem("ty_live_results_"+s,cached);else sessionStorage.removeItem("ty_live_results_"+s)}catch(e){sessionStorage.removeItem("ty_live_results_"+s)}}catch(err){try{sessionStorage.removeItem("ty_live_results_"+s);sessionStorage.setItem("ty_flight_search_error",String(err&&err.message||"Search request failed."))}catch(e){}}if(s!=="flight")hideTYLoaderV184();location.href=PAGES[s]+"?service="+encodeURIComponent(s)}
+/* Flight loader stays visible through the hand-off to the results page; a
+   bfcache restore of this page must still clear it. */
+window.addEventListener("pageshow",function(ev){if(ev.persisted)hideTYLoaderV184()});
 document.addEventListener("click",function(e){const btn=e.target.closest&&e.target.closest(".ty-search-button-v5");if(!btn)return;e.preventDefault();e.stopImmediatePropagation();const s=serviceOf(btn);if(s==="flight"&&trip()==="roundtrip"&&!hasRet()){openCalendar("flightReturn");return false}go(s);return false},true);document.addEventListener("submit",function(e){const f=e.target.closest&&e.target.closest("[data-v5-panel]");if(!f)return;e.preventDefault();e.stopImmediatePropagation();go(serviceOf(f));return false},true);window.tyStartBookingSearch=function(s){go(s)};
 function lock(){document.documentElement.classList.add("ty-v66-open");document.body.classList.add("ty-v66-open")}function unlock(){document.documentElement.classList.remove("ty-v66-open","ty-v65-picker-open","ty-v64-picker-open","ty-v63-picker-open","ty-v62-picker-open","ty-v61-picker-open","ty-v60-picker-open","ty-v59-picker-open","ty-v58-picker-open","ty-fp-open");document.body.classList.remove("ty-v66-open","ty-v65-picker-open","ty-v64-picker-open","ty-v63-picker-open","ty-v62-picker-open","ty-v61-picker-open","ty-v60-picker-open","ty-v59-picker-open","ty-v58-picker-open","ty-fp-open");document.body.style.overflow="";document.documentElement.style.overflow=""}function closeAll(){qa(".ty-picker-v5").forEach(p=>p.classList.remove("active"));id("tyCalendarV58")&&id("tyCalendarV58").classList.remove("active");unlock();setTimeout(positionSwap,80)}function placePopup(el,anchor,width){if(mob()){el.style.cssText="";return}const a=anchor?anchor.getBoundingClientRect():{left:24,bottom:90,top:80},w=width||440;const left=Math.max(16,Math.min(a.left,innerWidth-w-16)),top=a.bottom+10,available=Math.max(220,innerHeight-top-16);el.style.setProperty("left",left+"px","important");el.style.setProperty("top",top+"px","important");el.style.setProperty("bottom","auto","important");el.style.setProperty("width",w+"px","important");el.style.setProperty("max-height",Math.min(520,available)+"px","important")}function openPicker(idName,anchor,width){qa(".ty-picker-v5").forEach(p=>{if(p.id!==idName)p.classList.remove("active")});const el=id(idName);if(!el)return;el.classList.add("active");lock();placePopup(el,anchor,width);setTimeout(()=>{if(mob())el.scrollTop=0},30)}
 const oldClose=window.closePickerV5;window.closePickerV5=function(idName){const el=id(idName);if(el)el.classList.remove("active");if(typeof oldClose==="function")try{oldClose(idName)}catch(e){}unlock();setTimeout(positionSwap,80)};function syncNow(){if(window.sync)try{window.sync()}catch(e){}updateReturnUI();positionSwap()}
@@ -5856,29 +5726,33 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     if(!wantsLogin(params)) return;
     cleanLoginQueryFromHistory();
     var user = window.tyCurrentFirebaseUser || (window.auth && window.auth.currentUser) || null;
-    if(user){
-      window.tyApplyAuthUser(user);
+    if(user && typeof window.tyIsLoggedIn === "function" && window.tyIsLoggedIn()){
+      window.tyApplyAuthUser(user, {authorized:true, error:null});
       return;
     }
     if(!loginPanelIsOpen() && typeof window.openLogin === "function") window.openLogin();
   }
 
-  window.tyApplyAuthUser = async function(user){
-    if(typeof window.tyApplyAuthUi === "function") window.tyApplyAuthUi(user);
-    if(typeof window.tyApplyAuthProfile === "function") window.tyApplyAuthProfile(user);
-    if(typeof window.tyApplyAuthAccountButton === "function") window.tyApplyAuthAccountButton(user);
-    if(!user) return;
+  /* Called by assets/js/firebase-auth.js once the backend sync has settled.
+     "user" is non-null only when a TravelYaraa authToken exists. */
+  window.tyApplyAuthUser = function(user, state){
+    var authorized = Boolean(user) && (state ? Boolean(state.authorized) : (typeof window.tyIsLoggedIn === "function" && window.tyIsLoggedIn()));
+    var uiUser = authorized ? user : null;
 
-    try{
-      if(typeof window.tySyncFirebaseUserWithBackend === "function"){
-        await window.tySyncFirebaseUserWithBackend(user, {service:"account"});
-      }
-      if(isLoginFlow()) redirectAfterLogin(user);
-    }catch(error){
+    if(typeof window.tyApplyAuthUi === "function") window.tyApplyAuthUi(uiUser);
+    if(typeof window.tyApplyAuthProfile === "function") window.tyApplyAuthProfile(uiUser);
+    if(typeof window.tyApplyAuthAccountButton === "function") window.tyApplyAuthAccountButton(uiUser);
+
+    var error = state && state.error;
+    if(error){
+      if(!loginPanelIsOpen() && typeof window.openLogin === "function") window.openLogin();
       if(typeof window.tySetAuthStatus === "function"){
-        window.tySetAuthStatus("auth-status", (error && error.message) || "TravelYaraa login could not be completed.", "err");
+        window.tySetAuthStatus("auth-status", error.message || "TravelYaraa login could not be completed.", "err");
       }
+      return;
     }
+
+    if(authorized && isLoginFlow()) redirectAfterLogin(user);
   };
 
   document.addEventListener("DOMContentLoaded", function(){

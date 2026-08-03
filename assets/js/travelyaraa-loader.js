@@ -46,6 +46,19 @@
     return el;
   }
 
+  /* Never let a non-string reach textContent: that is what produced the
+     literal "[object Object]" on the results page. */
+  function readableText(value, depth){
+    if(typeof value === "string") return value.trim();
+    if(typeof value === "number" || typeof value === "boolean") return String(value);
+    if(!value || typeof value !== "object") return "";
+    if((depth || 0) >= 2) return "";
+    if(value instanceof Error) return readableText(value.message, (depth || 0) + 1);
+    const message = readableText(value.message, (depth || 0) + 1);
+    if(message) return message;
+    return readableText(value.code, (depth || 0) + 1);
+  }
+
   function setText(el, options){
     const node = el.querySelector(".ty-results-flight-loader__text");
     if(!node) return;
@@ -56,8 +69,7 @@
     }
     node.hidden = false;
     const hasText = options && (Object.prototype.hasOwnProperty.call(options, "text") || Object.prototype.hasOwnProperty.call(options, "message"));
-    const raw = hasText ? (options.text || options.message || "") : DEFAULT_TEXT;
-    const text = raw && typeof raw === "object" ? String(raw.message || raw.code || DEFAULT_TEXT) : String(raw);
+    const text = (hasText ? readableText(options.text) || readableText(options.message) : "") || DEFAULT_TEXT;
     node.textContent = text;
     node.hidden = !text;
   }

@@ -2142,6 +2142,7 @@
       sessionStorage.setItem("tySelectedService", "flight");
       sessionStorage.setItem("ty_restore_search_bar", "1");
     }catch(e){}
+    showFlightSearchLoader();
     location.href = "/?service=flight&modify=1#flight-search";
   }
 
@@ -3298,7 +3299,9 @@ function normalizeCabin(value){
 
   async function loadFlights(forceFresh){
     const cached = forceFresh ? [] : readCachedFlightResults();
-    const showLoader = !tyIsBackForwardNavigation() && !cached.length;
+    /* The same loader must stay up from the search click until results are
+       painted, including the cached hand-off from the home page. */
+    const showLoader = !tyIsBackForwardNavigation();
     state.searchError = '';
     try{
       try{
@@ -3310,10 +3313,12 @@ function normalizeCabin(value){
       }catch(e){}
       if(!ROOT.querySelector('.ty-fr-page')) renderShell('', { skipDateFares: true });
       if(showLoader){
-        state.rawFlights = [];
-        state.legFlights = {};
-        state.flights = [];
-        renderShell('', { skipDateFares: true });
+        if(!cached.length){
+          state.rawFlights = [];
+          state.legFlights = {};
+          state.flights = [];
+          renderShell('', { skipDateFares: true });
+        }
         showFlightSearchLoader();
       }else hideFlightSearchLoader();
       const legs = routeLegs();
@@ -4373,13 +4378,11 @@ function renderShell(content, opts){
     const previousSummary = i > 0 ? `<div class="ty-prev-pax-summary" data-prev-summary-for="${i}" hidden></div>` : '';
     const desktopPanel = !isMobileView();
     const dobFieldHtml = `<label class="ty-form-field ty-dob-field"><span>${dobReqThis ? requiredLabel('Date of Birth') : 'Date of Birth'}</span>${renderDOBSelects('dob_'+i, dobReqThis, meta.type)}</label>`;
-    const contactInlineHtml = (desktopPanel && i === 0) ? `<div class="ty-desktop-contact-inline"><h3>Contact Details</h3><div class="ty-field-note">Your ticket & flight details will be shared here</div><div class="ty-form-grid contact ty-desktop-contact-grid"><label class="ty-form-field"><span>${requiredLabel('Email Address')}</span><input name="email" type="email" required autocomplete="email" placeholder="Enter Email Address"></label><label class="ty-form-field"><span>${requiredLabel('Phone Number')}</span><div class="ty-phone-row"><select name="mobileCountryCode" required aria-label="Country code">${countryCodeOptions()}</select><input name="mobile" type="tel" required inputmode="numeric" autocomplete="tel-national" placeholder="Enter Mobile no."></div></label></div></div>` : '';
     const passportDobHtml = (desktopPanel && passReq) ? `<label class="ty-form-field ty-passport-dob-field"><span>${dobReqThis ? requiredLabel('Date of Birth') : 'Date of Birth'}</span>${renderDOBSelects('dob_'+i, dobReqThis, meta.type)}</label>` : '';
     return `<div class="ty-pax-panel ${active?'active':''}" data-pax-panel="${i}">
       ${previousSummary}
       <h3 class="ty-pax-panel-title">${esc(personLabel)}</h3>
       <div class="ty-form-grid ty-name-grid"><label class="ty-form-field ty-title-field"><span>${requiredLabel('Title')}</span><select name="title_${i}" required><option value="">Title</option><option>Mr</option><option>Ms</option><option>Mrs</option></select></label><label class="ty-form-field ty-first-field"><span>${requiredLabel('First & Middle Name')}</span><input name="firstName_${i}" required autocomplete="given-name"></label><label class="ty-form-field ty-last-field"><span>${requiredLabel('Last Name')}</span><input name="lastName_${i}" required autocomplete="family-name"></label>${desktopPanel && passReq ? '' : dobFieldHtml}</div>
-      ${contactInlineHtml}
       ${passReq ? `<div class="ty-passport-box"><h3>Passport Details <em class="ty-required-star" aria-label="required">*</em></h3><div class="ty-field-note">Required for this selected flight as per airline rules.</div><div class="ty-form-grid two ty-passport-grid">${passportDobHtml}<label class="ty-form-field"><span>${requiredLabel('Passport Number')}</span><input name="passportNumber_${i}" required minlength="6" maxlength="15" pattern="[A-Za-z0-9]{6,15}" autocomplete="off"></label><label class="ty-form-field"><span>${requiredLabel('Passport Issuing Country')}</span><select name="passportIssueCountry_${i}" required>${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Nationality')}</span><select name="nationality_${i}" required>${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Passport Issue Date')}</span>${renderDateSelects('passportIssue_'+i, true, 'passportIssue')}</label><label class="ty-form-field"><span>${requiredLabel('Passport Expiry Date')}</span>${renderDateSelects('passportExpiry_'+i, true, 'passportExpiry')}</label></div></div>` : ''}
       ${panReq ? `<div class="ty-form-grid two" style="margin-top:10px"><label class="ty-form-field"><span>${requiredLabel('PAN')}</span><input name="pan_${i}" pattern="[A-Z]{5}[0-9]{4}[A-Z]" required></label></div>` : ''}
     </div>`;
@@ -5039,7 +5042,9 @@ function renderShell(content, opts){
 
 
   function tyEnsurePassportScanLoaderCss(){
-    return injectResultsFlightLoaderCss();
+    /* .ty-passport-scan-loader styles ship in assets/css/travelyaraa-loader.css,
+       which every results page already links. */
+    return true;
   }
 
   function tyShowPassportScanLoader(message){
@@ -6274,7 +6279,6 @@ function mobileFareSheets(flights, fare, options){
         .ty-passport-box .ty-passport-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:12px!important;}
         .ty-passport-dob-field{grid-column:auto!important;}
         .ty-form-field input,.ty-form-field select{border-radius:10px!important;min-height:42px!important;border:1px solid #cfd8e6!important;}
-        .ty-booking-left>.ty-contact-card{display:none!important;}
       }
     `;
     document.head.appendChild(style);
@@ -6778,7 +6782,9 @@ function mobileFareSheets(flights, fare, options){
     const desktopLeftContinueHtml = mobileReview ? '' : '<button type="button" class="ty-payment-btn ty-left-continue ty-desktop-continue" data-desktop-continue="true" id="tyProceedPaymentLeft">Continue Booking</button>';
     const desktopSideContinueHtml = mobileReview ? '' : '<button type="button" class="ty-payment-btn ty-desktop-continue" data-desktop-continue="true" id="tyProceedPayment">Continue Booking</button>';
     const contactOptional = false;
-    const contactCardHtml = mobileReview ? `<article class="ty-contact-card"><div class="ty-section-head"><h2>Contact Details</h2><p>Your ticket & flight details will be shared here</p></div><div class="ty-section-body"><div class="ty-form-grid contact"><label class="ty-form-field"><span>${requiredLabel('Email Address')}</span><input name="email" type="email" required autocomplete="email" placeholder="Enter Email Address"></label><label class="ty-form-field"><span>${requiredLabel('Phone Number')}</span><div class="ty-phone-row"><select name="mobileCountryCode" required aria-label="Country code">${countryCodeOptions()}</select><input name="mobile" type="tel" required inputmode="numeric" autocomplete="tel-national" placeholder="Enter Mobile no."></div><small class="ty-field-note">Use the mobile number linked with this booking.</small></label></div></div></article>` : '';
+    /* Contact Details always follow the complete traveller list on both
+       viewports; they must never sit inside passenger 1's panel. */
+    const contactCardHtml = `<article class="ty-contact-card"><div class="ty-section-head"><h2>Contact Details</h2><p>Your ticket & flight details will be shared here</p></div><div class="ty-section-body"><div class="ty-form-grid contact"><label class="ty-form-field"><span>${requiredLabel('Email Address')}</span><input name="email" type="email" required autocomplete="email" placeholder="Enter Email Address"></label><label class="ty-form-field"><span>${requiredLabel('Phone Number')}</span><div class="ty-phone-row"><select name="mobileCountryCode" required aria-label="Country code">${countryCodeOptions()}</select><input name="mobile" type="tel" required inputmode="numeric" autocomplete="tel-national" placeholder="Enter Mobile no."></div><small class="ty-field-note">Use the mobile number linked with this booking.</small></label></div></div></article>`;
     const reviewTopHtml = mobileReview
       ? `<button type="button" class="ty-review-back ty-mobile-review-back" data-review-back aria-label="Back">‹</button>`
       : `<header class="ty-review-top ty-booking-top"><button type="button" class="ty-review-back" data-review-back>‹</button>${travelYaraaLogo()}<div><h1>Flight Review</h1><p>${summary}</p></div></header>`;
@@ -7758,6 +7764,11 @@ function mobileFareSheets(flights, fare, options){
 
   function tyRecognizedLoggedInUser(){
     try{
+      /* A Firebase identity alone is not a TravelYaraa login. Every protected
+         API needs the backend authToken, so without it treat the user as
+         logged out and let the existing login panel run. */
+      if(!tyGuestAuthToken()) return null;
+
       if(window.tyCurrentFirebaseUser && (window.tyCurrentFirebaseUser.uid || window.tyCurrentFirebaseUser.email || window.tyCurrentFirebaseUser.phoneNumber)){
         return {
           uid: window.tyCurrentFirebaseUser.uid || "",
@@ -7843,6 +7854,13 @@ function mobileFareSheets(flights, fare, options){
     return token ? {"Authorization":"Bearer " + token} : {};
   }
 
+  function tyIsAuthRequiredError(error){
+    if(!error) return false;
+    if(Number(error.status) === 401) return true;
+    if(String(error.code || '') === 'AUTH_REQUIRED') return true;
+    return /please log in|auth[_ ]required/i.test(String(error.message || ''));
+  }
+
   function tyGuestEmail(payload){
     return payload?.passenger?.email || payload?.details?.contact?.email || payload?.details?.email || payload?.email || "";
   }
@@ -7870,14 +7888,9 @@ function mobileFareSheets(flights, fare, options){
     const appMod = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js");
     const authMod = await import("https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js");
 
-    let app = null;
-    try{
-      app = appMod.getApps && appMod.getApps().length ? appMod.getApps()[0] : appMod.initializeApp(TY_FIREBASE_CONFIG);
-    }catch(e){
-      app = appMod.initializeApp(TY_FIREBASE_CONFIG, "ty-flight-guest-auth");
-    }
-
-    const auth = authMod.getAuth(app);
+    /* assets/js/firebase-auth.js owns the only Firebase app on this page. */
+    const app = appMod.getApps && appMod.getApps().length ? appMod.getApps()[0] : appMod.initializeApp(TY_FIREBASE_CONFIG);
+    const auth = window.auth || authMod.getAuth(app);
     try{ await authMod.setPersistence(auth, authMod.browserLocalPersistence); }catch(e){}
 
     tyFirebaseAuthRuntime = {appMod, authMod, auth};
@@ -8030,8 +8043,8 @@ function mobileFareSheets(flights, fare, options){
   }
 
   async function requireGuestOtpBeforePayment(payload, msg){
-    const existingUser = tySyncLoggedInUserForBooking(payload);
-    if(existingUser){
+    const existingUser = tyGuestAuthToken() ? tySyncLoggedInUserForBooking(payload) : null;
+    if(existingUser && tyGuestAuthToken()){
       return {authToken:tyGuestAuthToken(), user:existingUser, reused:true};
     }
 
@@ -8218,7 +8231,10 @@ function mobileFareSheets(flights, fare, options){
     });
     const data = await response.json().catch(()=>({}));
     if(!response.ok || !data || data.success === false){
-      throw new Error(data.message || data.error || ('HTTP ' + response.status));
+      const error = new Error(data.message || data.error || ('HTTP ' + response.status));
+      error.status = response.status;
+      error.code = data.code || '';
+      throw error;
     }
     return data;
   }
@@ -8719,6 +8735,11 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     }catch(e){
       hideSecurePaymentOverlay();
       const text = (e && e.message) ? e.message : "Payment could not be started. Please try again.";
+      if(tyIsAuthRequiredError(e)){
+        /* Stale or missing backend session: drop it so the next Continue
+           Payment click reopens the existing TravelYaraa login panel. */
+        if(typeof window.tyClearBackendSession === "function") window.tyClearBackendSession();
+      }
       if(msg){ msg.classList.add("error"); msg.textContent = text; }
       else { try{ alert(text); }catch(_e){} }
     }
