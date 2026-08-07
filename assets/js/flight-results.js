@@ -4104,14 +4104,15 @@ function renderShell(content, opts){
     )));
 
     /* If backend already sends display/result amount, use it only to infer hidden markup.
-       Do not treat hidden markup as an open fee. Customer must not see markup separately. */
+       Do not treat hidden markup as an open fee. Customer must not see markup separately.
+       displayTotal/resultDisplayAmount is already supplier + ENV markup (no convenience fee). */
     let hiddenMarkup = explicitMarkup;
     if(!hiddenMarkup && displayTotal && supplierTicketAmount){
-      hiddenMarkup = Math.max(0, displayTotal - supplierTicketAmount - openBookingCharge);
+      hiddenMarkup = Math.max(0, displayTotal - supplierTicketAmount);
     }
 
     const customerTicketAmount = Math.max(0, Math.round(
-      supplierTicketAmount + hiddenMarkup || displayTotal
+      displayTotal || (supplierTicketAmount + hiddenMarkup)
     ));
 
     let baseFare = apiBase;
@@ -6889,16 +6890,31 @@ function mobileFareSheets(flights, fare, options){
     const selected = selectedOfferObject(fare);
     const hasSelected = Boolean(selected && selected.code);
     const cards = state.availableOffers.length
-      ? state.availableOffers.map(renderOfferCard).join('')
+      ? state.availableOffers.map(function(o){ return renderOfferCard(o, fare); }).join('')
       : '<p class="ty-offer-empty">No active flight offer is available right now.</p>';
     return `<section class="ty-offer-box ty-offer-box-v2"><div class="ty-section-head"><h2>Offers & Promo Code</h2></div><div class="ty-section-body"><div class="ty-code-input ty-code-input-v2"><input id="tyCouponInput" type="text" placeholder="ENTER COUPON CODE" value="${hasSelected?esc(selected.code||selected.offerCode):''}"><button type="button" ${hasSelected?'data-remove-coupon':'data-apply-coupon'}>${hasSelected?'Remove':'Apply'}</button></div>${hasSelected?`<p class="ty-offer-success">${esc(selected.message || selected.success || 'Offer applied successfully.')}</p>`:''}<div class="ty-offer-list">${cards}</div></div></section>`;
   }
 
-  function renderOfferCard(offer){
+  function tyOfferCardSaving(offer, fare){
+    const code = String(offer && (offer.code || offer.offerCode) || '').toUpperCase();
+    const type = String(offer && (offer.discountType || offer.type) || '').toLowerCase();
+    if(code === 'TY0FEES' || type.includes('convenience_fee') || type.includes('fee_waiver')){
+      const fee = Math.max(0, Math.round(Number(fare && (fare.bookingFee || fare.convenienceFee || fare.openBookingCharge) || 0)));
+      if(fee > 0) return '₹' + fee.toLocaleString('en-IN') + ' OFF';
+      return 'Zero Convenience Fee';
+    }
+    const flat = Math.max(0, Number(offer && (offer.discountValue != null ? offer.discountValue : offer.maxDiscount) || 0));
+    if(flat > 0) return '₹' + flat.toLocaleString('en-IN') + ' OFF';
+    return '';
+  }
+
+  function renderOfferCard(offer, fare){
     const code = String(offer.code || offer.offerCode || '').toUpperCase();
     const activeCode = String((state.selectedOffer && (state.selectedOffer.code || state.selectedOffer.offerCode)) || '').toUpperCase();
     const active = activeCode === code;
-    return `<div class="ty-offer-card ${active?'active':''}" data-offer-code="${esc(code)}"><span class="ty-offer-radio">${active?'✓':''}</span><div><b>${esc(code)} - ${esc(offer.title||'Offer')}</b><p>${esc(offer.customer_text||offer.terms||'')}</p><button type="button" class="ty-offer-apply-btn" data-offer-apply="${esc(code)}">${active?'Applied':'Apply'}</button></div></div>`;
+    const saving = tyOfferCardSaving(offer, fare);
+    const blurb = offer.customer_text || offer.terms || '';
+    return `<div class="ty-offer-card ${active?'active':''}" data-offer-code="${esc(code)}"><span class="ty-offer-radio">${active?'✓':''}</span><div><b>${esc(code)} - ${esc(offer.title||'Offer')}</b>${saving?`<strong class="ty-offer-saving">${esc(saving)}</strong>`:''}<p>${esc(blurb)}</p><button type="button" class="ty-offer-apply-btn" data-offer-apply="${esc(code)}">${active?'Applied':'Apply'}</button></div></div>`;
   }
 
   function tyOfferForCode(code){
