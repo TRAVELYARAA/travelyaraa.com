@@ -4104,14 +4104,15 @@ function renderShell(content, opts){
     )));
 
     /* If backend already sends display/result amount, use it only to infer hidden markup.
-       Do not treat hidden markup as an open fee. Customer must not see markup separately. */
+       Do not treat hidden markup as an open fee. Customer must not see markup separately.
+       displayTotal/resultDisplayAmount is already supplier + ENV markup (no convenience fee). */
     let hiddenMarkup = explicitMarkup;
     if(!hiddenMarkup && displayTotal && supplierTicketAmount){
-      hiddenMarkup = Math.max(0, displayTotal - supplierTicketAmount - openBookingCharge);
+      hiddenMarkup = Math.max(0, displayTotal - supplierTicketAmount);
     }
 
     const customerTicketAmount = Math.max(0, Math.round(
-      supplierTicketAmount + hiddenMarkup || displayTotal
+      displayTotal || (supplierTicketAmount + hiddenMarkup)
     ));
 
     let baseFare = apiBase;
