@@ -184,11 +184,63 @@ function priceRangeLabel(k){ return ({'0-2200':'Up to ₹ 2,200','2201-2500':'�
 function countFor(fn){ return S.all.filter(fn).length; }
 function uniqueValues(fn, max){ return [...new Set(S.all.map(fn).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,max||12); }
 
-function mediaUrl(v){ if(!v)return ''; if(typeof v==='string')return v; return v.url||v.imageUrl||v.src||''; }
+function mediaUrl(v){
+  if(!v) return '';
+  if(typeof v==='string') return /^https?:\/\//i.test(v) ? v : '';
+  const links=v.links||{};
+  const href=(links.Standard&&(links.Standard.href||links.Standard.url))||(links.XXL&&(links.XXL.href||links.XXL.url))||(links.original&&(links.original.href||links.original.url))||v.url||v.imageUrl||v.src||v.href||'';
+  return /^https?:\/\//i.test(String(href)) ? String(href) : '';
+}
 function imageOf(h){ const raw=h.raw||h; const imgs=[h.image,h.imageUrl,h.heroImage,h.thumbnail,mediaUrl(h.images&&h.images[0]),mediaUrl(h.imgs&&h.imgs[0]),mediaUrl(raw.heroImage),mediaUrl(raw.images&&raw.images[0]),mediaUrl(raw.img&&raw.img[0])].filter(Boolean); return String(imgs[0]||''); }
-function priceOf(o,h){ const p=o&&o.pricing||{}; const c=[p.totalPrice,p.finalPrice,p.total,o&&o.totalPrice,o&&o.price,o&&o.tp,o&&o.tfcs&&o.tfcs.TF,o&&o.tfcs&&o.tfcs.NF,h&&h.price,h&&h.totalPrice,h&&h.totalAmount,h&&h.tp,h&&h.pops&&h.pops[0]&&h.pops[0].tpc]; for(const v of c){ const n=Number(v); if(n>0) return n; } return 0; }
-function cancellationOf(op){ const c=op&&op.cancellation||op&&op.cancellationPolicy||op&&op.cnp||{}; const penalties=arr(c.penalties).length?arr(c.penalties):arr(c.pd); const refundable=c.isRefundable!==undefined?!!c.isRefundable:(c.refundable!==undefined?!!c.refundable:!(c.isNonRefundable===true||c.nonRefundable===true||c.inra===true)); const freeUntil=c.freeCancellationUntil||c.freeCancellationTill||c.deadline||((penalties.find(x=>Number(x.amount!=null?x.amount:x.am)===0)||{}).toDate)||((penalties.find(x=>Number(x.amount!=null?x.amount:x.am)===0)||{}).tdt)||''; return {refundable,freeCancellation:!!(c.freeCancellation===true||c.ifra===true||freeUntil),freeCancellationUntil:freeUntil,penalties,raw:c}; }
-function normOption(op, h, i){ op=op||{}; const rooms=arr(op.roomInfo).length?arr(op.roomInfo):(arr(op.rooms).length?arr(op.rooms):arr(op.ris)); const first=rooms[0]||{}; const id=op.optionId||op.id||op.code||op.op||first.id||first.roomId||first.rc||('room_'+i); const cancel=cancellationOf(op); const roomName=op.roomSummary||op.roomName||first.roomCategory||first.roomType||first.name||first.rc||first.rt||'Room option'; const meal=op.mealBasis||op.boardBasis||op.mb||first.mealBasis||first.boardBasis||first.mb||''; return { id:String(id), optionId:String(id), roomType:String(roomName), roomSummary:String(roomName), mealBasis:String(meal), totalPrice:priceOf(op,h), baseFare:Number(op.baseFare||op.pricing&&op.pricing.basePrice||0), taxes:Number(op.taxes||op.pricing&&op.pricing.taxes||0), currency:op.currency||op.pricing&&op.pricing.currency||h.currency||'INR', refundable:cancel.refundable, freeCancellation:cancel.freeCancellation, cancellation:cancel, cancellationPolicy:cancel.raw, bookingNotes:op.bookingNotes||op.notes||[], rooms:rooms, raw:op }; }
+function customerStayPrice(o,h){
+  const pb=o&&o.pricingBreakup||{};
+  const optionVals=[o&&o.resultDisplayAmount,o&&o.displayPrice,pb.resultDisplayAmount,pb.displayPrice,o&&o.price,o&&o.amount,o&&o.finalPrice,o&&o.totalAmount];
+  for(const v of optionVals){ const n=Number(v); if(n>0) return n; }
+  if(o&&(o.optionId||o.id||o.pricing||o.cancellation||o.roomInfo||o.roomSummary)) return 0;
+  const hotelVals=[h&&h.resultDisplayAmount,h&&h.displayPrice,h&&h.price];
+  for(const v of hotelVals){ const n=Number(v); if(n>0) return n; }
+  return 0;
+}
+function priceOf(o,h){ return customerStayPrice(o,h); }
+function penaltyAmount(p){ const n=Number(p&&(p.amount!=null?p.amount:p.am)); return Number.isFinite(n)?n:NaN; }
+function penaltyTime(p, keys){ for(const k of keys){ const t=Date.parse(p&&p[k]); if(Number.isFinite(t)) return t; } return NaN; }
+function currentZeroPenaltyUntil(penalties){
+  const list=arr(penalties);
+  if(!list.length) return '';
+  const now=Date.now();
+  const current=list.find(p=>{
+    const amount=penaltyAmount(p);
+    if(!Number.isFinite(amount)) return false;
+    const from=penaltyTime(p,['from','fdt','fromDate']);
+    const to=penaltyTime(p,['to','tdt','toDate']);
+    if(Number.isFinite(from)&&Number.isFinite(to)) return now>=from && now<to;
+    if(Number.isFinite(from)&&!Number.isFinite(to)) return now>=from;
+    if(!Number.isFinite(from)&&Number.isFinite(to)) return now<to;
+    return false;
+  });
+  if(!current || penaltyAmount(current)!==0) return '';
+  return String(current.to||current.tdt||current.toDate||'');
+}
+function cancellationOf(op){
+  const nested=op&&(op.cancellation&&(op.cancellation.raw||op.cancellation));
+  const c=nested||(op&&op.cancellationPolicy)||(op&&op.cnp)||{};
+  const penalties=arr(c.penalties).length?arr(c.penalties):(arr(c.pd).length?arr(c.pd):arr(op&&op.cancellation&&op.cancellation.penalties));
+  const refundable=c.isRefundable!==undefined?!!c.isRefundable:(c.refundable!==undefined?!!c.refundable:!(c.isNonRefundable===true||c.nonRefundable===true||c.inra===true));
+  const freeUntil=currentZeroPenaltyUntil(penalties);
+  return {refundable,freeCancellation:!!freeUntil,freeCancellationUntil:freeUntil,penalties,raw:c};
+}
+function cancelBadge(o){
+  const c=o&&o.cancellation||cancellationOf(o||{});
+  if(!c.freeCancellation) return '';
+  return '<span>Free cancellation'+(c.freeCancellationUntil?' until '+esc(fmtDate(c.freeCancellationUntil)):'')+'</span>';
+}
+function stayNightsLabel(){
+  const s=S.search||{};
+  const ctx=s.searchContext||{};
+  const n=nights(s.checkIn||s.checkinDate||ctx.checkIn, s.checkOut||s.checkoutDate||ctx.checkOut);
+  return 'Total for '+n+' night'+(n===1?'':'s');
+}
+function normOption(op, h, i){ op=op||{}; const rooms=arr(op.roomInfo).length?arr(op.roomInfo):(arr(op.rooms).length?arr(op.rooms):arr(op.ris)); const first=rooms[0]||{}; const id=op.optionId||op.id||op.code||op.op||first.id||first.roomId||first.rc||('room_'+i); const cancel=cancellationOf(op); const roomName=op.roomSummary||op.roomName||first.roomCategory||first.roomType||first.name||first.rc||first.rt||''; const meal=op.mealBasis||op.boardBasis||op.mb||first.mealBasis||first.boardBasis||first.mb||''; return { id:String(id), optionId:String(id), roomType:String(roomName), roomSummary:String(roomName), mealBasis:String(meal), totalPrice:priceOf(op,h), resultDisplayAmount:priceOf(op,h), baseFare:Number(op.baseFare||op.pricing&&op.pricing.basePrice||0), taxes:Number(op.taxes||op.pricing&&op.pricing.taxes||0), currency:op.currency||op.pricing&&op.pricing.currency||h.currency||'INR', refundable:cancel.refundable, freeCancellation:cancel.freeCancellation, cancellation:cancel, cancellationPolicy:cancel.raw, bookingNotes:op.bookingNotes||op.notes||[], rooms:rooms, raw:op }; }
 function optionList(h){ const raw=h.raw||h; let ops=[]; if(arr(h.options).length) ops=arr(h.options); else if(arr(raw.options).length) ops=raw.options; else if(raw.option) ops=[raw.option]; else if(arr(raw.ops).length) ops=raw.ops; else if(arr(raw.hInfo&&raw.hInfo.ops).length) ops=raw.hInfo.ops; else if(arr(raw.data&&raw.data.hInfo&&raw.data.hInfo.ops).length) ops=raw.data.hInfo.ops; return ops.map((op,i)=>normOption(op,h,i)); }
 function amenityName(x){ return typeof x==='string'?x:(x&&x.name||x&&x.label||x&&x.description||x&&x.value||''); }
 function amenitiesOf(h){ const raw=h.raw||h; const vals=[].concat(arr(h.amenities),arr(h.facilities),arr(raw.amenities),arr(raw.facilities),arr(raw.hotelFacilities),arr(raw.fl),arr(raw.inst).map(x=>x&&x.msg),arr(raw.ops&&raw.ops[0]&&raw.ops[0].ris&&raw.ops[0].ris[0]&&raw.ops[0].ris[0].fcs)); return vals.map(amenityName).filter(Boolean).map(String); }
@@ -199,13 +251,14 @@ function normHotel(h,i){
   if(hInfo) h=Object.assign({}, hInfo, h, {raw:raw});
   const name=h.name||h.hotelName||h.propertyName||(hInfo&&hInfo.name)||'';
   const options=optionList(Object.assign({},h,{raw:raw}));
-  const price=options[0]&&options[0].totalPrice ? options[0].totalPrice : priceOf({},h);
+  const optionPrice=options.reduce(function(min,o){ const n=Number(o.totalPrice||0); return n>0&&(min===0||n<min)?n:min; },0);
+  const price=Number(h.resultDisplayAmount||h.displayPrice||h.price||optionPrice||0);
   const context=h.searchContext||raw.searchContext||S.search.searchContext||{};
   const id=h.tjHotelId||h.hotelId||h.id||h.hid||'';
   const base={
     key:String(id||h.uid||('hotel_'+i)),
     id:id, hotelId:id, tjHotelId:id,
-    name:name||'Hotel', area:h.area||h.locality||h.location||'', address:typeof h.address==='string'?h.address:(h.address&&h.address.addressLine1)||h.ad||'',
+    name:name, area:h.area||h.locality||h.location||'', address:typeof h.address==='string'?h.address:(h.address&&h.address.addressLine1)||h.ad||'',
     city:h.city||h.cityName||context.cityName||'', country:h.country||h.countryName||h.cnt||context.countryName||'',
     star:Number(h.starRating||h.star||h.rt||0), rating:Number(h.userRating||h.rating||h.ur||0),
     ratingCount:ratingCountOf(Object.assign({},h,{raw:raw})),
@@ -312,11 +365,12 @@ function renderResults(){
 }
 function hotelCard(h){
   const stars='★'.repeat(Math.max(0,Math.min(5,Math.round(h.star||0))));
-  const topBadges=(h.verified?'<span class="ok">✓ TJ verified</span>':'')+(h.bestRate?'<span class="rate">◆ Best rate</span>':'');
+  const topBadges=(h.verified?'<span class="ok">✓ Verified</span>':'')+(h.bestRate?'<span class="rate">◆ Best rate</span>':'');
   const facilities=arr(h.amenities).slice(0,3).map(a=>'<span>'+esc(a)+'</span>').join('');
   const meal=mealBasisOf(h);
   const rating=h.rating?('<strong>'+esc(h.rating)+'</strong><span>'+(h.rating>=4?'Good':'Rating')+(h.ratingCount?' <br>('+esc(h.ratingCount)+' Ratings)':'')+'</span>'):'';
-  return '<article class="tyh-card"><div class="tyh-img">'+(h.image?'<img src="'+attr(h.image)+'" alt="'+attr(h.name)+'">':'<span>'+esc((h.name||'H').slice(0,1))+'</span>')+'<div class="tyh-card-badges">'+topBadges+'</div></div><div class="tyh-info"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2><div class="tyh-stars">'+stars+'</div></div><p class="tyh-location">'+esc([h.area||h.place,h.city].filter(Boolean).join(', ')||h.address||'Location available after selection')+'</p><div class="tyh-facilities">'+facilities+'</div>'+(meal?'<p class="tyh-meal">• '+esc(meal)+'</p>':'')+'<div class="tyh-card-foot"><div class="tyh-rating">'+rating+'</div><div class="tyh-price"><small>'+esc(money(h.price))+'/night</small><b>'+esc(money(h.price))+'</b><em>Total incl. taxes</em></div></div>'+(gstOf(h)?'<div class="tyh-gst">GST claim eligible rates available</div>':'')+'<button type="button" data-room="'+attr(h.key)+'">View rooms</button></div></article>';
+  const location=[h.area||h.place,h.city].filter(Boolean).join(', ')||h.address||'';
+  return '<article class="tyh-card"><div class="tyh-img">'+(h.image?'<img src="'+attr(h.image)+'" alt="'+attr(h.name)+'">':'<span>'+esc((h.name||'H').slice(0,1))+'</span>')+'<div class="tyh-card-badges">'+topBadges+'</div></div><div class="tyh-info"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2><div class="tyh-stars">'+stars+'</div></div>'+(location?'<p class="tyh-location">'+esc(location)+'</p>':'')+'<div class="tyh-facilities">'+facilities+'</div>'+(meal?'<p class="tyh-meal">• '+esc(meal)+'</p>':'')+'<div class="tyh-card-foot"><div class="tyh-rating">'+rating+'</div><div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b><em>Total incl. taxes</em></div></div>'+(gstOf(h)?'<div class="tyh-gst">GST claim eligible rates available</div>':'')+'<button type="button" data-room="'+attr(h.key)+'">View rooms</button></div></article>';
 }
 function setFilterValue(kind,value,checked){
   if(kind==='gst'){ S.filters.gst = checked ? (value==='true') : null; return; }
@@ -342,7 +396,7 @@ function bindResults(){
 }
 
 async function openRooms(h){ S.roomHotel=h; renderResults(); if(optionList(h).length&&h.reviewHash) return; try{ showLoader('Loading room options…'); const context=h.searchContext||S.search.searchContext||{}; const res=await api('/api/hotels/detail',{hid:h.hotelId||h.id,hotelId:h.hotelId||h.id,searchContext:context}); const d=unwrap(res)||{}; const detailHotel=normHotel(Object.assign({},h,d.hotel||d,{reviewHash:d.reviewHash||'',searchContext:d.searchContext||context,raw:d.raw||d}),0); S.roomHotel=Object.assign({},h,detailHotel,{key:h.key,reviewHash:d.reviewHash||detailHotel.reviewHash||'',searchContext:d.searchContext||context}); S.all=S.all.map(x=>x.key===h.key?S.roomHotel:x); S.shown=S.shown.map(x=>x.key===h.key?S.roomHotel:x); renderResults(); }catch(e){ const rb=q('.tyh-room-body',root); if(rb) rb.innerHTML='<p class="tyh-muted">'+esc(friendlyError(e))+'</p>'; }finally{ hideLoader(); } }
-function roomSheet(h){ const opts=optionList(h); return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'Room options')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+(opts.length?opts.map(o=>'<article class="tyh-rate"><div><b>'+esc(o.roomSummary||o.roomType)+'</b><p>'+esc(o.mealBasis||'Room plan')+'</p>'+(o.refundable?'<span>Free cancellation</span>':'')+'</div><div><strong>'+esc(money(o.totalPrice))+'</strong><button type="button" data-review-room="'+attr(o.optionId)+'">Continue</button></div></article>').join(''):'<p class="tyh-muted">Room options are unavailable for this hotel.</p>')+'</div></section>'; }
+function roomSheet(h){ const opts=optionList(h); return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+(opts.length?opts.map(o=>'<article class="tyh-rate"><div>'+(o.roomSummary||o.roomType?'<b>'+esc(o.roomSummary||o.roomType)+'</b>':'')+(o.mealBasis?'<p>'+esc(o.mealBasis)+'</p>':'')+cancelBadge(o)+'</div><div><strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em><button type="button" data-review-room="'+attr(o.optionId)+'">Continue</button></div></article>').join(''):'<p class="tyh-muted">Room options are unavailable for this hotel.</p>')+'</div></section>'; }
 async function startReview(h, optionId){
   const selectedBeforeReview=optionList(h).find(o=>String(o.optionId)===String(optionId))||{};
   try{
