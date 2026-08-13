@@ -41,7 +41,17 @@ function newHotelClientRequestId(){
 }
 function nights(ci,co){ try{ const a=new Date(ci), b=new Date(co); const n=Math.round((b-a)/86400000); return n>0?n:1; }catch(e){ return 1; } }
 function fmtDate(v){ if(!v) return ''; try{ return new Date(v).toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short', year:'numeric'}).replace(',',''); }catch(e){ return String(v); } }
-function friendlyError(err){ const m=String((err&&err.message)||'').toLowerCase(); if(m.includes('city id')) return 'Hotel city id is missing. Please select the hotel location again and search.'; if(m.includes('tripjack')||m.includes('token')||m.includes('key')) return 'Hotel supplier connection is not available right now. Please try again later.'; return (err&&err.message)||'Something went wrong. Please try again.'; }
+function friendlyError(err){
+  const code = String((err && err.data && err.data.code) || (err && err.code) || '').toUpperCase();
+  const m = String((err && err.message) || '').toLowerCase();
+  if (code === 'HOTEL_CITY_AMBIGUOUS') return 'Multiple matching locations were found. Please choose an exact hotel location from the suggestions.';
+  if (code === 'HOTEL_CITY_NOT_FOUND' || code === 'HOTEL_CITY_REQUIRED') return 'Please select a valid hotel location from the suggestions and search again.';
+  if (code === 'HOTEL_MAPPING_EMPTY') return 'Hotels are not available for this exact location yet. Please choose a nearby Tripjack location suggestion and try again.';
+  if (code === 'HOTEL_NO_AVAILABILITY' || code === 'NO_AVAILABILITY') return 'No hotels are available for the selected dates and location right now.';
+  if (m.includes('city id') || m.includes('hotel city')) return 'Hotel city id is missing. Please select the hotel location again and search.';
+  if (m.includes('tripjack') || m.includes('token') || m.includes('key') || m.includes('supplier')) return 'Hotel supplier connection is not available right now. Please try again later.';
+  return (err && err.message) || 'Something went wrong. Please try again.';
+}
 function requestHeaders(path, json){
   const headers={Accept:'application/json'};
   if(json) headers['Content-Type']='application/json';
@@ -217,7 +227,42 @@ function shell(content, opts){ opts=opts||{}; const s=S.search||{}; const title=
 function bindBase(){ const b=q('[data-back]',root); if(b) b.onclick=()=>{ if(new URLSearchParams(location.search).get('step')&&new URLSearchParams(location.search).get('step')!=='results') { setPage('results'); renderResults(); } else history.back(); }; }
 
 function hotelSearchExpired(data){ const d=unwrap(data)||{}; const expires=d.expiresAt||d.searchContext&&d.searchContext.expiresAt; return !!(expires && Date.parse(expires)<=Date.now()); }
-async function loadResults(){ S.search=searchPayload(); const stored=read(KEY.results,null); const storedList=stored&&!hotelSearchExpired(stored)?extractResults(stored):[]; if(storedList.length){ const d=unwrap(stored)||{}; S.search=Object.assign({},S.search,{searchContext:d.searchContext||storedList[0].searchContext||{}}); setResults(storedList); return; } try{ showLoader('Finding the best hotels for you...'); const res=await api('/api/hotels/search',S.search); save(KEY.results,res); const d=unwrap(res)||{}; S.search=Object.assign({},S.search,{searchContext:d.searchContext||{}}); setResults(extractResults(res)); }catch(e){ shell('<main class="tyh-empty"><h2>No hotels found</h2><p>'+esc(friendlyError(e))+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'}); const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/'; }finally{ hideLoader(); } }
+async function loadResults(){
+  S.search=searchPayload();
+  const stored=read(KEY.results,null);
+  const storedList=stored&&!hotelSearchExpired(stored)?extractResults(stored):[];
+  if(storedList.length){
+    const d=unwrap(stored)||{};
+    S.search=Object.assign({},S.search,{searchContext:d.searchContext||storedList[0].searchContext||{}});
+    setResults(storedList);
+    return;
+  }
+  try{
+    showLoader('Finding the best hotels for you...');
+    const res=await api('/api/hotels/search',S.search);
+    save(KEY.results,res);
+    const d=unwrap(res)||{};
+    S.search=Object.assign({},S.search,{searchContext:d.searchContext||{}});
+    const list=extractResults(res);
+    if(!list.length){
+      const reason=String(d.emptyReason||'').toUpperCase();
+      const message = reason==='NO_AVAILABILITY'
+        ? 'No hotels are available for the selected dates and location right now.'
+        : reason==='NO_BOOKABLE_PRICE'
+          ? 'Hotels were found, but none currently have a bookable price for these dates.'
+          : reason==='FILTERED_EMPTY'
+            ? 'No hotels match the selected filters.'
+            : 'No bookable hotels were found for this location and dates.';
+      shell('<main class="tyh-empty"><h2>No hotels found</h2><p>'+esc(message)+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+      const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
+      return;
+    }
+    setResults(list);
+  }catch(e){
+    shell('<main class="tyh-empty"><h2>Unable to load hotels</h2><p>'+esc(friendlyError(e))+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+    const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
+  }finally{ hideLoader(); }
+}
 function setResults(list){ S.all=list; applyFilters(); }
 function applyFilters(){
   let list=S.all.slice();
