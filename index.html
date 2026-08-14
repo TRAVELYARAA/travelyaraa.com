@@ -13,7 +13,7 @@
   <link rel="icon" href="/images/favicon.png" type="image/png" />
   <link rel="stylesheet" href="/assets/css/travelyaraa-loader.css?v=20260803" />
   <script src="/assets/js/travelyaraa-loader.js?v=20260803" defer></script>
-  <script src="/assets/js/hotel-results.js" defer></script>
+  <script src="/assets/js/hotel-loader.js"></script>
 
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -2370,7 +2370,7 @@ html.ty-ui-overlay-open-v69 .slide-page.active {
 }
 </style>
 <script id="ty-tripjack-api-v74">
-(function(){"use strict";const API=(window.TRAVELYARAA_API_BASE||window.TY_API_BASE||"https://api.travelyaraa.com").replace(/\/$/,"");async function post(path,body){const res=await fetch(API+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});const data=await res.json().catch(()=>({}));if(!res.ok||data.success===false)throw new Error(data.message||data.code||("Request error "+res.status));return data;}function fpay(p){const pax=p.passengers||{};const rawFare=(p.pft||p.fareType||p.search?.pft||p.search?.fareType||"REGULAR").toString().toUpperCase();const apiPft=(rawFare==="STUDENT"||rawFare==="SENIOR_CITIZEN")?rawFare:"REGULAR";return {from:p.from||p.fromCode,to:p.to||p.toCode,departureDate:p.departureDate||p.date,returnDate:p.returnDate||"",cabin:p.cabin||p.cabinClass||pax.cabin||"ECONOMY",fareType:rawFare,pft:apiPft,passengers:{adults:Number(pax.adults||p.adults||1),children:Number(pax.children||p.children||0),infants:Number(pax.infants||p.infants||0)},routes:p.routes||undefined};}function hpay(p){const rooms=Array.isArray(p.rooms)&&p.rooms.length?p.rooms:[{adults:Number(p.adults||1),children:Number(p.children||0),childAge:p.childAge||[]}];return {checkIn:p.checkIn,checkOut:p.checkOut,rooms,currency:"INR",hids:p.hids||p.hotelIds||p.tjHotelIds||[]};}window.TravelYaraaTripjackAPI={post,searchFlights:p=>post("/api/flights/search",fpay(p)),reviewFlight:p=>post("/api/flights/review",p),searchHotels:p=>post("/api/hotels/search",hpay(p)),hotelDetail:p=>post("/api/hotels/detail",p),reviewHotel:p=>post("/api/hotels/review",p)};})();
+(function(){"use strict";const API=(window.TRAVELYARAA_API_BASE||window.TY_API_BASE||"https://api.travelyaraa.com").replace(/\/$/,"");async function post(path,body){const res=await fetch(API+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});const data=await res.json().catch(()=>({}));if(!res.ok||data.success===false)throw new Error(data.message||data.code||("Request error "+res.status));return data;}function fpay(p){const pax=p.passengers||{};const rawFare=(p.pft||p.fareType||p.search?.pft||p.search?.fareType||"REGULAR").toString().toUpperCase();const apiPft=(rawFare==="STUDENT"||rawFare==="SENIOR_CITIZEN")?rawFare:"REGULAR";return {from:p.from||p.fromCode,to:p.to||p.toCode,departureDate:p.departureDate||p.date,returnDate:p.returnDate||"",cabin:p.cabin||p.cabinClass||pax.cabin||"ECONOMY",fareType:rawFare,pft:apiPft,passengers:{adults:Number(pax.adults||p.adults||1),children:Number(pax.children||p.children||0),infants:Number(pax.infants||p.infants||0)},routes:p.routes||undefined};}function hpay(p){const rooms=Array.isArray(p.rooms)&&p.rooms.length?p.rooms:[{adults:Number(p.adults||1),children:Number(p.children||0),childAge:p.childAge||[]}];return {checkIn:p.checkIn,checkOut:p.checkOut,rooms,currency:"INR",hids:p.hids||p.hotelIds||p.tjHotelIds||[]};}window.TravelYaraaTripjackAPI={post,searchFlights:p=>post("/api/flights/search",fpay(p)),reviewFlight:p=>post("/api/flights/review",p),hotelDetail:p=>post("/api/hotels/detail",p),reviewHotel:p=>post("/api/hotels/review",p)};})();
 </script>
 <link rel="stylesheet" href="/assets/css/offers.css?v=126">
 
@@ -2962,8 +2962,8 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
 <div class="ty-v5-service-grid">
         <button class="ty-box-v5 full-mobile" type="button" onclick="openCityPickerV5('hotelCity')">
           <span class="ty-box-label-v5">City / Hotel / Area</span>
-          <span class="ty-box-main-v5" id="hotelCityTextV5">Tokyo</span>
-          <span class="ty-box-sub-v5" id="hotelAreaTextV5">Japan</span>
+          <span class="ty-box-main-v5" id="hotelCityTextV5">City or area</span>
+          <span class="ty-box-sub-v5" id="hotelAreaTextV5">Select an exact location</span>
         </button>
         <button class="ty-box-v5" type="button" onclick="openCalendarV5('hotelCheckin')">
           <span class="ty-box-label-v5">Check-in</span>
@@ -4162,7 +4162,7 @@ const S={
     fareType:"REGULAR",
     multi:[]
   },
-  hotel:{city:"Tokyo",area:"Japan",checkin:new Date(today),checkout:addDays(today,1),rooms:1,adults:1,children:0},
+  hotel:{city:"",area:"",checkin:new Date(today),checkout:addDays(today,1),rooms:1,adults:1,children:0},
   cab:{pickup:"Airport",drop:"Hotel",date:new Date(today),time:"12:30",type:"Sedan"}
 };
 function $(id){return document.getElementById(id)}
@@ -4210,7 +4210,7 @@ function sync(){
   $("flightTravellerMainV5").innerHTML=ft+"<small>, "+S.flight.cabin.replace("Economy/Premium Economy","Eco/Prem. Eco")+"</small>";
   $("flightTravellerMainMultiV5").innerHTML=$("flightTravellerMainV5").innerHTML;
 
-  $("hotelCityTextV5").textContent=S.hotel.city; $("hotelAreaTextV5").textContent=S.hotel.area;
+  $("hotelCityTextV5").textContent=S.hotel.city||"City or area"; $("hotelAreaTextV5").textContent=S.hotel.area||"Select an exact location";
   $("hotelCheckinTextV5").textContent=fmtShort(S.hotel.checkin); $("hotelCheckoutTextV5").textContent=fmtShort(S.hotel.checkout);
   $("hotelGuestMainV5").textContent=S.hotel.rooms+" Room"+(S.hotel.rooms>1?"s":"")+", "+(S.hotel.adults+S.hotel.children)+" Guest"+((S.hotel.adults+S.hotel.children)>1?"s":"");
 
@@ -4650,7 +4650,7 @@ function showTYLoaderV184(service){
 }
 function hideTYLoaderV184(){if(window.TravelYaraaLoader)window.TravelYaraaLoader.hide();if(window.TYHotelSearchLoader)window.TYHotelSearchLoader.hide()}
 function supplierPayload(s,ctx){const st=S(),f=st.flight||{},h=st.hotel||{},c=st.cab||{};if(s==="flight"){const fareType=String(f.fareType||sessionStorage.getItem("ty_flight_fare_type_v128")||"REGULAR").toUpperCase();return{from:(f.from&&f.from.code)||ctx.from||"",to:(f.to&&f.to.code)||ctx.to||"",departureDate:isoDate(f.depart)||ctx.depart||"",returnDate:(function(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)?d:""})(isoDate(f.ret)),tripType:st.trip||trip(),passengers:{adults:Number(f.adults||ctx.flight?.adults||1),children:Number(f.children||ctx.flight?.children||0),infants:Number(f.infants||ctx.flight?.infants||0)},cabin:f.cabin||ctx.flight?.cabin||"",fareType:fareType,pft:fareType,searchModifiers:{pft:(fareType==="STUDENT"||fareType==="SENIOR_CITIZEN")?fareType:"REGULAR"}}}if(s==="hotel"){const rawId=String(h.cityId||h.hotelCityId||h.regionId||"");const cityId=/^\d+$/.test(rawId)?rawId:"";return{city:h.city||ctx.hotelCity||"",cityName:h.city||ctx.hotelCity||"",cityId:cityId,regionId:cityId,countryName:h.country||h.cityCountry||"",nationality:"IN",currency:"INR",latitude:h.lat||h.latitude||"",longitude:h.lng||h.longitude||"",nearMe:Boolean(h.lat&&h.lng),checkIn:isoDate(h.checkin)||ctx.hotel?.checkIn||"",checkOut:isoDate(h.checkout)||ctx.hotel?.checkOut||"",rooms:[{adults:Number(h.adults||1),children:Number(h.children||0),childAge:h.childAge||[]}],adults:Number(h.adults||1),children:Number(h.children||0)}}return{source:c.pickup||ctx.cabPickup||"",destination:c.drop||ctx.cabDrop||"",scheduledDate:isoDate(c.date)||ctx.cab?.date||"",scheduledTime:c.time||ctx.cab?.time||"",cabType:c.type||""}}
-async function go(s){s=String(s||"flight").toLowerCase();if(!PAGES[s])s="flight";const ctx=payload(s);const live=supplierPayload(s,ctx);if(s==="hotel"&&!String(live.city||live.cityName||"").trim())return;if(s==="flight"||s==="hotel")showTYLoaderV184(s);else hideTYLoaderV184();save("tySearchPayload",{service:s,search:ctx,livePayload:live,createdAt:new Date().toISOString()});save("tySearchContext",ctx);try{sessionStorage.removeItem("ty_flight_search_error");sessionStorage.setItem("ty_last_search_payload",JSON.stringify(Object.assign({type:s,service:s},live)));sessionStorage.removeItem("ty_live_results_"+s)}catch(e){}sessionStorage.setItem("tySelectedService",s);const paths={flight:"/api/flights/search",hotel:"/api/hotels/search",cab:"/api/cabs/search"};try{const data=await postSearch(paths[s],live);try{const cached=JSON.stringify(data);if(cached.length<=4500000)sessionStorage.setItem("ty_live_results_"+s,cached);else sessionStorage.removeItem("ty_live_results_"+s)}catch(e){sessionStorage.removeItem("ty_live_results_"+s)}}catch(err){try{sessionStorage.removeItem("ty_live_results_"+s);sessionStorage.setItem("ty_flight_search_error",String(err&&err.message||"Search request failed."))}catch(e){}}if(s!=="flight"&&s!=="hotel")hideTYLoaderV184();location.href=PAGES[s]+"?service="+encodeURIComponent(s)}
+async function go(s){s=String(s||"flight").toLowerCase();if(!PAGES[s])s="flight";const ctx=payload(s);const live=supplierPayload(s,ctx);if(s==="hotel"){if(!/^\d+$/.test(String(live.regionId||live.cityId||""))){if(typeof window.openCityPickerV5==="function")window.openCityPickerV5("hotelCity");return;}showTYLoaderV184("hotel");save("tySearchPayload",{service:"hotel",search:ctx,livePayload:live,createdAt:new Date().toISOString()});save("tySearchContext",ctx);try{sessionStorage.setItem("ty_last_search_payload",JSON.stringify(Object.assign({type:"hotel",service:"hotel"},live)));sessionStorage.removeItem("ty_live_results_hotel");sessionStorage.removeItem("ty_flight_search_error")}catch(e){}sessionStorage.setItem("tySelectedService","hotel");location.href=PAGES.hotel+"?service=hotel&step=results";return;}if(s==="flight")showTYLoaderV184("flight");else hideTYLoaderV184();save("tySearchPayload",{service:s,search:ctx,livePayload:live,createdAt:new Date().toISOString()});save("tySearchContext",ctx);try{sessionStorage.removeItem("ty_flight_search_error");sessionStorage.setItem("ty_last_search_payload",JSON.stringify(Object.assign({type:s,service:s},live)));sessionStorage.removeItem("ty_live_results_"+s)}catch(e){}sessionStorage.setItem("tySelectedService",s);const paths={flight:"/api/flights/search",cab:"/api/cabs/search"};try{const data=await postSearch(paths[s],live);try{const cached=JSON.stringify(data);if(cached.length<=4500000)sessionStorage.setItem("ty_live_results_"+s,cached);else sessionStorage.removeItem("ty_live_results_"+s)}catch(e){sessionStorage.removeItem("ty_live_results_"+s)}}catch(err){try{sessionStorage.removeItem("ty_live_results_"+s);sessionStorage.setItem("ty_flight_search_error",String(err&&err.message||"Search request failed."))}catch(e){}}if(s!=="flight")hideTYLoaderV184();location.href=PAGES[s]+"?service="+encodeURIComponent(s)}
 /* Flight loader stays visible through the hand-off to the results page; a
    bfcache restore of this page must still clear it. */
 window.addEventListener("pageshow",function(ev){if(ev.persisted)hideTYLoaderV184()});
@@ -4665,8 +4665,6 @@ function apiBaseV181(){return String(window.TRAVELYARAA_API_BASE||window.TY_API_
 
 const TY_TOP_AIRPORT_CODES_V181=["DEL","BOM","BLR","HYD","MAA","CCU","AMD","PNQ","GOX","JDH","JAI","COK","LKO","IXC","GAU"];
 const TY_AIRPORT_DISPLAY_V181={DEL:"New Delhi",BOM:"Mumbai",BLR:"Bengaluru",HYD:"Hyderabad",MAA:"Chennai",CCU:"Kolkata",AMD:"Ahmedabad",PNQ:"Pune",GOX:"Goa",GOI:"Goa",JDH:"Jodhpur",JAI:"Jaipur",COK:"Kochi",LKO:"Lucknow",IXC:"Chandigarh",GAU:"Guwahati"};
-const TY_POPULAR_HOTEL_LOCATIONS_V181=["New Delhi","Mumbai","Bengaluru","Hyderabad","Chennai","Kolkata","Pune","Goa","Jodhpur","Jaipur","Ahmedabad","Kochi","Lucknow","Chandigarh","Guwahati"].map(x=>({id:"",name:x,cityName:x,state:"",country:"India",source:"popular"}));
-
 function normalizeAirportRows(raw){
   const obj=raw&&typeof raw==="object"?raw:{};
   return Object.keys(obj).map(code=>{
@@ -4846,11 +4844,21 @@ function hotelDestinationLabelV181(r){
   const parts=uniqueHotelPlacePartsV181(r);
   return {title:parts[0]||prettyHotelPlaceV181((r&&(r.cityName||r.name||r.city))||""), sub:parts.slice(1).join(", "), country:parts[parts.length-1]||prettyHotelPlaceV181((r&&r.country)||""), label:parts.join(", ")};
 }
+function hotelRegionTypeLabelV181(value){
+  const raw=String(value||"").trim().toUpperCase();
+  if(raw==="MULTI_CITY_VICINITY") return "Area";
+  if(raw==="PROVINCE_STATE") return "Region";
+  if(raw==="CITY") return "City";
+  return prettyHotelPlaceV181(raw.replace(/_/g," "));
+}
 function hotelRowHtmlV181(r,recent){
   const loc=hotelDestinationLabelV181(r);
   const name=loc.title||r.name||r.cityName||r.city||"";
   const sub=loc.sub||(recent?"Recent searches":"");
-  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr((/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))?String(r.id||r.cityId||r.regionId):""))}" data-country="${escAttr(loc.country||r.country||"")}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184"></span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b><small>${escHtml(sub)}</small></span></button>`;
+  const type=hotelRegionTypeLabelV181(r.regionType||(r.raw&&r.raw.regionType)||"");
+  const country=loc.country||prettyHotelPlaceV181(r.country||"");
+  const meta=[type,country].filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.toLowerCase()===v.toLowerCase())===i).join(" · ");
+  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr((/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))?String(r.id||r.cityId||r.regionId):""))}" data-country="${escAttr(country)}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184"></span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b><small>${escHtml(sub)}</small>${meta?'<em>'+escHtml(meta)+'</em>':''}</span></button>`;
 }
 function bindCityButtonsV181(box){
   qa(".ty-city-row-v66,.ty-hotel-chip-v184",box).forEach(btn=>btn.onclick=function(){
@@ -4877,23 +4885,12 @@ async function renderCityRows(){
   async function draw(){
     const t=S().cityTarget;const v=String(input.value||"").trim();
     if(isHotelTarget(t)){
-      if(!v){
-        const recent=readRecentV181(t);
-        const domesticNames=["New Delhi","Pune","Ahmedabad","Mumbai","Bengaluru","Jaipur","Agra","Hyderabad"];
-        const internationalNames=["Dubai","Abu Dhabi","Singapore","Bangkok"];
-        const live=await hotelCitySearchV181("",20);
-        function chip(name,country){
-          const matches=(live||[]).filter(x=>String(x.name||x.cityName||"").toLowerCase()===String(name).toLowerCase());
-          const match=matches.length===1?matches[0]:{};
-          const chipId=/^\d+$/.test(String(match.id||match.cityId||match.regionId||""))?String(match.id||match.cityId||match.regionId):"";
-          return `<button type="button" class="ty-hotel-chip-v184" data-kind="hotel" data-city="${escAttr(match.name||match.cityName||name)}" data-cityid="${escAttr(chipId)}" data-country="${escAttr(match.country||country||"")}" data-lat="${escAttr(match.lat||"")}" data-lng="${escAttr(match.lng||"")}">${escHtml(name)}</button>`;
-        }
-        box.innerHTML=(recent.length?cityLabelV181("Recent searches")+recent.map(r=>hotelRowHtmlV181(r,true)).join(""):"")+cityLabelV181("Popular Search In Domestic")+`<div class="ty-hotel-chip-grid-v184">${domesticNames.map(n=>chip(n,"India")).join("")}</div>`+cityLabelV181("Popular Search In International")+`<div class="ty-hotel-chip-grid-v184">${internationalNames.map(n=>chip(n,"")).join("")}</div>`;
-        bindCityButtonsV181(box);return;
-      }
+      function numericHotelRows(list){ return (list||[]).filter(r=>/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))); }
       box.innerHTML=cityStatusV181("Searching locations...","loading");
-      const rows=await hotelCitySearchV181(v,30);if(String(input.value||"").trim()!==v)return;
-      box.innerHTML=rows.length?rows.map(r=>hotelRowHtmlV181(r,false)).join(""):"";
+      const live=await hotelCitySearchV181(v,v?30:20);if(String(input.value||"").trim()!==v)return;
+      const recent=v?[]:numericHotelRows(readRecentV181(t));
+      const rows=numericHotelRows(live);
+      box.innerHTML=(recent.length?cityLabelV181("Recent searches")+recent.map(r=>hotelRowHtmlV181(r,true)).join(""):"")+(rows.length?rows.map(r=>hotelRowHtmlV181(r,false)).join(""):cityStatusV181("Type a location and select an exact suggestion.","empty"));
       bindCityButtonsV181(box);return;
     }
     const rows=await airportApiSearchV185(v,30);if(String(input.value||"").trim()!==v)return;
