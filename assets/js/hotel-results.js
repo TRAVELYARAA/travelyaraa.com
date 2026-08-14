@@ -46,11 +46,13 @@ function friendlyError(err){
   const m = String((err && err.message) || '').toLowerCase();
   if (code === 'HOTEL_CITY_AMBIGUOUS') return 'Multiple matching locations were found. Please choose an exact hotel location from the suggestions.';
   if (code === 'HOTEL_CITY_NOT_FOUND' || code === 'HOTEL_CITY_REQUIRED') return 'Please select a valid hotel location from the suggestions and search again.';
-  if (code === 'HOTEL_MAPPING_EMPTY') return 'Hotels are not available for this exact location yet. Please choose a nearby Tripjack location suggestion and try again.';
-  if (code === 'HOTEL_NO_AVAILABILITY' || code === 'NO_AVAILABILITY') return 'No hotels are available for the selected dates and location right now.';
-  if (m.includes('city id') || m.includes('hotel city')) return 'Hotel city id is missing. Please select the hotel location again and search.';
-  if (m.includes('tripjack') || m.includes('token') || m.includes('key') || m.includes('supplier')) return 'Hotel supplier connection is not available right now. Please try again later.';
-  return (err && err.message) || 'Something went wrong. Please try again.';
+  if (code === 'HOTEL_MAPPING_EMPTY') return 'Hotels are not available for this exact location yet. Please choose another nearby location.';
+  if (code === 'HOTEL_NO_AVAILABILITY' || code === 'NO_AVAILABILITY') return 'No hotels are available for this location and these dates. Try another nearby location or different dates.';
+  if (code === 'HOTEL_CITY_CATALOG_EMPTY' || code === 'HOTEL_SEARCH_EXPIRED' || code === 'HOTEL_SEARCH_CONTEXT_REQUIRED') return 'We couldn’t load hotels right now. Please try again.';
+  if (m.includes('city id') || m.includes('hotel city')) return 'Please select a valid hotel location from the suggestions and search again.';
+  if (/tripjack|supplier|provider|\/api\/|endpoint|regionid|\btoken\b|\bapi key\b/.test(m)) return 'We couldn’t load hotels right now. Please try again.';
+  if (Number(err && err.status) >= 500) return 'We couldn’t load hotels right now. Please try again.';
+  return (err && err.message) || 'We couldn’t load hotels right now. Please try again.';
 }
 function requestHeaders(path, json){
   const headers={Accept:'application/json'};
@@ -282,16 +284,17 @@ function bindBase(){ const b=q('[data-back]',root); if(b) b.onclick=()=>{ if(new
 function hotelSearchExpired(data){ const d=unwrap(data)||{}; const expires=d.expiresAt||d.searchContext&&d.searchContext.expiresAt; return !!(expires && Date.parse(expires)<=Date.now()); }
 async function loadResults(){
   S.search=searchPayload();
+  showLoader('Finding the best hotels for you...');
   const stored=read(KEY.results,null);
   const storedList=stored&&!hotelSearchExpired(stored)?extractResults(stored):[];
   if(storedList.length){
     const d=unwrap(stored)||{};
     S.search=Object.assign({},S.search,{searchContext:d.searchContext||storedList[0].searchContext||{}});
     setResults(storedList);
+    hideLoader();
     return;
   }
   try{
-    showLoader('Finding the best hotels for you...');
     const res=await api('/api/hotels/search',S.search);
     save(KEY.results,res);
     const d=unwrap(res)||{};
@@ -300,7 +303,9 @@ async function loadResults(){
     if(!list.length){
       const reason=String(d.emptyReason||'').toUpperCase();
       const message = reason==='NO_AVAILABILITY'
-        ? 'No hotels are available for the selected dates and location right now.'
+        ? 'No hotels are available for this location and these dates. Try another nearby location or different dates.'
+        : reason==='HOTEL_MAPPING_EMPTY'
+          ? 'Hotels are not available for this exact location yet. Please choose another nearby location.'
         : reason==='NO_BOOKABLE_PRICE'
           ? 'Hotels were found, but none currently have a bookable price for these dates.'
           : reason==='FILTERED_EMPTY'
