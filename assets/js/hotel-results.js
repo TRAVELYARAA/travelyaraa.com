@@ -1,89 +1,12 @@
 (function(){
 'use strict';
 
-function ensureHotelLoaderCss(){
-  if(document.getElementById('tyHotelOnlyLoaderCss')) return;
-  const st=document.createElement('style');
-  st.id='tyHotelOnlyLoaderCss';
-  st.textContent=`
-  .tyh-loading-lock{overflow:hidden!important}
-  .tyh-hotel-loader{
-    position:fixed;
-    inset:0;
-    z-index:2147483000;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:24px;
-    background:rgba(7,29,73,.82);
-    backdrop-filter:blur(2px);
-    -webkit-backdrop-filter:blur(2px);
-  }
-  .tyh-hotel-loader-box{
-    width:min(92vw,360px);
-    min-height:260px;
-    border-radius:28px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:22px;
-    text-align:center;
-    background:rgba(255,255,255,.10);
-    border:1px solid rgba(255,255,255,.18);
-    box-shadow:0 22px 70px rgba(0,0,0,.22);
-  }
-  .tyh-hotel-spin{
-    width:92px;
-    height:92px;
-    border-radius:50%;
-    border:7px solid rgba(255,255,255,.22);
-    border-top-color:#ffffff;
-    border-right-color:#eb814b;
-    animation:tyhHotelSpin .9s linear infinite;
-  }
-  .tyh-hotel-loader-text{
-    margin:0;
-    color:#fff;
-    font-size:20px;
-    line-height:1.35;
-    font-weight:900;
-    letter-spacing:.01em;
-  }
-  @keyframes tyhHotelSpin{to{transform:rotate(360deg)}}
-  @media(max-width:640px){
-    .tyh-hotel-loader{padding:18px}
-    .tyh-hotel-loader-box{width:92vw;min-height:240px;border-radius:24px;gap:20px}
-    .tyh-hotel-spin{width:86px;height:86px;border-width:6px}
-    .tyh-hotel-loader-text{font-size:18px;max-width:260px}
-  }`;
-  document.head.appendChild(st);
-}
 function showLoader(msg, hideText){
-  try{ if(window.TravelYaraaLoader && typeof window.TravelYaraaLoader.hide==='function') window.TravelYaraaLoader.hide(); }catch(e){}
-  ensureHotelLoaderCss();
-  let el=document.getElementById('tyHotelOnlyLoader');
-  if(!el){
-    el=document.createElement('div');
-    el.id='tyHotelOnlyLoader';
-    el.className='tyh-hotel-loader';
-    el.setAttribute('role','status');
-    el.setAttribute('aria-live','polite');
-    el.innerHTML='<div class="tyh-hotel-loader-box"><div class="tyh-hotel-spin" aria-hidden="true"></div><p class="tyh-hotel-loader-text"></p></div>';
-    document.body.appendChild(el);
-  }
-  const t=el.querySelector('.tyh-hotel-loader-text');
-  if(t){ t.textContent=hideText ? '' : (msg || 'Finding the best hotels for you...'); t.hidden=!!hideText; }
-  el.style.display='flex';
-  document.body.classList.add('tyh-loading-lock');
+  if(window.TYHotelSearchLoader && typeof window.TYHotelSearchLoader.show==='function') window.TYHotelSearchLoader.show(msg, hideText);
 }
 function hideLoader(){
-  const el=document.getElementById('tyHotelOnlyLoader');
-  if(el) el.style.display='none';
-  document.body.classList.remove('tyh-loading-lock');
-  try{ if(window.TravelYaraaLoader && typeof window.TravelYaraaLoader.hide==='function') window.TravelYaraaLoader.hide(); }catch(e){}
+  if(window.TYHotelSearchLoader && typeof window.TYHotelSearchLoader.hide==='function') window.TYHotelSearchLoader.hide();
 }
-window.TYHotelSearchLoader={show:showLoader,hide:hideLoader};
 
 const API = String(window.TRAVELYARAA_API_BASE || window.TY_API_BASE || 'https://api.travelyaraa.com').replace(/\/$/, '');
 const root = document.getElementById('travelRoot') || document.getElementById('tyHotelResultsRoot');
@@ -102,10 +25,11 @@ const S = {
   all:[], shown:[], search:{}, sort:'recommended',
   filters:{
     priceRanges:new Set(), gst:null, propertyTypes:new Set(), places:new Set(),
-    stars:new Set(), meals:new Set(), amenities:new Set(), min:0, max:0
+    stars:new Set(), meals:new Set(), amenities:new Set(), min:0, max:0,
+    freeCancel:false, nameQuery:''
   },
   filterTab:'price', roomHotel:null, selectedHotel:null, selectedOption:null, review:null,
-  guestIndex:0
+  guestIndex:0, detailHotel:null
 };
 
 function q(sel, ctx){ return (ctx||document).querySelector(sel); }
@@ -186,6 +110,25 @@ function ratingCountOf(h){ const r=rawOf(h); const v=firstText(h.ratingCount,h.r
 function priceRangeKey(p){ p=Number(p||0); if(!p) return ''; if(p<=2200) return '0-2200'; if(p<=2500) return '2201-2500'; if(p<=3000) return '2501-3000'; if(p<=3900) return '3001-3900'; if(p<=5600) return '3901-5600'; return '5601+'; }
 function priceRangeLabel(k){ return ({'0-2200':'Up to ₹ 2,200','2201-2500':'₹ 2,201 – ₹ 2,500','2501-3000':'₹ 2,501 – ₹ 3,000','3001-3900':'₹ 3,001 – ₹ 3,900','3901-5600':'₹ 3,901 – ₹ 5,600','5601+':'₹ 5,601 +'}[k]||k); }
 function countFor(fn){ return S.all.filter(fn).length; }
+function hotelFreeCancel(h){
+  if(h && (h.freeCancellation || (h.cancellation && h.cancellation.freeCancellation))) return true;
+  return optionList(h).some(function(o){ return !!(o && o.freeCancellation); });
+}
+function hotelCancelText(h){
+  const ops=optionList(h);
+  const hit=ops.find(function(o){ return o && o.freeCancellation; })||{};
+  const c=hit.cancellation||cancellationOf(hit);
+  if(!c.freeCancellation) return '';
+  return 'Free cancellation'+(c.freeCancellationUntil?' until '+fmtDate(c.freeCancellationUntil):'');
+}
+function searchIso(v){
+  const s=String(v||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const t=Date.parse(s);
+  if(!Number.isFinite(t)) return '';
+  const d=new Date(t);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function uniqueValues(fn, max){ return [...new Set(S.all.map(fn).map(x=>String(x||'').trim()).filter(Boolean))].slice(0,max||12); }
 
 function mediaUrl(v){
@@ -291,46 +234,54 @@ function cacheMatchesCurrentSearch(stored, search){
   if(!/^\d+$/.test(want) || !/^\d+$/.test(got) || want!==got) return false;
   return true;
 }
+let hotelSearchLock=null;
 async function loadResults(){
   S.search=searchPayload();
   showLoader('Finding the best hotels for you...');
-  const stored=read(KEY.results,null);
-  const storedList=stored&&!hotelSearchExpired(stored)&&cacheMatchesCurrentSearch(stored,S.search)?extractResults(stored):[];
-  if(storedList.length){
-    const d=unwrap(stored)||{};
-    S.search=Object.assign({},S.search,{searchContext:d.searchContext||storedList[0].searchContext||{}});
-    setResults(storedList);
+  if(!/^\d+$/.test(String(S.search.regionId||S.search.cityId||''))){
     hideLoader();
+    shell('<main class="tyh-empty"><h2>Select a location</h2><p>'+esc('Please select a valid hotel location from the suggestions and search again.')+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+    const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
     return;
   }
-  try{
-    const res=await api('/api/hotels/search',S.search);
-    save(KEY.results,res);
-    const d=unwrap(res)||{};
-    S.search=Object.assign({},S.search,{searchContext:d.searchContext||{}});
-    const list=extractResults(res);
-    if(!list.length){
-      const reason=String(d.emptyReason||'').toUpperCase();
-      const message = reason==='NO_AVAILABILITY'
-        ? 'No hotels are available for this location and these dates. Try another nearby location or different dates.'
-        : reason==='HOTEL_MAPPING_EMPTY'
-          ? 'Hotels are not available for this exact location yet. Please choose another nearby location.'
-        : reason==='NO_BOOKABLE_PRICE'
-          ? 'Hotels were found, but none currently have a bookable price for these dates.'
-          : reason==='FILTERED_EMPTY'
-            ? 'No hotels match the selected filters.'
-            : 'No bookable hotels were found for this location and dates.';
-      shell('<main class="tyh-empty"><h2>No hotels found</h2><p>'+esc(message)+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+  const searchKey=JSON.stringify({regionId:String(S.search.regionId||S.search.cityId||''),checkIn:S.search.checkIn||S.search.checkinDate||'',checkOut:S.search.checkOut||S.search.checkoutDate||'',rooms:S.search.rooms||[]});
+  if(hotelSearchLock && hotelSearchLock.key===searchKey) return hotelSearchLock.promise;
+  const job={key:searchKey, promise:null};
+  job.promise=(async function(){
+    try{
+      const res=await api('/api/hotels/search',S.search);
+      save(KEY.results,res);
+      const d=unwrap(res)||{};
+      S.search=Object.assign({},S.search,{searchContext:d.searchContext||{}});
+      const list=extractResults(res);
+      if(!list.length){
+        const reason=String(d.emptyReason||'').toUpperCase();
+        const message = reason==='NO_AVAILABILITY'
+          ? 'No hotels are available for this location and these dates. Try another nearby location or different dates.'
+          : reason==='HOTEL_MAPPING_EMPTY'
+            ? 'Hotels are not available for this exact location yet. Please choose another nearby location.'
+          : reason==='NO_BOOKABLE_PRICE'
+            ? 'Hotels were found, but none currently have a bookable price for these dates.'
+            : reason==='FILTERED_EMPTY'
+              ? 'No hotels match the selected filters.'
+              : 'No bookable hotels were found for this location and dates.';
+        shell('<main class="tyh-empty"><h2>No hotels found</h2><p>'+esc(message)+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+        const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
+        return;
+      }
+      setResults(list);
+    }catch(e){
+      shell('<main class="tyh-empty"><h2>Unable to load hotels</h2><p>'+esc(friendlyError(e))+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
       const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
-      return;
+    }finally{
+      hideLoader();
+      if(hotelSearchLock===job) hotelSearchLock=null;
     }
-    setResults(list);
-  }catch(e){
-    shell('<main class="tyh-empty"><h2>Unable to load hotels</h2><p>'+esc(friendlyError(e))+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
-    const t=q('[data-try]',root); if(t)t.onclick=()=>location.href='/';
-  }finally{ hideLoader(); }
+  })();
+  hotelSearchLock=job;
+  return job.promise;
 }
-function setResults(list){ S.all=list; applyFilters(); }
+function setResults(list){ S.all=list; applyFilters(); maybeShowHotelDetailsFromUrl(); }
 function applyFilters(){
   let list=S.all.slice();
   if(S.filters.priceRanges.size) list=list.filter(h=>S.filters.priceRanges.has(priceRangeKey(h.price)));
@@ -340,6 +291,8 @@ function applyFilters(){
   if(S.filters.stars.size) list=list.filter(h=>S.filters.stars.has(String(Math.round(h.star)||0)));
   if(S.filters.meals.size) list=list.filter(h=>S.filters.meals.has(lower(mealBasisOf(h))));
   if(S.filters.amenities.size){ list=list.filter(h=>{ const hay=(h.amenities||[]).join(' ').toLowerCase(); return [...S.filters.amenities].every(a=>hay.includes(a)); }); }
+  if(S.filters.freeCancel) list=list.filter(hotelFreeCancel);
+  if(S.filters.nameQuery) list=list.filter(h=>lower(h.name).includes(lower(S.filters.nameQuery)));
   if(S.filters.min) list=list.filter(h=>Number(h.price||0)>=S.filters.min);
   if(S.filters.max) list=list.filter(h=>Number(h.price||0)<=S.filters.max);
   if(S.sort==='priceLow') list.sort((a,b)=>(a.price||9999999)-(b.price||9999999));
@@ -350,66 +303,158 @@ function applyFilters(){
   S.shown=list;
   renderResults();
 }
-function activeFilterCount(){ return S.filters.priceRanges.size + (S.filters.gst!==null?1:0) + S.filters.propertyTypes.size + S.filters.places.size + S.filters.stars.size + S.filters.meals.size + S.filters.amenities.size + (S.filters.min?1:0) + (S.filters.max?1:0); }
-function filterOption(kind,value,label,count){ const key=String(value); const checked = kind==='gst' ? (S.filters.gst===value) : (S.filters[kind]&&S.filters[kind].has(key)); return '<label class="tyh-fcheck"><input type="checkbox" data-fkind="'+attr(kind)+'" data-fvalue="'+attr(key)+'" '+(checked?'checked':'')+'><span></span><b>'+esc(label)+'</b><em>('+(count||0)+')</em></label>'; }
+function activeFilterCount(){ return S.filters.priceRanges.size + (S.filters.gst!==null?1:0) + S.filters.propertyTypes.size + S.filters.places.size + S.filters.stars.size + S.filters.meals.size + S.filters.amenities.size + (S.filters.min?1:0) + (S.filters.max?1:0) + (S.filters.freeCancel?1:0) + (S.filters.nameQuery?1:0); }
+function filterOption(kind,value,label,count){ const key=String(value); const checked = kind==='gst' ? (S.filters.gst===value) : kind==='freeCancel' ? !!S.filters.freeCancel : (S.filters[kind]&&S.filters[kind].has(key)); return '<label class="tyh-fcheck"><input type="checkbox" data-fkind="'+attr(kind)+'" data-fvalue="'+attr(key)+'" '+(checked?'checked':'')+'><span></span><b>'+esc(label)+'</b><em>('+(count||0)+')</em></label>'; }
 function filterPanel(){
-  const tab=S.filterTab||'price';
-  const tabs=[['price','Price range'],['gst','GST applicable'],['propertyTypes','Property type'],['places','Popular places'],['stars','Star category'],['meals','Meal basis']];
-  const propertyVals=uniqueValues(propertyTypeOf,10);
-  const placeVals=uniqueValues(placeOf,10);
   const mealVals=uniqueValues(mealBasisOf,10);
   const priceKeys=['0-2200','2201-2500','2501-3000','3001-3900','3901-5600','5601+'];
-  let body='';
-  if(tab==='price') body=priceKeys.map(k=>filterOption('priceRanges',k,priceRangeLabel(k),countFor(h=>priceRangeKey(h.price)===k))).join('') || '<p class="tyh-muted">No price filter available</p>';
-  else if(tab==='gst') body=filterOption('gst',true,'GST applicable',countFor(h=>gstOf(h)))+filterOption('gst',false,'GST not listed',countFor(h=>!gstOf(h)));
-  else if(tab==='propertyTypes') body=(propertyVals.length?propertyVals.map(v=>filterOption('propertyTypes',lower(v),v,countFor(h=>lower(propertyTypeOf(h))===lower(v)))).join(''):'<p class="tyh-muted">No property type available</p>');
-  else if(tab==='places') body=(placeVals.length?placeVals.map(v=>filterOption('places',lower(v),v,countFor(h=>lower(placeOf(h))===lower(v)))).join(''):'<p class="tyh-muted">No place filter available</p>');
-  else if(tab==='stars') body=[5,4,3,2,1].map(v=>filterOption('stars',String(v),v+' star',countFor(h=>String(Math.round(h.star)||0)===String(v)))).join('');
-  else if(tab==='meals') body=(mealVals.length?mealVals.map(v=>filterOption('meals',lower(v),v,countFor(h=>lower(mealBasisOf(h))===lower(v)))).join(''):'<p class="tyh-muted">No meal basis available</p>');
-  return '<aside class="tyh-filter"><div class="tyh-filter-head"><button type="button" data-filter-close>‹</button><h2>Filters</h2><button type="button" data-clear-top>Reset filters</button></div><div class="tyh-filter-grid"><nav>'+tabs.map(x=>'<button type="button" class="'+(tab===x[0]?'active':'')+'" data-filter-tab="'+x[0]+'">'+esc(x[1])+'</button>').join('')+'</nav><section>'+body+'</section></div><div class="tyh-filter-actions"><button type="button" data-filter-close>Close</button><button type="button" data-apply>Apply filter</button></div></aside>';
+  const starBody=[5,4,3,2,1].filter(v=>countFor(h=>String(Math.round(h.star)||0)===String(v))).map(v=>filterOption('stars',String(v),v+' star',countFor(h=>String(Math.round(h.star)||0)===String(v)))).join('');
+  const mealBody=mealVals.map(v=>filterOption('meals',lower(v),v,countFor(h=>lower(mealBasisOf(h))===lower(v)))).join('');
+  const freeCount=countFor(hotelFreeCancel);
+  return '<aside class="tyh-filter"><div class="tyh-filter-head"><button type="button" data-filter-close aria-label="Close filters">‹</button><h2>Filters</h2><button type="button" data-clear-top>Reset</button></div><div class="tyh-filter-stack">'
+    +'<div class="tyh-filter-section"><h3>Hotel name</h3><input type="search" data-hotel-name value="'+attr(S.filters.nameQuery||'')+'" placeholder="Search hotel name"></div>'
+    +(freeCount?'<div class="tyh-filter-section"><h3>Cancellation</h3>'+filterOption('freeCancel','true','Free cancellation',freeCount)+'</div>':'')
+    +(starBody?'<div class="tyh-filter-section"><h3>Star category</h3>'+starBody+'</div>':'')
+    +(mealBody?'<div class="tyh-filter-section"><h3>Meal basis</h3>'+mealBody+'</div>':'')
+    +'<div class="tyh-filter-section"><h3>Price</h3>'+priceKeys.map(k=>filterOption('priceRanges',k,priceRangeLabel(k),countFor(h=>priceRangeKey(h.price)===k))).join('')+'</div>'
+    +'</div><div class="tyh-filter-actions"><button type="button" data-filter-close>Close</button><button type="button" data-apply>Apply filter</button></div></aside>';
 }
 function sortSheet(){ return '<div class="tyh-sort-bg" data-sort-close></div><section class="tyh-sort-sheet"><header><h2>Sort by</h2><button type="button" data-sort-close>×</button></header>'+[['recommended','Most popular'],['priceLow','Price <span>Lowest first</span>'],['priceHigh','Price <span>Highest first</span>'],['starHigh','Star rating <span>High to Low</span>']].map(x=>'<button type="button" class="'+(S.sort===x[0]?'active':'')+'" data-sort-pick="'+x[0]+'"><b>'+x[1]+'</b><i></i></button>').join('')+'</section>'; }
+function modifySearchBar(){
+  const s=S.search||{};
+  const room=arr(s.rooms)[0]||{};
+  const adults=Number(room.adults||s.adults||1);
+  const children=Number(room.children||s.children||0);
+  const rooms=arr(s.rooms).length||Number(s.roomCount||1);
+  return '<form class="tyh-modify" data-modify-search><label>Destination<input value="'+attr(s.cityName||s.city||'')+'" readonly></label><label>Check-in<input type="date" data-modify-checkin value="'+attr(searchIso(s.checkIn||s.checkinDate))+'" required></label><label>Check-out<input type="date" data-modify-checkout value="'+attr(searchIso(s.checkOut||s.checkoutDate))+'" required></label><fieldset class="tyh-modify-guests"><legend>Rooms &amp; guests</legend><label>Rooms<input type="number" min="1" max="8" data-modify-rooms value="'+attr(rooms)+'"></label><label>Adults<input type="number" min="1" max="12" data-modify-adults value="'+attr(adults)+'"></label><label>Children<input type="number" min="0" max="8" data-modify-children value="'+attr(children)+'"></label></fieldset><button type="submit">Search</button></form>';
+}
 function renderResults(){
   const s=S.search||{};
   const city=s.cityName||s.city||s.destination||s.location||'Hotels';
   const count=activeFilterCount();
-  const content='<main class="tyh-results"><section class="tyh-list-wrap"><div class="tyh-search-line"><div><strong>Showing '+esc(S.shown.length)+' hotels for '+esc(city)+'</strong><span>'+esc([fmtDate(s.checkIn||s.checkinDate),fmtDate(s.checkOut||s.checkoutDate)].filter(Boolean).join(' • '))+'</span></div></div><div class="tyh-result-tools"><button type="button" data-open-filter>Filters'+(count?' ('+count+')':'')+'</button><button type="button" data-open-sort>Sort by</button></div><div class="tyh-cards">'+(S.shown.length?S.shown.map(hotelCard).join(''):'<div class="tyh-empty"><h2>No hotels found</h2><p>Try changing filters or search again.</p></div>')+'</div></section>'+filterPanel()+'</main>'+(document.body.classList.contains('tyh-sort-open')?sortSheet():'')+(S.roomHotel?roomSheet(S.roomHotel):'');
+  const content=modifySearchBar()+'<main class="tyh-results">'+filterPanel()+'<section class="tyh-list-wrap"><div class="tyh-list-head"><div><strong>Showing '+esc(S.shown.length)+' hotels for '+esc(city)+'</strong><span>'+esc([fmtDate(s.checkIn||s.checkinDate),fmtDate(s.checkOut||s.checkoutDate)].filter(Boolean).join(' • '))+'</span></div><label class="tyh-desktop-sort">Sort by <select data-sort-select><option value="recommended"'+(S.sort==='recommended'?' selected':'')+'>Most popular</option><option value="priceLow"'+(S.sort==='priceLow'?' selected':'')+'>Price: lowest first</option><option value="priceHigh"'+(S.sort==='priceHigh'?' selected':'')+'>Price: highest first</option><option value="starHigh"'+(S.sort==='starHigh'?' selected':'')+'>Star rating</option></select></label></div><div class="tyh-result-tools"><button type="button" data-open-filter>Filters'+(count?' ('+count+')':'')+'</button><button type="button" data-open-sort>Sort by</button></div><div class="tyh-cards">'+(S.shown.length?S.shown.map(hotelCard).join(''):'<div class="tyh-empty"><h2>No hotels found</h2><p>Try changing filters or search again.</p></div>')+'</div></section></main>'+(document.body.classList.contains('tyh-sort-open')?sortSheet():'')+(S.roomHotel?roomSheet(S.roomHotel):'');
   shell(content,{title:city, sub:'Hotel results'});
   bindResults();
 }
 function hotelCard(h){
-  const stars='★'.repeat(Math.max(0,Math.min(5,Math.round(h.star||0))));
-  const topBadges=(h.verified?'<span class="ok">✓ Verified</span>':'')+(h.bestRate?'<span class="rate">◆ Best rate</span>':'');
+  const hid=String(h.hotelId||h.id||'');
+  const stars=h.star?'<div class="tyh-stars" aria-label="'+esc(Math.round(h.star))+' star">'+"★".repeat(Math.max(0,Math.min(5,Math.round(h.star))))+'</div>':'';
   const facilities=arr(h.amenities).slice(0,3).map(a=>'<span>'+esc(a)+'</span>').join('');
   const meal=mealBasisOf(h);
-  const rating=h.rating?('<strong>'+esc(h.rating)+'</strong><span>'+(h.rating>=4?'Good':'Rating')+(h.ratingCount?' <br>('+esc(h.ratingCount)+' Ratings)':'')+'</span>'):'';
-  const location=[h.area||h.place,h.city].filter(Boolean).join(', ')||h.address||'';
-  return '<article class="tyh-card"><div class="tyh-img">'+(h.image?'<img src="'+attr(h.image)+'" alt="'+attr(h.name)+'">':'<span>'+esc((h.name||'H').slice(0,1))+'</span>')+'<div class="tyh-card-badges">'+topBadges+'</div></div><div class="tyh-info"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2><div class="tyh-stars">'+stars+'</div></div>'+(location?'<p class="tyh-location">'+esc(location)+'</p>':'')+'<div class="tyh-facilities">'+facilities+'</div>'+(meal?'<p class="tyh-meal">• '+esc(meal)+'</p>':'')+'<div class="tyh-card-foot"><div class="tyh-rating">'+rating+'</div><div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b><em>Total incl. taxes</em></div></div>'+(gstOf(h)?'<div class="tyh-gst">GST claim eligible rates available</div>':'')+'<button type="button" data-room="'+attr(h.key)+'">View rooms</button></div></article>';
+  const cancel=hotelCancelText(h);
+  const location=[h.area||h.place,h.city].filter(Boolean).join(', ')||(typeof h.address==='string'?h.address:'');
+  const href='/pages/results/hotels.html?service=hotel&step=hotel-details&hotelId='+encodeURIComponent(hid);
+  return '<a class="tyh-card" href="'+attr(href)+'" data-hotel-id="'+attr(hid)+'"><div class="tyh-img">'+(imageOf(h)?'<img src="'+attr(imageOf(h))+'" alt="'+attr(h.name)+'">':'<span>'+esc((h.name||'H').slice(0,1))+'</span>')+'</div><div class="tyh-info"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2>'+stars+'</div>'+(location?'<p class="tyh-location">'+esc(location)+'</p>':'')+(facilities?'<div class="tyh-facilities">'+facilities+'</div>':'')+(meal?'<p class="tyh-meal">'+esc(meal)+'</p>':'')+(cancel?'<p class="tyh-free">'+esc(cancel)+'</p>':'')+'<div class="tyh-card-foot"><div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b><em>Total incl. taxes</em></div></div></div></a>';
 }
 function setFilterValue(kind,value,checked){
   if(kind==='gst'){ S.filters.gst = checked ? (value==='true') : null; return; }
+  if(kind==='freeCancel'){ S.filters.freeCancel = !!checked; return; }
   const set=S.filters[kind]; if(!set) return;
   checked ? set.add(value) : set.delete(value);
 }
-function clearFilters(){ S.filters.priceRanges.clear(); S.filters.gst=null; S.filters.propertyTypes.clear(); S.filters.places.clear(); S.filters.stars.clear(); S.filters.meals.clear(); S.filters.amenities.clear(); S.filters.min=0; S.filters.max=0; }
+function clearFilters(){ S.filters.priceRanges.clear(); S.filters.gst=null; S.filters.propertyTypes.clear(); S.filters.places.clear(); S.filters.stars.clear(); S.filters.meals.clear(); S.filters.amenities.clear(); S.filters.min=0; S.filters.max=0; S.filters.freeCancel=false; S.filters.nameQuery=''; }
 function closeFilter(){ document.body.classList.remove('tyh-filter-open'); }
 function closeSort(){ document.body.classList.remove('tyh-sort-open'); renderResults(); }
+function isMobileHotelUi(){ return window.matchMedia('(max-width:860px)').matches; }
+function persistHotelSearch(patch){
+  const live=Object.assign({}, searchPayload(), S.search, patch||{});
+  const regionId=String(live.regionId||live.cityId||'');
+  if(/^\d+$/.test(regionId)){ live.regionId=regionId; live.cityId=regionId; }
+  const roomCount=Math.max(1, Number(live.roomCount||arr(live.rooms).length||1));
+  const adults=Math.max(1, Number(live.adults||1));
+  const children=Math.max(0, Number(live.children||0));
+  live.rooms=Array.from({length:roomCount}, function(){ return {adults:adults, children:children, childAge:[]}; });
+  live.roomCount=roomCount;
+  live.adults=adults;
+  live.children=children;
+  live.service='hotel';
+  live.type='hotel';
+  S.search=live;
+  save(KEY.payload, live);
+  const wrap=read(KEY.search,{})||{};
+  save(KEY.search, Object.assign({}, wrap, {service:'hotel', livePayload:live, createdAt:new Date().toISOString()}));
+  try{ sessionStorage.removeItem(KEY.results); }catch(e){}
+}
+function hotelByRealId(id){
+  const want=String(id||'');
+  if(!want) return null;
+  return S.all.find(function(h){ return String(h.hotelId||h.id||'')===want; }) || S.shown.find(function(h){ return String(h.hotelId||h.id||'')===want; }) || null;
+}
+function maybeShowHotelDetailsFromUrl(){
+  const params=new URLSearchParams(location.search);
+  if((params.get('step')||'')!=='hotel-details') return false;
+  S.detailHotel=hotelByRealId(params.get('hotelId')||'');
+  renderHotelDetailsPlumbing();
+  return true;
+}
+function renderHotelDetailsPlumbing(){
+  const h=S.detailHotel;
+  if(!h){
+    shell('<main class="tyh-empty"><h2>Hotel not found</h2><p>Please return to results and choose a hotel from this search.</p><button type="button" data-back-results>Back to results</button></main>',{title:'Hotel details'});
+    const b=q('[data-back-results]',root); if(b) b.onclick=function(){ setPage('results'); renderResults(); };
+    return;
+  }
+  const stars=h.star?'<div class="tyh-stars" aria-label="'+esc(Math.round(h.star))+' star">'+"★".repeat(Math.max(0,Math.min(5,Math.round(h.star))))+'</div>':'';
+  const location=[h.area||h.place,h.city].filter(Boolean).join(', ')||(typeof h.address==='string'?h.address:'');
+  const meal=mealBasisOf(h);
+  const cancel=hotelCancelText(h);
+  const facilities=arr(h.amenities).slice(0,6).map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('');
+  const content=modifySearchBar()+'<main class="tyh-details-plumb"><article class="tyh-card"><div class="tyh-img">'+(imageOf(h)?'<img src="'+attr(imageOf(h))+'" alt="'+attr(h.name)+'">':'<span>'+esc((h.name||'H').slice(0,1))+'</span>')+'</div><div class="tyh-info"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2>'+stars+'</div>'+(location?'<p class="tyh-location">'+esc(location)+'</p>':'')+(facilities?'<div class="tyh-facilities">'+facilities+'</div>':'')+(meal?'<p class="tyh-meal">'+esc(meal)+'</p>':'')+(cancel?'<p class="tyh-free">'+esc(cancel)+'</p>':'')+'<div class="tyh-card-foot"><div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b><em>Total incl. taxes</em></div></div></div></article></main>'+(S.roomHotel?roomSheet(S.roomHotel):'');
+  shell(content,{title:h.name||'Hotel details', sub:'Hotel details'});
+  bindResults();
+}
+function openHotelDetails(h){
+  const id=String((h&& (h.hotelId||h.id))||'');
+  if(!id) return;
+  S.detailHotel=h;
+  setPage('hotel-details','hotelId='+encodeURIComponent(id));
+  renderHotelDetailsPlumbing();
+}
 function bindResults(){
+  const form=q('[data-modify-search]',root);
+  if(form) form.onsubmit=function(e){
+    e.preventDefault();
+    persistHotelSearch({
+      checkIn:q('[data-modify-checkin]',form)&&q('[data-modify-checkin]',form).value,
+      checkOut:q('[data-modify-checkout]',form)&&q('[data-modify-checkout]',form).value,
+      roomCount:q('[data-modify-rooms]',form)&&q('[data-modify-rooms]',form).value,
+      adults:q('[data-modify-adults]',form)&&q('[data-modify-adults]',form).value,
+      children:q('[data-modify-children]',form)&&q('[data-modify-children]',form).value
+    });
+    setPage('results');
+    loadResults();
+  };
   qa('[data-open-filter],[data-mobile-filter]',root).forEach(b=>b.onclick=()=>document.body.classList.add('tyh-filter-open'));
   qa('[data-filter-close]',root).forEach(b=>b.onclick=closeFilter);
-  qa('[data-filter-tab]',root).forEach(b=>b.onclick=()=>{ S.filterTab=b.dataset.filterTab; renderResults(); document.body.classList.add('tyh-filter-open'); });
-  qa('[data-fkind]',root).forEach(i=>i.onchange=()=>{ setFilterValue(i.dataset.fkind,i.dataset.fvalue,i.checked); renderResults(); document.body.classList.add('tyh-filter-open'); });
+  qa('[data-fkind]',root).forEach(i=>i.onchange=()=>{ setFilterValue(i.dataset.fkind,i.dataset.fvalue,i.checked); applyFilters(); if(isMobileHotelUi()) document.body.classList.add('tyh-filter-open'); });
   const apply=q('[data-apply]',root); if(apply) apply.onclick=()=>{ closeFilter(); applyFilters(); };
-  qa('[data-clear-top], [data-clear]',root).forEach(b=>b.onclick=()=>{ clearFilters(); applyFilters(); document.body.classList.add('tyh-filter-open'); });
+  qa('[data-clear-top], [data-clear]',root).forEach(b=>b.onclick=()=>{ clearFilters(); applyFilters(); if(isMobileHotelUi()) document.body.classList.add('tyh-filter-open'); });
+  const name=q('[data-hotel-name]',root);
+  if(name) name.oninput=function(){ S.filters.nameQuery=String(name.value||'').trim(); applyFilters(); const n=q('[data-hotel-name]',root); if(n){ n.focus(); try{ n.setSelectionRange(n.value.length,n.value.length); }catch(e){} } };
+  const sortSelect=q('[data-sort-select]',root);
+  if(sortSelect) sortSelect.onchange=function(){ S.sort=sortSelect.value||'recommended'; applyFilters(); };
   qa('[data-sort-pick]',root).forEach(b=>b.onclick=()=>{ S.sort=b.dataset.sortPick; document.body.classList.remove('tyh-sort-open'); applyFilters(); });
   qa('[data-open-sort],[data-mobile-sort]',root).forEach(b=>b.onclick=()=>{ document.body.classList.add('tyh-sort-open'); renderResults(); });
   qa('[data-sort-close]',root).forEach(b=>b.onclick=closeSort);
-  qa('[data-room]',root).forEach(b=>b.onclick=()=>{ const h=S.shown.find(x=>x.key===b.dataset.room); if(h) openRooms(h); });
-  qa('[data-close]',root).forEach(b=>b.onclick=()=>{ S.roomHotel=null; renderResults(); });
+  qa('a.tyh-card[data-hotel-id]',root).forEach(function(a){
+    a.onclick=function(ev){
+      if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button) return;
+      ev.preventDefault();
+      const h=hotelByRealId(a.getAttribute('data-hotel-id'));
+      if(h) openHotelDetails(h);
+    };
+  });
+  qa('[data-room]',root).forEach(b=>b.onclick=()=>{ const h=S.shown.find(x=>x.key===b.dataset.room)||S.detailHotel; if(h) openRooms(h); });
+  qa('[data-close]',root).forEach(b=>b.onclick=()=>{ S.roomHotel=null; paintHotelView(); });
   qa('[data-review-room]',root).forEach(b=>b.onclick=()=>{ if(S.roomHotel) startReview(S.roomHotel,b.dataset.reviewRoom); });
 }
 
-async function openRooms(h){ S.roomHotel=h; renderResults(); if(optionList(h).length&&h.reviewHash) return; try{ showLoader('Loading room options…'); const context=h.searchContext||S.search.searchContext||{}; const res=await api('/api/hotels/detail',{hid:h.hotelId||h.id,hotelId:h.hotelId||h.id,searchContext:context}); const d=unwrap(res)||{}; const detailHotel=normHotel(Object.assign({},h,d.hotel||d,{reviewHash:d.reviewHash||'',searchContext:d.searchContext||context,raw:d.raw||d}),0); S.roomHotel=Object.assign({},h,detailHotel,{key:h.key,reviewHash:d.reviewHash||detailHotel.reviewHash||'',searchContext:d.searchContext||context}); S.all=S.all.map(x=>x.key===h.key?S.roomHotel:x); S.shown=S.shown.map(x=>x.key===h.key?S.roomHotel:x); renderResults(); }catch(e){ const rb=q('.tyh-room-body',root); if(rb) rb.innerHTML='<p class="tyh-muted">'+esc(friendlyError(e))+'</p>'; }finally{ hideLoader(); } }
+function paintHotelView(){
+  const step=new URLSearchParams(location.search).get('step')||'results';
+  if(step==='hotel-details') renderHotelDetailsPlumbing();
+  else renderResults();
+}
+async function openRooms(h){ S.roomHotel=h; paintHotelView(); if(optionList(h).length&&h.reviewHash) return; try{ showLoader('Loading room options…'); const context=h.searchContext||S.search.searchContext||{}; const res=await api('/api/hotels/detail',{hid:h.hotelId||h.id,hotelId:h.hotelId||h.id,searchContext:context}); const d=unwrap(res)||{}; const detailHotel=normHotel(Object.assign({},h,d.hotel||d,{reviewHash:d.reviewHash||'',searchContext:d.searchContext||context,raw:d.raw||d}),0); S.roomHotel=Object.assign({},h,detailHotel,{key:h.key,reviewHash:d.reviewHash||detailHotel.reviewHash||'',searchContext:d.searchContext||context}); S.all=S.all.map(x=>x.key===h.key?S.roomHotel:x); S.shown=S.shown.map(x=>x.key===h.key?S.roomHotel:x); paintHotelView(); }catch(e){ const rb=q('.tyh-room-body',root); if(rb) rb.innerHTML='<p class="tyh-muted">'+esc(friendlyError(e))+'</p>'; }finally{ hideLoader(); } }
 function roomSheet(h){ const opts=optionList(h); return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+(opts.length?opts.map(o=>'<article class="tyh-rate"><div>'+(o.roomSummary||o.roomType?'<b>'+esc(o.roomSummary||o.roomType)+'</b>':'')+(o.mealBasis?'<p>'+esc(o.mealBasis)+'</p>':'')+cancelBadge(o)+'</div><div><strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em><button type="button" data-review-room="'+attr(o.optionId)+'">Continue</button></div></article>').join(''):'<p class="tyh-muted">Room options are unavailable for this hotel.</p>')+'</div></section>'; }
 async function startReview(h, optionId){
   const selectedBeforeReview=optionList(h).find(o=>String(o.optionId)===String(optionId))||{};
@@ -812,8 +857,8 @@ function bindStatus(id,b){
   qa('[data-action]',root).forEach(x=>x.onclick=()=>action(id,x.dataset.action));
 }
 
-function init(){ const params=new URLSearchParams(location.search); const step=params.get('step')||'results'; const bookingId=params.get('bookingId')||params.get('id'); if(step==='booking-status'&&bookingId){ loadStatusById(bookingId); return; } if(step==='guest'&&read(KEY.draft,null)){ S.search=searchPayload(); setPage('guest'); renderGuestStep(); return; } if(step==='review'&&read(KEY.draft,null)){ S.search=searchPayload(); setPage('review'); renderReviewStep(); return; } setPage('results'); loadResults(); }
-window.addEventListener('popstate',()=>{ const step=new URLSearchParams(location.search).get('step')||'results'; if(step==='guest')renderGuestStep(); else if(step==='review')renderReviewStep(); else if(step==='booking-status'){ const id=new URLSearchParams(location.search).get('bookingId'); id?loadStatusById(id):renderStatus(read(KEY.status,{})); } else renderResults(); });
+function init(){ if(window.__tyhResultsInit) return; window.__tyhResultsInit=true; const params=new URLSearchParams(location.search); const step=params.get('step')||'results'; const bookingId=params.get('bookingId')||params.get('id'); if(step==='booking-status'&&bookingId){ loadStatusById(bookingId); return; } if(step==='guest'&&read(KEY.draft,null)){ S.search=searchPayload(); setPage('guest'); renderGuestStep(); return; } if(step==='review'&&read(KEY.draft,null)){ S.search=searchPayload(); setPage('review'); renderReviewStep(); return; } if(step!=='hotel-details') setPage('results'); loadResults(); }
+window.addEventListener('popstate',()=>{ const params=new URLSearchParams(location.search); const step=params.get('step')||'results'; if(step==='guest')renderGuestStep(); else if(step==='review')renderReviewStep(); else if(step==='booking-status'){ const id=params.get('bookingId'); id?loadStatusById(id):renderStatus(read(KEY.status,{})); } else if(step==='hotel-details'){ S.detailHotel=hotelByRealId(params.get('hotelId')||''); renderHotelDetailsPlumbing(); } else renderResults(); });
 
 function css(){ return `
 :root{--ty-navy:#071d49;--ty-blue:#0062e3;--ty-orange:#ef6614;--ty-bg:#f4f7fb;--ty-line:#e4ecf7;--ty-text:#101828;--ty-muted:#667085;--ty-soft:#eef6ff;--ty-green:#067647;--ty-red:#b42318}*{box-sizing:border-box}body.ty-hotel-page,body.travel-page{margin:0;background:var(--ty-bg);font-family:Inter,Arial,sans-serif;color:var(--ty-text);text-transform:none}.tyh-page{min-height:100vh;background:var(--ty-bg);padding-bottom:110px}.tyh-top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--ty-line);box-shadow:0 4px 16px rgba(7,29,73,.04)}.tyh-back{width:42px;height:42px;border:0;border-radius:14px;background:#f1f6ff;color:var(--ty-navy);font-size:30px;font-weight:900;line-height:1}.tyh-top-title{min-width:0;flex:1}.tyh-top h1{margin:0;color:var(--ty-navy);font-size:20px;font-weight:900;letter-spacing:0}.tyh-top p{margin:3px 0 0;color:var(--ty-muted);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tyh-status-pill{background:#e7f8ef;color:#067647;border:1px solid #c8f1da;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900}.tyh-results{max-width:1180px;margin:14px auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px;padding:0 14px}.tyh-filter{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;position:sticky;top:76px;align-self:start}.tyh-filter h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-filter h3{font-size:14px;margin:14px 0 8px;color:var(--ty-navy)}.tyh-filter label{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:750;color:#344054;line-height:1.3}.tyh-filter input[type=number]{width:100%;height:38px;border:1px solid var(--ty-line);border-radius:10px;padding:0 10px;margin:5px 0;font-size:14px}.tyh-filter-actions{display:flex;gap:8px;border-top:1px solid var(--ty-line);padding-top:12px;margin-top:12px}.tyh-filter-actions button{flex:1;height:40px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);font-weight:900}.tyh-filter-actions button:first-child{border:0;background:var(--ty-orange);color:#fff}.tyh-search-line{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px}.tyh-search-line strong{display:block;color:var(--ty-navy);font-size:18px}.tyh-search-line span{display:block;color:var(--ty-muted);font-size:12px;margin-top:3px}.tyh-search-line button{display:none;border:1px solid var(--ty-line);background:#fff;border-radius:12px;height:38px;padding:0 12px;font-weight:900;color:var(--ty-navy)}.tyh-sort{display:flex;gap:10px;overflow:auto;margin-bottom:12px}.tyh-sort button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;color:var(--ty-navy);white-space:nowrap}.tyh-sort button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-cards{display:grid;gap:14px}.tyh-card{background:#fff;border:1px solid var(--ty-line);border-radius:20px;box-shadow:0 10px 28px rgba(7,29,73,.07);display:grid;grid-template-columns:230px minmax(0,1fr) 190px;overflow:hidden}.tyh-img{min-height:178px;background:#eef6ff;display:grid;place-items:center;color:var(--ty-blue);font-size:42px;font-weight:900}.tyh-img img{width:100%;height:100%;object-fit:cover}.tyh-info{padding:16px;min-width:0}.tyh-info h2{margin:0 0 6px;color:#101828;font-size:20px;line-height:1.25;font-weight:900;letter-spacing:0}.tyh-info p{margin:0;color:var(--ty-muted);font-size:13px;font-weight:700;line-height:1.35}.tyh-stars{color:#f5b301;margin:9px 0;font-size:14px;letter-spacing:1px}.tyh-tags{display:flex;gap:6px;flex-wrap:wrap}.tyh-tags span,.tyh-rate span{background:#f2f4f7;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800;color:#344054}.tyh-price{border-left:1px solid var(--ty-line);padding:16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:7px;text-align:right}.tyh-price em{background:#067647;color:#fff;border-radius:9px;padding:5px 8px;font-size:12px;font-style:normal;font-weight:900}.tyh-price b{font-size:22px;color:#101828}.tyh-price small{color:var(--ty-muted);font-size:11px;font-weight:700}.tyh-price button,.tyh-rate button,.tyh-bottom button,.tyh-actions button,.tyh-empty button{height:42px;border:0;border-radius:13px;background:var(--ty-orange);color:#fff;padding:0 16px;font-weight:900;font-size:14px}.tyh-empty{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:28px;text-align:center;margin:12px}.tyh-empty h2{margin:0 0 8px;color:var(--ty-navy)}.tyh-empty p,.tyh-muted{color:var(--ty-muted);font-weight:700}.tyh-modal-bg{position:fixed;inset:0;background:rgba(7,29,73,.45);z-index:70}.tyh-room{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:80;width:min(780px,100%);max-height:86vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;box-shadow:0 -12px 35px rgba(7,29,73,.18)}.tyh-room header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--ty-line);padding:16px;display:flex;justify-content:space-between;gap:12px}.tyh-room h2{margin:0;color:var(--ty-navy);font-size:19px}.tyh-room header p{margin:4px 0 0;color:var(--ty-muted);font-size:12px}.tyh-room header button{width:38px;height:38px;border:0;border-radius:12px;background:#f2f4f7;font-size:24px}.tyh-room-body{padding:16px}.tyh-rate{border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px;display:flex;justify-content:space-between;gap:12px}.tyh-rate b{display:block;color:#101828;font-size:15px;line-height:1.3}.tyh-rate p{margin:6px 0;color:var(--ty-muted);font-size:12px}.tyh-rate strong{display:block;text-align:right;margin-bottom:8px;font-size:18px}.tyh-book,.tyh-status{max-width:920px;margin:14px auto;padding:0 14px;display:grid;gap:14px}.tyh-summary-card,.tyh-panel,.tyh-actions,.tyh-confirm{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}.tyh-mini{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center}.tyh-mini-img{height:115px;border-radius:14px;background:#eef6ff;display:grid;place-items:center;overflow:hidden;color:var(--ty-blue);font-size:40px;font-weight:900}.tyh-mini-img img{width:100%;height:100%;object-fit:cover}.tyh-mini h2{margin:0 0 6px;color:var(--ty-navy);font-size:21px;line-height:1.25}.tyh-mini p{margin:0;color:var(--ty-muted);font-size:13px;line-height:1.35}.tyh-room-name{margin-top:8px!important;color:#344054!important;font-weight:800}.tyh-panel h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-panel h2 small{font-size:12px;color:var(--ty-muted);font-weight:700}.tyh-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.tyh-tabs button{border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);border-radius:999px;padding:9px 12px;font-size:13px;font-weight:900;white-space:nowrap}.tyh-tabs button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tyh-form-grid label{font-size:12px;color:#344054;font-weight:850;display:grid;gap:6px}.tyh-form-grid input,.tyh-form-grid select{height:44px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px;font-size:14px;background:#fff;color:#101828}.tyh-check{display:flex!important;align-items:flex-start;gap:10px;color:#344054;font-size:13px;font-weight:750;line-height:1.4}.tyh-kv,.tyh-guest-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #eef2f7;padding:11px 0;align-items:center}.tyh-kv:first-of-type,.tyh-guest-row:first-of-type{border-top:0}.tyh-kv span,.tyh-guest-row span{color:var(--ty-muted);font-size:13px;font-weight:750}.tyh-kv b,.tyh-guest-row b{color:#101828;text-align:right;font-size:14px}.tyh-kv.total b{font-size:21px;color:var(--ty-blue)}.tyh-policy-actions{display:flex;gap:8px;flex-wrap:wrap}.tyh-policy-actions button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;color:var(--ty-blue);font-weight:900;padding:9px 12px}.tyh-policy-box{margin-top:12px;background:#f8fbff;border:1px solid var(--ty-line);border-radius:14px;padding:12px;color:#344054;font-size:13px;line-height:1.45}.tyh-bottom{position:sticky;bottom:0;z-index:40;background:#101827;color:#fff;border-radius:22px 22px 0 0;margin:4px -14px -110px;padding:16px 18px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}.tyh-bottom span{display:block;font-size:12px;font-weight:800;color:#cbd5e1}.tyh-bottom b{font-size:22px}.tyh-bottom button{min-width:190px;border-radius:999px}.tyh-confirm{background:#ecfdf3;border-color:#bbf7d0}.tyh-confirm.failed{background:#fff1f2;border-color:#fecdd3}.tyh-confirm.pending{background:#fff7ed;border-color:#fed7aa}.tyh-confirm h2{margin:0 0 8px;font-size:24px;color:var(--ty-navy)}.tyh-confirm p{margin:0 0 10px;color:#344054}.tyh-confirm span{display:inline-flex;background:#fff;border-radius:999px;padding:7px 11px;color:#344054;font-weight:900;font-size:12px}.tyh-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tyh-actions button{background:#fff;color:var(--ty-navy);border:1px solid var(--ty-line)}.tyh-actions button:nth-child(1),.tyh-actions button:nth-child(2){background:var(--ty-blue);color:#fff;border:0}.tyh-actions button:disabled{opacity:.45;cursor:not-allowed}
@@ -842,12 +887,101 @@ function css(){ return `
 .tyh-status-room-head{display:block}
 .tyh-status-room-head span{display:inline-flex;margin-top:8px}
 }
-.tyh-page{padding-bottom:125px}.tyh-top{padding:10px 12px}.tyh-back{width:40px;height:40px}.tyh-top h1{font-size:17px}.tyh-results{display:block;margin:10px auto;padding:0 10px}.tyh-filter{display:none;position:fixed;left:10px;right:10px;top:72px;bottom:16px;z-index:90;overflow:auto}body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;position:fixed;z-index:97}.tyh-search-line button{display:block}.tyh-room{max-height:88vh;border-radius:20px 20px 0 0}.tyh-rate{display:block}.tyh-rate strong{text-align:left;margin-top:10px}.tyh-book,.tyh-status{padding:0 10px;margin:10px auto}.tyh-mini{grid-template-columns:104px minmax(0,1fr);gap:12px}.tyh-mini-img{height:92px}.tyh-mini h2{font-size:17px}.tyh-form-grid{grid-template-columns:1fr}.tyh-kv,.tyh-guest-row{align-items:flex-start}.tyh-bottom{left:0;right:0;margin:4px -10px -125px;border-radius:20px 20px 0 0}.tyh-bottom button{min-width:0;flex:1}.tyh-actions{grid-template-columns:1fr}.tyh-policy-actions{display:grid;grid-template-columns:1fr}
-/* TravelYaraa hotel filter/sort/card redesign */
-.tyh-results{display:block!important;grid-template-columns:none!important;align-items:start}.tyh-list-wrap{min-width:0;order:1}.tyh-filter{order:2}.tyh-mobile-tools,.tyh-desktop-sort{display:none!important}.tyh-result-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}.tyh-result-tools button{height:48px;border:1px solid var(--ty-line);background:#fff;border-radius:12px;color:#101828;font-size:14px;font-weight:900;box-shadow:0 4px 12px rgba(7,29,73,.03)}.tyh-filter{display:none!important;padding:0;overflow:hidden}.tyh-filter-head{height:58px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--ty-line)}.tyh-filter-head h2{flex:1;text-align:center;margin:0;font-size:17px}.tyh-filter-head button{border:0;background:#fff;color:var(--ty-navy);font-weight:900}.tyh-filter-head button:first-child{font-size:28px;width:34px}.tyh-filter-head button:last-child{color:#98a2b3;font-size:13px}.tyh-filter-grid{display:grid;grid-template-columns:130px minmax(0,1fr);min-height:360px}.tyh-filter-grid nav{background:#f8fafc;border-right:1px solid var(--ty-line);padding:8px 0}.tyh-filter-grid nav button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:15px 14px;color:#344054;font-weight:850;font-size:13px;line-height:1.25}.tyh-filter-grid nav button.active{background:#fff;color:var(--ty-orange);border-left:4px solid var(--ty-orange)}.tyh-filter-grid section{padding:14px;max-height:470px;overflow:auto}.tyh-fcheck{display:flex!important;align-items:center;gap:12px;margin:0!important;padding:12px 0;border-bottom:1px solid #f1f5f9;color:#344054}.tyh-fcheck input{display:none}.tyh-fcheck span{width:24px;height:24px;border-radius:7px;border:2px solid #98a2b3;display:inline-flex;align-items:center;justify-content:center;background:#fff;flex:0 0 auto}.tyh-fcheck input:checked+span{background:var(--ty-blue);border-color:var(--ty-blue)}.tyh-fcheck input:checked+span:after{content:'✓';color:#fff;font-size:15px;font-weight:900}.tyh-fcheck b{font-size:14px;font-weight:750;flex:1}.tyh-fcheck em{font-style:normal;color:#98a2b3;font-size:12px;font-weight:750}.tyh-filter-actions{padding:14px;border-top:1px solid var(--ty-line);display:grid;grid-template-columns:1fr 1.45fr;gap:12px;margin:0}.tyh-filter-actions button{height:48px;border-radius:13px;font-size:15px;text-transform:none}.tyh-filter-actions button:first-child{background:#fff!important;color:var(--ty-orange)!important;border:1px solid var(--ty-line)!important}.tyh-filter-actions button:last-child{background:var(--ty-blue)!important;color:#fff!important;border:0!important}.tyh-search-line{box-shadow:0 8px 20px rgba(7,29,73,.04)}.tyh-card{grid-template-columns:320px minmax(0,1fr);border-radius:22px;position:relative}.tyh-img{min-height:230px;position:relative;background:#eaf2ff}.tyh-card-badges{position:absolute;left:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap}.tyh-card-badges span{font-size:12px;font-weight:900;border-radius:8px;padding:7px 10px;background:#fff;color:#067647;box-shadow:0 5px 14px rgba(0,0,0,.08)}.tyh-card-badges .rate{color:#a36a00}.tyh-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.tyh-title-row h2{font-size:19px}.tyh-stars{margin:0;color:#f5b301;white-space:nowrap}.tyh-location{font-size:13px!important;margin-bottom:12px!important}.tyh-facilities{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0 10px}.tyh-facilities span{background:transparent;padding:0;color:#101828;font-size:14px;font-weight:800}.tyh-meal{margin-top:8px!important;color:#667085!important;font-size:13px!important}.tyh-card-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:18px}.tyh-rating{display:flex;align-items:center;gap:10px;min-height:40px}.tyh-rating strong{display:grid;place-items:center;min-width:43px;height:40px;border:1px solid var(--ty-line);border-radius:9px;color:#ef7d22;font-size:18px}.tyh-rating span{font-size:12px;font-weight:750;color:#344054;line-height:1.25}.tyh-price{border:0!important;padding:0!important;display:block!important;text-align:right}.tyh-price small{display:block;font-size:12px!important;color:#344054!important}.tyh-price b{display:block;font-size:24px!important;color:#101828!important}.tyh-price em{display:block;background:transparent!important;color:#667085!important;padding:0!important;font-size:12px!important}.tyh-gst{margin-top:12px;background:linear-gradient(90deg,#fff1df,#fff7ed);border-radius:10px;padding:10px 12px;color:#8a4b12;font-size:12px;font-weight:850}.tyh-card .tyh-info>button{margin-top:14px;height:42px;border:0;border-radius:12px;background:var(--ty-blue);color:#fff;font-weight:900;padding:0 14px}.tyh-sort-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:95}.tyh-sort-sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(560px,100%);background:#fff;z-index:96;border-radius:22px 22px 0 0;box-shadow:0 -14px 40px rgba(0,0,0,.2);padding-bottom:env(safe-area-inset-bottom)}.tyh-sort-sheet header{height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--ty-line)}.tyh-sort-sheet h2{margin:0;color:#101828;font-size:22px}.tyh-sort-sheet header button{border:0;background:#fff;color:var(--ty-blue);font-size:30px;font-weight:900}.tyh-sort-sheet>button{width:100%;height:64px;border:0;background:#fff;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:#101828;text-align:left}.tyh-sort-sheet>button b{font-size:17px;font-weight:900}.tyh-sort-sheet>button span{font-size:13px;color:#667085;font-weight:700}.tyh-sort-sheet>button i{width:26px;height:26px;border-radius:50%;border:2px solid #98a2b3}.tyh-sort-sheet>button.active i{border:7px solid var(--ty-blue)}
-@media(min-width:861px){body.tyh-filter-open .tyh-filter{top:72px;right:16px;bottom:16px;left:auto;width:min(420px,92vw);border-radius:18px;border:1px solid var(--ty-line);box-shadow:0 18px 50px rgba(7,29,73,.18)}}
-@media(max-width:860px){.tyh-results{display:block;margin:8px auto;padding:0 10px}.tyh-desktop-sort,.tyh-mobile-tools{display:none!important}.tyh-filter{display:none;position:fixed;left:0;right:0;top:auto;bottom:0;z-index:97;max-height:78vh;border-radius:22px 22px 0 0;border:0;box-shadow:0 -15px 42px rgba(0,0,0,.18)}body.tyh-filter-open:before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:96}body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;position:fixed;z-index:97}.tyh-filter-grid{grid-template-columns:150px minmax(0,1fr);min-height:430px}.tyh-filter-grid section{max-height:430px}.tyh-card{display:block;border-radius:18px;overflow:hidden}.tyh-img{min-height:196px}.tyh-info{padding:14px 16px 16px}.tyh-title-row h2{font-size:16px;line-height:1.25}.tyh-stars{font-size:13px}.tyh-facilities{gap:13px;margin:18px 0 10px}.tyh-facilities span{font-size:13px}.tyh-card-foot{margin-top:22px}.tyh-price{text-align:right!important;align-items:flex-end!important}.tyh-price b{font-size:22px!important}.tyh-card .tyh-info>button{width:100%;background:var(--ty-blue)}}
-}`; }
+
+.tyh-page{padding-bottom:28px}
+.tyh-modify{max-width:1180px;margin:12px auto 0;padding:12px 14px;display:grid;grid-template-columns:1.3fr .9fr .9fr 1.8fr auto;gap:10px;align-items:end;background:#fff;border:1px solid var(--ty-line);border-radius:16px;box-shadow:0 8px 20px rgba(7,29,73,.04)}
+.tyh-modify label,.tyh-modify-guests{display:grid;gap:6px;font-size:11px;font-weight:850;color:#344054;margin:0}
+.tyh-modify input{height:42px;border:1px solid var(--ty-line);border-radius:12px;padding:0 10px;font-size:14px;background:#fff;color:#101828}
+.tyh-modify input[readonly]{background:#f8fbff;color:#101828}
+.tyh-modify-guests{border:1px solid var(--ty-line);border-radius:12px;padding:6px 8px 8px;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tyh-modify-guests legend{padding:0 4px;font-size:11px;font-weight:850;color:#344054}
+.tyh-modify-guests input{height:36px}
+.tyh-modify button{height:42px;border:0;border-radius:12px;background:var(--ty-blue);color:#fff;padding:0 18px;font-weight:900}
+.tyh-results{max-width:1180px;margin:12px auto;padding:0 14px;display:grid!important;grid-template-columns:280px minmax(0,1fr)!important;gap:16px;align-items:start}
+.tyh-list-wrap{min-width:0}
+.tyh-list-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:12px}
+.tyh-list-head strong{display:block;color:var(--ty-navy);font-size:18px}
+.tyh-list-head span{display:block;color:var(--ty-muted);font-size:12px;margin-top:3px}
+.tyh-desktop-sort{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:850;color:#344054}
+.tyh-desktop-sort select{height:40px;border:1px solid var(--ty-line);border-radius:12px;padding:0 10px;background:#fff;font-weight:800}
+.tyh-result-tools{display:none}
+.tyh-filter{display:flex!important;flex-direction:column;position:sticky;top:76px;align-self:start;background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:0;overflow:hidden;max-height:calc(100vh - 96px)}
+.tyh-filter-head{height:54px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--ty-line)}
+.tyh-filter-head h2{flex:1;text-align:left;margin:0;font-size:16px}
+.tyh-filter-head [data-filter-close]{display:none}
+.tyh-filter-head button{border:0;background:#fff;color:#98a2b3;font-weight:900;font-size:13px}
+.tyh-filter-stack{padding:8px 14px 14px;overflow:auto}
+.tyh-filter-section{padding:10px 0;border-bottom:1px solid #f1f5f9}
+.tyh-filter-section h3{margin:0 0 8px;font-size:13px}
+.tyh-filter-section input[type=search]{width:100%;height:40px;border:1px solid var(--ty-line);border-radius:10px;padding:0 10px}
+.tyh-fcheck{display:flex!important;align-items:center;gap:12px;margin:0!important;padding:10px 0;border-bottom:1px solid #f1f5f9;color:#344054}
+.tyh-fcheck input{display:none}
+.tyh-fcheck span{width:22px;height:22px;border-radius:7px;border:2px solid #98a2b3;display:inline-flex;align-items:center;justify-content:center;background:#fff;flex:0 0 auto}
+.tyh-fcheck input:checked+span{background:var(--ty-blue);border-color:var(--ty-blue)}
+.tyh-fcheck input:checked+span:after{content:'✓';color:#fff;font-size:14px;font-weight:900}
+.tyh-fcheck b{font-size:13px;font-weight:750;flex:1}
+.tyh-fcheck em{font-style:normal;color:#98a2b3;font-size:12px;font-weight:750}
+.tyh-filter-actions{display:none}
+.tyh-cards{display:grid;gap:12px}
+.tyh-card{text-decoration:none;color:inherit;background:#fff;border:1px solid var(--ty-line);border-radius:18px;box-shadow:0 8px 22px rgba(7,29,73,.06);display:grid;grid-template-columns:200px minmax(0,1fr);overflow:hidden;cursor:pointer}
+.tyh-card:focus-visible{outline:3px solid #99c2ff;outline-offset:2px}
+.tyh-img{min-height:148px;position:relative;background:#eaf2ff;display:grid;place-items:center;color:var(--ty-blue);font-size:36px;font-weight:900}
+.tyh-img img{width:100%;height:100%;object-fit:cover}
+.tyh-info{padding:12px 14px;min-width:0}
+.tyh-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.tyh-title-row h2{margin:0;font-size:17px;line-height:1.25;color:#101828}
+.tyh-stars{margin:0;color:#f5b301;white-space:nowrap;font-size:13px}
+.tyh-location{font-size:12px!important;margin:6px 0 8px!important}
+.tyh-facilities{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.tyh-facilities span{background:transparent;padding:0;color:#101828;font-size:12px;font-weight:800}
+.tyh-meal,.tyh-free{margin-top:4px!important;color:#067647!important;font-size:12px!important}
+.tyh-meal{color:#667085!important}
+.tyh-card-foot{display:flex;justify-content:flex-end;align-items:flex-end;gap:12px;margin-top:8px}
+.tyh-price{border:0!important;padding:0!important;display:block!important;text-align:right}
+.tyh-price small{display:block;font-size:11px!important;color:#344054!important}
+.tyh-price b{display:block;font-size:20px!important;color:#101828!important}
+.tyh-price em{display:block;background:transparent!important;color:#667085!important;padding:0!important;font-size:11px!important;font-style:normal}
+.tyh-details-plumb{max-width:1180px;margin:12px auto;padding:0 14px}
+.tyh-sort-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:95}
+.tyh-sort-sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(560px,100%);background:#fff;z-index:96;border-radius:22px 22px 0 0;box-shadow:0 -14px 40px rgba(0,0,0,.2);padding-bottom:env(safe-area-inset-bottom)}
+.tyh-sort-sheet header{height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--ty-line)}
+.tyh-sort-sheet h2{margin:0;color:#101828;font-size:22px}
+.tyh-sort-sheet header button{border:0;background:#fff;color:var(--ty-blue);font-size:30px;font-weight:900}
+.tyh-sort-sheet>button{width:100%;height:64px;border:0;background:#fff;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:#101828;text-align:left}
+.tyh-sort-sheet>button b{font-size:17px;font-weight:900}
+.tyh-sort-sheet>button span{font-size:13px;color:#667085;font-weight:700}
+.tyh-sort-sheet>button i{width:26px;height:26px;border-radius:50%;border:2px solid #98a2b3}
+.tyh-sort-sheet>button.active i{border:7px solid var(--ty-blue)}
+.tyh-room{max-height:88vh;border-radius:20px 20px 0 0}
+@media(max-width:860px){
+.tyh-modify{grid-template-columns:1fr 1fr;margin:8px 10px 0;padding:12px}
+.tyh-modify-guests{grid-column:1/-1}
+.tyh-modify button{grid-column:1/-1}
+.tyh-results{display:block!important;grid-template-columns:none!important;margin:8px auto;padding:0 10px}
+.tyh-desktop-sort{display:none!important}
+.tyh-result-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px}
+.tyh-result-tools button{height:48px;border:1px solid var(--ty-line);background:#fff;border-radius:12px;color:#101828;font-size:14px;font-weight:900}
+.tyh-filter{display:none!important;position:fixed;left:0;right:0;top:auto;bottom:0;z-index:97;max-height:78vh;border-radius:22px 22px 0 0;border:0;box-shadow:0 -15px 42px rgba(0,0,0,.18);padding:0}
+.tyh-filter-head [data-filter-close]{display:block}
+.tyh-filter-actions{display:grid;grid-template-columns:1fr 1.45fr;gap:12px;padding:14px;border-top:1px solid var(--ty-line);margin:0}
+.tyh-filter-actions button{height:48px;border-radius:13px;font-size:15px}
+.tyh-filter-actions button:first-child{background:#fff;color:var(--ty-orange);border:1px solid var(--ty-line)}
+.tyh-filter-actions button:last-child{background:var(--ty-blue);color:#fff;border:0}
+body.tyh-filter-open:before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:96}
+body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;position:fixed;z-index:97}
+.tyh-card{display:block;border-radius:16px}
+.tyh-img{min-height:168px}
+.tyh-info{padding:12px 14px 14px}
+.tyh-title-row h2{font-size:16px}
+.tyh-book,.tyh-status{padding:0 10px;margin:10px auto}
+.tyh-mini{grid-template-columns:104px minmax(0,1fr);gap:12px}
+.tyh-mini-img{height:92px}
+.tyh-form-grid{grid-template-columns:1fr}
+.tyh-bottom{left:0;right:0;margin:4px -10px -28px;border-radius:20px 20px 0 0}
+.tyh-bottom button{min-width:0;flex:1}
+.tyh-actions{grid-template-columns:1fr}
+}
+`; }
 
 init();
 })();
