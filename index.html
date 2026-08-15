@@ -4784,6 +4784,50 @@ function normalizeHotelCityRowsV181(raw){
   });
   return list.slice(0,60);
 }
+function hotelCityNormV181(s){return String(s||"").toUpperCase().replace(/[.,]/g," ").replace(/\s+/g," ").trim()}
+function hotelCityPartsV181(r){
+  const full=String((r&&(r.fullRegionName||r.fullName||r.label))||"").trim();
+  if(full) return full.split(/\s*,\s*/).map(function(x){return String(x||"").trim()}).filter(Boolean);
+  return [r&&(r.cityName||r.name||r.city), r&&r.state, r&&r.country].map(function(x){return String(x||"").trim()}).filter(Boolean);
+}
+function rankHotelCityRowsV181(rows, query){
+  const q=hotelCityNormV181(query);
+  const list=(rows||[]).slice();
+  list.forEach(function(r,i){ r._ord=i; });
+  if(!q||!list.length) return list;
+  function typeRank(r){
+    const t=String(r.regionType||"").toUpperCase();
+    if(t==="MULTI_CITY_VICINITY") return 0;
+    if(t==="CITY") return 1;
+    if(t==="PROVINCE_STATE") return 2;
+    return 3;
+  }
+  function partsOf(r){return hotelCityPartsV181(r).map(hotelCityNormV181)}
+  function exactName(r){return hotelCityNormV181(r.cityName||r.name||r.city)===q}
+  function clusterKey(r){
+    const parts=partsOf(r);
+    const hit=parts.find(function(p){return p===q||p.split(" ").indexOf(q)>=0||p.indexOf(q)>=0});
+    return String(hit||parts.slice(-2).join("|"))+"|"+hotelCityNormV181(r.country);
+  }
+  const counts={};
+  list.forEach(function(r){const k=clusterKey(r);counts[k]=(counts[k]||0)+1});
+  let bestK="",bestN=0;
+  Object.keys(counts).forEach(function(k){if(counts[k]>bestN){bestN=counts[k];bestK=k}});
+  list.sort(function(a,b){
+    const aDom=bestN>=3&&clusterKey(a)===bestK?0:1;
+    const bDom=bestN>=3&&clusterKey(b)===bestK?0:1;
+    if(aDom!==bDom) return aDom-bDom;
+    const ta=typeRank(a),tb=typeRank(b);
+    if(ta!==tb) return ta-tb;
+    const ea=exactName(a)?0:1,eb=exactName(b)?0:1;
+    if(ea!==eb) return ea-eb;
+    const na=hotelCityNormV181(a.cityName||a.name),nb=hotelCityNormV181(b.cityName||b.name);
+    const sa=na.indexOf(q)===0?0:1,sb=nb.indexOf(q)===0?0:1;
+    if(sa!==sb) return sa-sb;
+    return (a._ord||0)-(b._ord||0);
+  });
+  return list;
+}
 async function hotelCitySearchV181(term,limit){
   const q=String(term||"").trim();
   const cacheKey=q+"|"+(limit||30);
@@ -4852,13 +4896,13 @@ function hotelRegionTypeLabelV181(value){
   return prettyHotelPlaceV181(raw.replace(/_/g," "));
 }
 function hotelRowHtmlV181(r,recent){
+  const parts=hotelCityPartsV181(r);
+  const name=parts[0]||r.cityName||r.name||r.city||"";
+  const sub=parts.slice(1).join(", ")||(recent?"Recent searches":"");
   const loc=hotelDestinationLabelV181(r);
-  const name=loc.title||r.name||r.cityName||r.city||"";
-  const sub=loc.sub||(recent?"Recent searches":"");
-  const type=hotelRegionTypeLabelV181(r.regionType||(r.raw&&r.raw.regionType)||"");
-  const country=loc.country||prettyHotelPlaceV181(r.country||"");
-  const meta=[type,country].filter(Boolean).filter((v,i,a)=>a.findIndex(x=>x.toLowerCase()===v.toLowerCase())===i).join(" · ");
-  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr((/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))?String(r.id||r.cityId||r.regionId):""))}" data-country="${escAttr(country)}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184"></span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b><small>${escHtml(sub)}</small>${meta?'<em>'+escHtml(meta)+'</em>':''}</span></button>`;
+  const country=String(r.country||loc.country||"").trim();
+  const cityId=/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))?String(r.id||r.cityId||r.regionId):"";
+  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(parts.join(", ")||loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr(cityId)}" data-country="${escAttr(country)}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184"></span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b>${sub?'<small>'+escHtml(sub)+'</small>':''}</span></button>`;
 }
 function bindCityButtonsV181(box){
   qa(".ty-city-row-v66,.ty-hotel-chip-v184",box).forEach(btn=>btn.onclick=function(){
@@ -4887,9 +4931,9 @@ async function renderCityRows(){
     if(isHotelTarget(t)){
       function numericHotelRows(list){ return (list||[]).filter(r=>/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))); }
       box.innerHTML=cityStatusV181("Searching locations...","loading");
-      const live=await hotelCitySearchV181(v,v?30:20);if(String(input.value||"").trim()!==v)return;
+      const live=await hotelCitySearchV181(v,v?40:20);if(String(input.value||"").trim()!==v)return;
       const recent=v?[]:numericHotelRows(readRecentV181(t));
-      const rows=numericHotelRows(live);
+      const rows=rankHotelCityRowsV181(numericHotelRows(live),v);
       box.innerHTML=(recent.length?cityLabelV181("Recent searches")+recent.map(r=>hotelRowHtmlV181(r,true)).join(""):"")+(rows.length?rows.map(r=>hotelRowHtmlV181(r,false)).join(""):cityStatusV181("Type a location and select an exact suggestion.","empty"));
       bindCityButtonsV181(box);return;
     }
