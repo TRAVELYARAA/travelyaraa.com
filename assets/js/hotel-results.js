@@ -29,7 +29,7 @@ const S = {
     freeCancel:false, nameQuery:''
   },
   filterTab:'price', roomHotel:null, selectedHotel:null, selectedOption:null, review:null,
-  guestIndex:0, detailHotel:null,
+  guestIndex:0, detailHotel:null, detailStatus:'idle', detailError:'',
   ui:{ calOpen:false, calStep:'start', calOffset:0, cityOpen:false, guestOpen:false, cityQuery:'', cityRows:[], cityStatus:'' }
 };
 
@@ -195,8 +195,32 @@ function stayNightsLabel(){
   const n=nights(s.checkIn||s.checkinDate||ctx.checkIn, s.checkOut||s.checkoutDate||ctx.checkOut);
   return 'Total for '+n+' night'+(n===1?'':'s');
 }
-function normOption(op, h, i){ op=op||{}; const rooms=arr(op.roomInfo).length?arr(op.roomInfo):(arr(op.rooms).length?arr(op.rooms):arr(op.ris)); const first=rooms[0]||{}; const id=op.optionId||op.id||op.code||op.op||first.id||first.roomId||first.rc||('room_'+i); const cancel=cancellationOf(op); const roomName=op.roomSummary||op.roomName||first.roomCategory||first.roomType||first.name||first.rc||first.rt||''; const meal=op.mealBasis||op.boardBasis||op.mb||first.mealBasis||first.boardBasis||first.mb||''; return { id:String(id), optionId:String(id), roomType:String(roomName), roomSummary:String(roomName), mealBasis:String(meal), totalPrice:priceOf(op,h), resultDisplayAmount:priceOf(op,h), baseFare:Number(op.baseFare||op.pricing&&op.pricing.basePrice||0), taxes:Number(op.taxes||op.pricing&&op.pricing.taxes||0), currency:op.currency||op.pricing&&op.pricing.currency||h.currency||'INR', refundable:cancel.refundable, freeCancellation:cancel.freeCancellation, cancellation:cancel, cancellationPolicy:cancel.raw, bookingNotes:op.bookingNotes||op.notes||[], rooms:rooms, raw:op }; }
+function normOption(op, h, i){ op=op||{}; const rooms=arr(op.roomInfo).length?arr(op.roomInfo):(arr(op.rooms).length?arr(op.rooms):arr(op.ris)); const first=rooms[0]||{}; const id=String(op.optionId||op.id||op.code||op.op||'').trim(); const cancel=cancellationOf(op); const roomName=op.roomSummary||op.roomName||first.roomCategory||first.roomType||first.name||first.rc||first.rt||''; const meal=op.mealBasis||op.boardBasis||op.mb||first.mealBasis||first.boardBasis||first.mb||''; return { id:id, optionId:id, roomType:String(roomName), roomSummary:String(roomName), mealBasis:String(meal), totalPrice:priceOf(op,h), resultDisplayAmount:priceOf(op,h), baseFare:Number(op.baseFare||op.pricing&&op.pricing.basePrice||0), taxes:Number(op.taxes||op.pricing&&op.pricing.taxes||0), currency:op.currency||op.pricing&&op.pricing.currency||h.currency||'INR', refundable:cancel.refundable, freeCancellation:cancel.freeCancellation, cancellation:cancel, cancellationPolicy:cancel.raw, bookingNotes:op.bookingNotes||op.notes||[], rooms:rooms, raw:op }; }
 function optionList(h){ const raw=h.raw||h; let ops=[]; if(arr(h.options).length) ops=arr(h.options); else if(arr(raw.options).length) ops=raw.options; else if(raw.option) ops=[raw.option]; else if(arr(raw.ops).length) ops=raw.ops; else if(arr(raw.hInfo&&raw.hInfo.ops).length) ops=raw.hInfo.ops; else if(arr(raw.data&&raw.data.hInfo&&raw.data.hInfo.ops).length) ops=raw.data.hInfo.ops; return ops.map((op,i)=>normOption(op,h,i)); }
+function realHotelId(h){ return String((h&&(h.hotelId||h.tjHotelId||h.id))||'').trim(); }
+function realOptionId(o){ const id=String((o&&(o.optionId||o.id))||'').trim(); if(!id||/^room_\d+$/i.test(id)) return ''; return id; }
+function realReviewHash(h){ return String((h&&h.reviewHash)||'').trim(); }
+function hasPricingReviewContext(h){ return S.detailStatus==='ready' && !!realHotelId(h) && !!realReviewHash(h) && optionList(h).some(function(o){ return !!realOptionId(o); }); }
+function roomRateArticle(o, allowContinue){
+  const id=realOptionId(o);
+  const action=allowContinue&&id?'<button type="button" data-review-room="'+attr(id)+'">Continue</button>':'';
+  return '<article class="tyh-rate"><div>'+(o.roomSummary||o.roomType?'<b>'+esc(o.roomSummary||o.roomType)+'</b>':'')+(o.mealBasis?'<p>'+esc(o.mealBasis)+'</p>':'')+cancelBadge(o)+'</div><div><strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em>'+action+'</div></article>';
+}
+function roomRatesHtml(h){
+  if(S.detailStatus==='loading'){
+    const listing=optionList(h);
+    return (listing.length?'<div class="tyh-detail-rooms">'+listing.map(function(o){ return roomRateArticle(o,false); }).join('')+'</div>':'')+'<p class="tyh-muted">Loading live room rates…</p>';
+  }
+  if(S.detailStatus==='error'){
+    return '<p class="tyh-muted">'+esc(S.detailError||'We couldn’t load hotels right now. Please try again.')+'</p><button type="button" data-retry-detail>Try again</button>';
+  }
+  if(!hasPricingReviewContext(h)){
+    return '<p class="tyh-muted">Live room rates are not ready yet. Please wait or try again.</p><button type="button" data-retry-detail>Try again</button>';
+  }
+  const ops=optionList(h).filter(function(o){ return !!realOptionId(o); });
+  if(!ops.length) return '<p class="tyh-muted">Room options are unavailable for this hotel.</p>';
+  return '<div class="tyh-detail-rooms">'+ops.map(function(o){ return roomRateArticle(o,true); }).join('')+'</div>';
+}
 function amenityName(x){ return typeof x==='string'?x:(x&&x.name||x&&x.label||x&&x.description||x&&x.value||''); }
 function amenitiesOf(h){ const raw=h.raw||h; const vals=[].concat(arr(h.amenities),arr(h.facilities),arr(raw.amenities),arr(raw.facilities),arr(raw.hotelFacilities),arr(raw.fl),arr(raw.inst).map(x=>x&&x.msg),arr(raw.ops&&raw.ops[0]&&raw.ops[0].ris&&raw.ops[0].ris[0]&&raw.ops[0].ris[0].fcs)); return vals.map(amenityName).filter(Boolean).map(String); }
 function normHotel(h,i){
@@ -570,7 +594,10 @@ function maybeShowHotelDetailsFromUrl(){
   const params=new URLSearchParams(location.search);
   if((params.get('step')||'')!=='hotel-details') return false;
   S.detailHotel=hotelByRealId(params.get('hotelId')||'');
+  S.detailStatus=S.detailHotel?'loading':'idle';
+  S.detailError='';
   renderHotelDetailsPlumbing();
+  if(S.detailHotel) loadHotelPricing(S.detailHotel);
   return true;
 }
 function hotelDescription(h){
@@ -592,26 +619,40 @@ function renderHotelDetailsPlumbing(){
   const facilities=arr(h.amenities).map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('');
   const desc=hotelDescription(h);
   const imgs=[imageOf(h)].filter(Boolean);
-  const ops=optionList(h);
-  const roomsHtml=ops.length?('<div class="tyh-detail-rooms">'+ops.map(function(o){ return '<article class="tyh-rate"><div>'+(o.roomSummary||o.roomType?'<b>'+esc(o.roomSummary||o.roomType)+'</b>':'')+(o.mealBasis?'<p>'+esc(o.mealBasis)+'</p>':'')+cancelBadge(o)+'</div><div><strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em><button type="button" data-review-room="'+attr(o.optionId)+'">Continue</button></div></article>'; }).join('')+'</div>'):'<p class="tyh-muted">Room options will appear from the live hotel details when available.</p>';
+  const roomsHtml=roomRatesHtml(h);
   const content=modifySearchBar()+'<main class="tyh-details-plumb"><article class="tyh-detail">'+(imgs[0]?'<div class="tyh-detail-img"><img src="'+attr(imgs[0])+'" alt="'+attr(h.name)+'"></div>':'')+'<div class="tyh-detail-body"><div class="tyh-title-row"><h2>'+esc(h.name)+'</h2>'+stars+'</div>'+(location?'<p class="tyh-location">'+esc(location)+'</p>':'')+(desc?'<p class="tyh-desc">'+esc(desc)+'</p>':'')+(facilities?'<div class="tyh-facilities">'+facilities+'</div>':'')+(meal?'<p class="tyh-meal">'+esc(meal)+'</p>':'')+(cancel?'<p class="tyh-free">'+esc(cancel)+'</p>':'')+'<div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b></div><h3>Room options</h3>'+roomsHtml+'</div></article></main>';
   shell(content,{title:h.name||'Hotel details', sub:'Hotel details'});
   bindResults();
-  qa('[data-review-room]',root).forEach(function(b){ b.onclick=function(){ startReview(h,b.dataset.reviewRoom); }; });
+  qa('[data-review-room]',root).forEach(function(b){ b.onclick=function(){ startReview(S.detailHotel||h,b.dataset.reviewRoom); }; });
+  const retry=q('[data-retry-detail]',root);
+  if(retry) retry.onclick=function(){ const hotel=S.detailHotel||h; if(hotel) loadHotelPricing(hotel); };
 }
 function openHotelDetails(h){
   const id=String((h&& (h.hotelId||h.id))||'');
   if(!id) return;
   S.detailHotel=h;
+  S.detailStatus='loading';
+  S.detailError='';
   setPage('hotel-details','hotelId='+encodeURIComponent(id));
   renderHotelDetailsPlumbing();
-  openRooms(h, true).then(function(merged){
-    if(merged && String(merged.hotelId||merged.id)===id){
-      S.detailHotel=merged;
-      S.roomHotel=null;
-      renderHotelDetailsPlumbing();
-    }
-  });
+  loadHotelPricing(h);
+}
+function applyPricedHotel(listingHotel, merged){
+  const id=realHotelId(listingHotel);
+  if(!merged || realHotelId(merged)!==id) return;
+  S.detailHotel=merged;
+  S.roomHotel=null;
+  S.detailStatus='ready';
+  S.detailError='';
+  renderHotelDetailsPlumbing();
+}
+async function loadHotelPricing(h){
+  S.detailStatus='loading';
+  S.detailError='';
+  renderHotelDetailsPlumbing();
+  const merged=await openRooms(h, true);
+  if(S.detailStatus==='error') return;
+  applyPricedHotel(h, merged);
 }
 function rerenderKeepUi(){
   const step=new URLSearchParams(location.search).get('step')||'results';
@@ -729,7 +770,8 @@ function bindResults(){
   });
   qa('[data-room]',root).forEach(function(b){ b.onclick=function(){ const h=S.shown.find(function(x){ return x.key===b.dataset.room; })||S.detailHotel; if(h) openRooms(h); }; });
   qa('[data-close]',root).forEach(function(b){ b.onclick=function(){ S.roomHotel=null; paintHotelView(); }; });
-  qa('[data-review-room]',root).forEach(function(b){ b.onclick=function(){ const hotel=S.roomHotel||S.detailHotel; if(hotel) startReview(hotel,b.dataset.reviewRoom); }; });
+  qa('[data-review-room]',root).forEach(function(b){ b.onclick=function(){ const hotel=S.detailHotel||S.roomHotel; if(hotel) startReview(hotel,b.dataset.reviewRoom); }; });
+  qa('[data-retry-detail]',root).forEach(function(b){ b.onclick=function(){ const hotel=S.detailHotel||S.roomHotel; if(hotel) loadHotelPricing(hotel); }; });
 }
 
 function paintHotelView(){
@@ -737,32 +779,84 @@ function paintHotelView(){
   if(step==='hotel-details') renderHotelDetailsPlumbing();
   else renderResults();
 }
-async function openRooms(h, silent){ if(!silent){ S.roomHotel=h; paintHotelView(); } if(optionList(h).length&&h.reviewHash && !silent) return; try{ if(!silent) showLoader('Loading room options…'); const context=h.searchContext||S.search.searchContext||{}; const res=await api('/api/hotels/detail',{hid:h.hotelId||h.id,hotelId:h.hotelId||h.id,searchContext:context}); const d=unwrap(res)||{}; const detailHotel=normHotel(Object.assign({},h,d.hotel||d,{reviewHash:d.reviewHash||'',searchContext:d.searchContext||context,raw:d.raw||d}),0); const merged=Object.assign({},h,detailHotel,{key:h.key,reviewHash:d.reviewHash||detailHotel.reviewHash||'',searchContext:d.searchContext||context}); if(!silent){ S.roomHotel=merged; } S.all=S.all.map(x=>x.key===h.key?merged:x); S.shown=S.shown.map(x=>x.key===h.key?merged:x); if(S.detailHotel&&String(S.detailHotel.hotelId||S.detailHotel.id)===String(h.hotelId||h.id)) S.detailHotel=merged; if(!silent) paintHotelView(); return merged; }catch(e){ if(!silent){ const rb=q('.tyh-room-body',root); if(rb) rb.innerHTML='<p class="tyh-muted">'+esc(friendlyError(e))+'</p>'; } return h; }finally{ hideLoader(); } }
-function roomSheet(h){ const opts=optionList(h); return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+(opts.length?opts.map(o=>'<article class="tyh-rate"><div>'+(o.roomSummary||o.roomType?'<b>'+esc(o.roomSummary||o.roomType)+'</b>':'')+(o.mealBasis?'<p>'+esc(o.mealBasis)+'</p>':'')+cancelBadge(o)+'</div><div><strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em><button type="button" data-review-room="'+attr(o.optionId)+'">Continue</button></div></article>').join(''):'<p class="tyh-muted">Room options are unavailable for this hotel.</p>')+'</div></section>'; }
+async function openRooms(h, silent){
+  if(!silent){ S.roomHotel=h; paintHotelView(); }
+  try{
+    if(!silent) showLoader('Loading room options…');
+    const context=h.searchContext||S.search.searchContext||{};
+    const hid=realHotelId(h);
+    const res=await api('/api/hotels/detail',{hid:hid,hotelId:hid,searchContext:context});
+    const d=unwrap(res)||{};
+    const reviewHash=String(d.reviewHash||(d.hotel&&d.hotel.reviewHash)||'').trim();
+    const priced=d.hotel||{};
+    const detailHotel=normHotel(Object.assign({},priced,{hotelId:priced.hotelId||priced.tjHotelId||hid,tjHotelId:priced.tjHotelId||priced.hotelId||hid,reviewHash:reviewHash,searchContext:d.searchContext||context,raw:d.raw||priced.raw||d}),0);
+    const merged=Object.assign({},h,{
+      key:h.key,
+      hotelId:hid,
+      id:hid,
+      tjHotelId:hid,
+      options:detailHotel.options,
+      price:detailHotel.price||h.price,
+      reviewHash:reviewHash,
+      searchContext:d.searchContext||context,
+      raw:detailHotel.raw
+    }, detailHotel, {hotelId:hid,id:hid,tjHotelId:hid,reviewHash:reviewHash,options:detailHotel.options,searchContext:d.searchContext||context});
+    if(!reviewHash || !optionList(merged).some(function(o){ return !!realOptionId(o); })){
+      const err=new Error('Live room rates are not ready yet. Please try again.');
+      err.status=409;
+      throw err;
+    }
+    if(!silent) S.roomHotel=merged;
+    S.all=S.all.map(function(x){ return realHotelId(x)===hid?Object.assign({},x,{reviewHash:reviewHash}):x; });
+    S.shown=S.shown.map(function(x){ return realHotelId(x)===hid?Object.assign({},x,{reviewHash:reviewHash}):x; });
+    if(!silent) paintHotelView();
+    return merged;
+  }catch(e){
+    S.detailStatus='error';
+    S.detailError=friendlyError(e);
+    if(!silent){
+      const rb=q('.tyh-room-body',root);
+      if(rb) rb.innerHTML='<p class="tyh-muted">'+esc(S.detailError)+'</p><button type="button" data-retry-detail>Try again</button>';
+    }else{
+      renderHotelDetailsPlumbing();
+    }
+    return null;
+  }finally{ hideLoader(); }
+}
+function roomSheet(h){
+  return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+roomRatesHtml(h)+'</div></section>';
+}
 async function startReview(h, optionId){
-  const selectedBeforeReview=optionList(h).find(o=>String(o.optionId)===String(optionId))||{};
+  const hotel=S.detailHotel||h;
+  const oid=realOptionId({optionId:optionId,id:optionId});
+  if(!hasPricingReviewContext(hotel) || !oid || !optionList(hotel).some(function(o){ return realOptionId(o)===oid; })){
+    alert('Please wait for live room rates, then choose the room again.');
+    return;
+  }
+  const selectedBeforeReview=optionList(hotel).find(function(o){ return realOptionId(o)===oid; })||{};
   try{
     showLoader('Verifying hotel price and policy…');
-    const context=h.searchContext||S.search.searchContext||{};
-    const res=await api('/api/hotels/review',{hid:h.hotelId||h.id,hotelId:h.hotelId||h.id,optionId:optionId,reviewHash:h.reviewHash||'',searchContext:context});
+    const context=hotel.searchContext||S.search.searchContext||{};
+    const hid=realHotelId(hotel);
+    const res=await api('/api/hotels/review',{hid:hid,hotelId:hid,optionId:oid,reviewHash:realReviewHash(hotel),searchContext:context});
     const raw=res.raw||res.review&&res.review.raw||res;
     const reviewData=res.review||{};
-    const reviewedHotel=reviewData.hotel ? normHotel(Object.assign({},reviewData.hotel,{searchContext:res.searchContext||context}),0) : h;
-    const reviewedOption=reviewData.option ? normOption(reviewData.option,reviewedHotel,0) : (optionList(reviewedHotel).find(o=>String(o.optionId)===String(optionId)) || selectedBeforeReview);
-    const oldAmount=priceOf(selectedBeforeReview,h);
+    const reviewedHotel=reviewData.hotel ? normHotel(Object.assign({},reviewData.hotel,{searchContext:res.searchContext||context,reviewHash:realReviewHash(hotel)}),0) : hotel;
+    const reviewedOption=reviewData.option ? normOption(reviewData.option,reviewedHotel,0) : selectedBeforeReview;
+    const oldAmount=priceOf(selectedBeforeReview,hotel);
     const reviewedAmount=priceOf(reviewedOption,reviewedHotel) || oldAmount;
     const priceChanged=Boolean(reviewData.isPriceChanged) || (oldAmount>0 && reviewedAmount>0 && Math.abs(reviewedAmount-oldAmount)>0.01);
     if(priceChanged){
-      const accepted=window.confirm('The hotel price changed from '+money(oldAmount)+' to '+money(reviewedAmount)+'. Continue with the latest Tripjack price?');
+      const accepted=window.confirm('The hotel price changed from '+money(oldAmount)+' to '+money(reviewedAmount)+'. Continue with the latest available price?');
       if(!accepted) return;
     }
-    S.selectedHotel=Object.assign({},h,reviewedHotel,{searchContext:res.searchContext||context});
+    S.selectedHotel=Object.assign({},hotel,reviewedHotel,{searchContext:res.searchContext||context,reviewHash:realReviewHash(hotel),hotelId:hid,id:hid,tjHotelId:hid});
     S.selectedOption=reviewedOption;
     S.review=res;
     const reviewBookingId=reviewData.bookingId||raw.bookingId||res.bookingId||'';
-    if(!reviewBookingId) throw new Error('Tripjack did not return a hotel booking reference. Please select the room again.');
-    const draft={service:'hotel',hotel:S.selectedHotel,selected:S.selectedHotel,option:reviewedOption,optionId,reviewHash:h.reviewHash||res.reviewHash||'',searchContext:res.searchContext||context,tripjackReviewRaw:raw,tripjackReviewBookingId:reviewBookingId,cancellationPolicyRaw:reviewedOption.cancellationPolicy||{},finalPayableAmount:reviewedAmount,searchPayload:Object.assign({},S.search,{searchContext:res.searchContext||context}),contact:{countryCode:'+91'},guests:defaultGuests(),gst:{enabled:false},clientRequestId:newHotelClientRequestId(),createdAt:new Date().toISOString()};
-    save(KEY.selected,{service:'hotel',hotel:S.selectedHotel,option:reviewedOption,optionId,review:res,search:S.search});
+    if(!reviewBookingId) throw new Error('Hotel review could not be completed. Please select the room again.');
+    const draft={service:'hotel',hotel:S.selectedHotel,selected:S.selectedHotel,option:reviewedOption,optionId:oid,reviewHash:realReviewHash(hotel),searchContext:res.searchContext||context,tripjackReviewRaw:raw,tripjackReviewBookingId:reviewBookingId,cancellationPolicyRaw:reviewedOption.cancellationPolicy||{},finalPayableAmount:reviewedAmount,searchPayload:Object.assign({},S.search,{searchContext:res.searchContext||context}),contact:{countryCode:'+91'},guests:defaultGuests(),gst:{enabled:false},clientRequestId:newHotelClientRequestId(),createdAt:new Date().toISOString()};
+    save(KEY.selected,{service:'hotel',hotel:S.selectedHotel,option:reviewedOption,optionId:oid,review:res,search:S.search});
     save(KEY.draft,draft);
     setPage('guest');
     renderGuestStep();
