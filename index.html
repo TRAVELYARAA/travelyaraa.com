@@ -4967,8 +4967,8 @@ const oldApplyTrav=window.applyTravellerV5;
 window.applyTravellerV5=function(){if(typeof oldApplyTrav==="function")try{oldApplyTrav()}catch(e){}closeAll();syncNow();return false};
 function setTripRound(){const st=S();st.trip="roundtrip";if(st.flight&&st.flight.depart&&!st.flight.ret)st.flight.ret=addDays(st.flight.depart,1);if(window.setTripActive)try{window.setTripActive("roundtrip")}catch(e){}syncNow()}function setOneWay(){const st=S();st.trip="oneway";if(st.flight)st.flight.ret=null;if(window.setTripActive)try{window.setTripActive("oneway")}catch(e){}syncNow()}function updateReturnUI(){const st=S(),box=id("flightReturnBoxV5"),lab=id("flightReturnLabelV5"),txt=id("flightReturnTextV5");if(!st||!box||!lab||!txt)return;if(st.trip==="roundtrip"){lab.textContent="ROUND TRIP";if(!st.flight.ret)st.flight.ret=addDays(st.flight.depart||today,1);txt.textContent=fmt(st.flight.ret);box.classList.remove("ty-return-empty-v5");box.classList.add("ty-has-return-v66")}else{lab.textContent="ROUND TRIP";txt.textContent="Book a round trip to save more";box.classList.add("ty-return-empty-v5");box.classList.remove("ty-has-return-v66")}}const clear=id("tyReturnClearV66");if(clear)clear.onclick=function(e){e.preventDefault();e.stopPropagation();setOneWay();return false};
 function targetInfo(t){const st=S(),i={title:"Select Date",startLabel:"Date",endLabel:"Return",showEnd:false,min:today};if(t==="flightDepart"){i.title=trip()==="roundtrip"?"Select Departure & Return":"Select Departure Date";i.startLabel="Departure";i.endLabel="Return";i.showEnd=trip()==="roundtrip";draftStart=st.flight.depart;draftEnd=st.flight.ret||null}else if(t==="flightReturn"){i.title="Select Return Date";i.startLabel="Departure";i.endLabel="Return";i.showEnd=true;draftStart=st.flight.depart;draftEnd=st.flight.ret||addDays(st.flight.depart||today,1);i.min=addDays(st.flight.depart||today,1);calStep="end"}else if(t==="hotelCheckin"||t==="hotelCheckout"){i.title="Select Check-in & Check-out";i.startLabel="Check-in";i.endLabel="Check-out";i.showEnd=true;draftStart=st.hotel.checkin;draftEnd=st.hotel.checkout;calStep=t==="hotelCheckout"?"end":"start"}else if(t==="cabDate"){i.title="Select Cab Date";i.startLabel="Pickup Date";draftStart=st.cab.date;draftEnd=null}else if(String(t).startsWith("multi_")){i.title="Select Flight Date";i.startLabel="Flight Date";let idx=+String(t).split("_")[1];draftStart=st.flight.multi&&st.flight.multi[idx]?st.flight.multi[idx].date:today;draftEnd=null}return i}
-function monthOffsetFor(d){if(!d)return 0;return Math.max(0,Math.min(TY_CALENDAR_MAX_DESKTOP_OFFSET_V58,(d.getFullYear()-today.getFullYear())*12+(d.getMonth()-today.getMonth())))}function openCalendar(t){refreshBookingCalendarBoundsV58();calTarget=t;calStep=(String(t).toLowerCase().includes("return")||String(t).toLowerCase().includes("checkout")||String(t).toLowerCase().includes("end"))?"end":"start";const inf=targetInfo(t);calMode=inf.showEnd?"range":"single";desktopOffset=monthOffsetFor(draftStart);calMin=inf.min||today;const modal=id("tyCalendarV58");if(!modal)return;id("tyCalTitleV58").textContent=inf.title;id("tyCalSubV58").textContent="";id("tyCalStartLabelV58").textContent=inf.startLabel;id("tyCalEndLabelV58").textContent=inf.endLabel;id("tyCalEndV58").style.display=inf.showEnd?"block":"none";modal.classList.add("active");lock();placePopup(modal,document.activeElement&&document.activeElement.closest?document.activeElement.closest(".ty-box-v5,.ty-multi-box-v5"):null,720);renderCalendar()}function updateSelectedUI(){id("tyCalStartTextV58").textContent=fmt(draftStart);id("tyCalEndTextV58").textContent=fmt(draftEnd);id("tyCalStartV58").classList.toggle("active",calStep==="start");id("tyCalEndV58").classList.toggle("active",calStep==="end")}function minFor(){if(calMode==="range"&&calStep==="end"&&draftStart)return addDays(draftStart,1);return calMin||today}
-function renderOneMonth(offset){const base=monthBase(offset),month=document.createElement("div");month.className="ty-month-v58";month.innerHTML=`<div class="ty-month-title-v58">${base.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</div><div class="ty-week-v58">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<span>${x}</span>`).join("")}</div>`;const days=document.createElement("div");days.className="ty-days-v58";for(let b=0;b<base.getDay();b++){const x=document.createElement("button");x.type="button";x.className="ty-day-v58 blank";days.appendChild(x)}const maxDays=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();for(let d=1;d<=maxDays;d++){const date=startDay(new Date(base.getFullYear(),base.getMonth(),d));const btn=document.createElement("button");btn.type="button";btn.className="ty-day-v58";btn.textContent=d;if(same(date,today))btn.classList.add("today");if(same(date,draftStart))btn.classList.add("selected","range-start");if(same(date,draftEnd))btn.classList.add("selected","range-end");if(between(date,draftStart,draftEnd))btn.classList.add("in-range");if(date<minFor()||date>maxDate)btn.classList.add("disabled");btn.onclick=()=>selectDate(date);days.appendChild(btn)}month.appendChild(days);return month}function renderCalendar(){updateSelectedUI();const wrap=id("tyCalMonthsV58");if(!wrap)return;wrap.innerHTML="";if(mob()){for(let i=0;i<TY_CALENDAR_VISIBLE_MONTHS_V58;i++)wrap.appendChild(renderOneMonth(i))}else{wrap.appendChild(renderOneMonth(desktopOffset));wrap.appendChild(renderOneMonth(desktopOffset+1))}id("tyCalPrevV58").style.display=desktopOffset<=0?"none":"block";id("tyCalNextV58").style.display=desktopOffset>=TY_CALENDAR_MAX_DESKTOP_OFFSET_V58?"none":"block"}function selectDate(date){if(calMode==="single"){draftStart=date;draftEnd=null;applyCalendar();return}if(calStep==="start"){draftStart=date;if(draftEnd&&le(draftEnd,draftStart))draftEnd=null;calStep="end";renderCalendar();return}if(!draftStart){draftStart=date;calStep="end";renderCalendar();return}if(le(date,draftStart))return;draftEnd=date;renderCalendar();if(!mob())applyCalendar()}function applyCalendar(){const st=S();if(!st||!draftStart)return;const t=calTarget;if(t==="flightDepart"){st.flight.depart=draftStart;if(trip()==="roundtrip"){if(!draftEnd)draftEnd=addDays(draftStart,1);st.flight.ret=draftEnd}else if(st.flight.ret&&le(st.flight.ret,draftStart)){st.flight.ret=null}}if(t==="flightReturn"){st.trip="roundtrip";st.flight.ret=draftEnd||draftStart||addDays(st.flight.depart||today,1);if(window.setTripActive)window.setTripActive("roundtrip")}if(t==="hotelCheckin"||t==="hotelCheckout"){st.hotel.checkin=draftStart;if(!draftEnd)draftEnd=addDays(draftStart,1);st.hotel.checkout=draftEnd}if(t==="cabDate"){st.cab.date=draftStart}if(String(t).startsWith("multi_")){let idx=+String(t).split("_")[1];if(st.flight.multi&&st.flight.multi[idx])st.flight.multi[idx].date=draftStart}closeAll();syncNow()}window.openCalendarV5=openCalendar;window.applyCalendarV5=applyCalendar;window.TravelYaraaCalendarFinal={open:openCalendar,apply:applyCalendar,close:closeAll};
+function monthOffsetFor(d){if(!d)return 0;return Math.max(0,Math.min(TY_CALENDAR_MAX_DESKTOP_OFFSET_V58,(d.getFullYear()-today.getFullYear())*12+(d.getMonth()-today.getMonth())))}function isHotelCal(){return calTarget==="hotelCheckin"||calTarget==="hotelCheckout"}function syncHotelDraftLive(){const st=S();if(!st||!st.hotel||!draftStart)return;st.hotel.checkin=draftStart;st.hotel.checkout=draftEnd||addDays(draftStart,1);syncNow()}function openCalendar(t){refreshBookingCalendarBoundsV58();calTarget=t;calStep=(String(t).toLowerCase().includes("return")||String(t).toLowerCase().includes("checkout")||String(t).toLowerCase().includes("end"))?"end":"start";const inf=targetInfo(t);calMode=inf.showEnd?"range":"single";desktopOffset=monthOffsetFor(draftStart);calMin=inf.min||today;const modal=id("tyCalendarV58");if(!modal)return;id("tyCalTitleV58").textContent=inf.title;id("tyCalSubV58").textContent="";id("tyCalStartLabelV58").textContent=inf.startLabel;id("tyCalEndLabelV58").textContent=inf.endLabel;id("tyCalEndV58").style.display=inf.showEnd?"block":"none";modal.classList.toggle("ty-cal-hotel-v58",isHotelCal());modal.classList.add("active");lock();placePopup(modal,document.activeElement&&document.activeElement.closest?document.activeElement.closest(".ty-box-v5,.ty-multi-box-v5"):null,isHotelCal()?560:720);renderCalendar()}function updateSelectedUI(){id("tyCalStartTextV58").textContent=fmt(draftStart);id("tyCalEndTextV58").textContent=fmt(draftEnd);id("tyCalStartV58").classList.toggle("active",calStep==="start");id("tyCalEndV58").classList.toggle("active",calStep==="end")}function minFor(){if(calMode==="range"&&calStep==="end"&&draftStart)return addDays(draftStart,1);return calMin||today}
+function renderOneMonth(offset){const base=monthBase(offset),month=document.createElement("div");month.className="ty-month-v58";month.innerHTML=`<div class="ty-month-title-v58">${base.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</div><div class="ty-week-v58">${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(x=>`<span>${x}</span>`).join("")}</div>`;const days=document.createElement("div");days.className="ty-days-v58";for(let b=0;b<base.getDay();b++){const x=document.createElement("button");x.type="button";x.className="ty-day-v58 blank";days.appendChild(x)}const maxDays=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();for(let d=1;d<=maxDays;d++){const date=startDay(new Date(base.getFullYear(),base.getMonth(),d));const btn=document.createElement("button");btn.type="button";btn.className="ty-day-v58";btn.textContent=d;if(same(date,today))btn.classList.add("today");if(same(date,draftStart))btn.classList.add("selected","range-start");if(same(date,draftEnd))btn.classList.add("selected","range-end");if(between(date,draftStart,draftEnd))btn.classList.add("in-range");if(date<minFor()||date>maxDate)btn.classList.add("disabled");btn.onclick=()=>selectDate(date);days.appendChild(btn)}month.appendChild(days);return month}function renderCalendar(){updateSelectedUI();const wrap=id("tyCalMonthsV58");if(!wrap)return;wrap.innerHTML="";const hotel=isHotelCal();if(mob()&&!hotel){for(let i=0;i<TY_CALENDAR_VISIBLE_MONTHS_V58;i++)wrap.appendChild(renderOneMonth(i))}else{wrap.appendChild(renderOneMonth(desktopOffset));if(!(mob()&&hotel))wrap.appendChild(renderOneMonth(desktopOffset+1))}const showNav=!mob()||hotel;id("tyCalPrevV58").style.display=(!showNav||desktopOffset<=0)?"none":"block";id("tyCalNextV58").style.display=(!showNav||desktopOffset>=TY_CALENDAR_MAX_DESKTOP_OFFSET_V58)?"none":"block"}function selectDate(date){if(calMode==="single"){draftStart=date;draftEnd=null;applyCalendar();return}if(calStep==="start"){draftStart=date;if(draftEnd&&le(draftEnd,draftStart))draftEnd=null;calStep="end";if(isHotelCal())syncHotelDraftLive();renderCalendar();return}if(!draftStart){draftStart=date;calStep="end";if(isHotelCal())syncHotelDraftLive();renderCalendar();return}if(le(date,draftStart))return;draftEnd=date;if(isHotelCal()){applyCalendar();return}renderCalendar();if(!mob())applyCalendar()}function applyCalendar(){const st=S();if(!st||!draftStart)return;const t=calTarget;if(t==="flightDepart"){st.flight.depart=draftStart;if(trip()==="roundtrip"){if(!draftEnd)draftEnd=addDays(draftStart,1);st.flight.ret=draftEnd}else if(st.flight.ret&&le(st.flight.ret,draftStart)){st.flight.ret=null}}if(t==="flightReturn"){st.trip="roundtrip";st.flight.ret=draftEnd||draftStart||addDays(st.flight.depart||today,1);if(window.setTripActive)window.setTripActive("roundtrip")}if(t==="hotelCheckin"||t==="hotelCheckout"){st.hotel.checkin=draftStart;if(!draftEnd)draftEnd=addDays(draftStart,1);st.hotel.checkout=draftEnd}if(t==="cabDate"){st.cab.date=draftStart}if(String(t).startsWith("multi_")){let idx=+String(t).split("_")[1];if(st.flight.multi&&st.flight.multi[idx])st.flight.multi[idx].date=draftStart}closeAll();syncNow()}window.openCalendarV5=openCalendar;window.applyCalendarV5=applyCalendar;window.TravelYaraaCalendarFinal={open:openCalendar,apply:applyCalendar,close:closeAll};
 function positionSwap(){const grid=id("flightNormalV5")?q(".ty-flight-grid-v5",id("flightNormalV5")):q(".ty-flight-grid-v5");if(!grid)return;const sw=q(".ty-swap-v5",grid),boxes=qa(".ty-box-v5",grid).filter(b=>b.offsetWidth&&b.offsetHeight);if(!sw||boxes.length<2)return;const gr=grid.getBoundingClientRect(),a=boxes[0].getBoundingClientRect(),b=boxes[1].getBoundingClientRect();let left,top;if(mob()||Math.abs(a.left-b.left)<20){left=grid.clientWidth/2;top=((a.bottom+b.top)/2)-gr.top}else{left=((a.right+b.left)/2)-gr.left;top=((a.top+a.bottom)/2)-gr.top}sw.style.setProperty("left",left+"px","important");sw.style.setProperty("top",top+"px","important");sw.style.setProperty("right","auto","important");sw.style.setProperty("transform","translate(-50%,-50%)","important")}window.tyPositionFlightSwapFinal=positionSwap;
 function bind(idn,fn){const e=id(idn);if(e)e.onclick=fn}bind("tyCalCloseV58",e=>{e&&e.preventDefault();closeAll()});bind("tyCalDoneV58",e=>{e&&e.preventDefault();applyCalendar()});bind("tyCalStartV58",()=>{calStep="start";renderCalendar()});bind("tyCalEndV58",()=>{calStep="end";renderCalendar()});bind("tyCalPrevV58",()=>{desktopOffset=Math.max(0,desktopOffset-1);renderCalendar()});bind("tyCalNextV58",()=>{desktopOffset=Math.min(TY_CALENDAR_MAX_DESKTOP_OFFSET_V58,desktopOffset+1);renderCalendar()});document.addEventListener("click",function(e){const tr=e.target.closest&&e.target.closest("[data-v5-trip]");if(tr){const val=tr.dataset.v5Trip;if(val==="roundtrip")setTimeout(setTripRound,30);else if(val==="oneway")setTimeout(setOneWay,30);else setTimeout(positionSwap,80)}},true);
 function fixedTop(){const sels=["header",".header",".site-header",".ty-header",".ty-topbar",".topbar",".navbar","nav","#header","#siteHeader","#mainHeader","#navbar","#topHeader",".logo-header",".main-header",".app-header",".mobile-header",".desktop-header"],ms=[".marquee",".marquee-wrap",".marquee-container",".scrolling-line",".top-marquee",".ty-marquee","#marquee","#topMarquee",".offer-marquee",".notice-marquee"];function first(a){for(const s of a){const e=q(s);if(e&&e.offsetHeight)return e}return null}const h=first(sels),m=first(ms);let top=0;if(h){top+=Math.ceil(h.getBoundingClientRect().height||62)}if(m){m.style.setProperty("top",top+"px","important");top+=Math.ceil(m.getBoundingClientRect().height||0)}document.documentElement.style.setProperty("--ty-fixed-top-offset",top?top+"px":"0px");document.documentElement.style.setProperty("--ty-header-height",h?Math.ceil(h.getBoundingClientRect().height||62)+"px":"62px")}
@@ -5673,6 +5673,77 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     z-index:10090!important;
     box-shadow:0 12px 24px rgba(7,29,73,.22)!important;
   }
+}
+
+/* Hotel search layout + hotel calendar month navigation */
+body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+}
+body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth-child(1),
+body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth-child(4){
+  grid-column:1/-1!important;
+  width:100%!important;
+}
+body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth-child(2),
+body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth-child(3){
+  grid-column:auto!important;
+  width:100%!important;
+  min-width:0!important;
+}
+.ty-calendar-v58.ty-cal-hotel-v58 .ty-cal-months-v58{
+  overflow:hidden!important;
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+}
+.ty-calendar-v58.ty-cal-hotel-v58 .ty-cal-desktop-nav-v58{
+  display:block!important;
+  position:absolute!important;
+  left:0!important;
+  right:0!important;
+  top:118px!important;
+  z-index:6!important;
+  pointer-events:none!important;
+}
+.ty-calendar-v58.ty-cal-hotel-v58 .ty-cal-desktop-nav-v58 button{
+  pointer-events:auto!important;
+  position:absolute!important;
+  width:26px!important;
+  height:26px!important;
+  min-width:26px!important;
+  min-height:26px!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:#fff!important;
+  color:#0b63f6!important;
+  box-shadow:0 4px 12px rgba(7,29,73,.16)!important;
+  font-size:14px!important;
+  line-height:26px!important;
+  font-weight:950!important;
+  padding:0!important;
+}
+.ty-calendar-v58.ty-cal-hotel-v58 #tyCalPrevV58{left:8px!important}
+.ty-calendar-v58.ty-cal-hotel-v58 #tyCalNextV58{right:8px!important}
+@media(min-width:901px){
+  .ty-calendar-v58.ty-cal-hotel-v58.active .ty-calendar-sheet-v58{
+    width:560px!important;
+    max-width:calc(100vw - 28px)!important;
+    max-height:390px!important;
+  }
+  .ty-calendar-v58.ty-cal-hotel-v58 .ty-day-v58{height:28px!important;font-size:11.5px!important}
+  .ty-calendar-v58.ty-cal-hotel-v58 .ty-month-v58{padding:6px 8px 8px!important}
+  .ty-calendar-v58.ty-cal-hotel-v58 .ty-month-title-v58{height:26px!important;font-size:13px!important;padding:0 28px!important}
+}
+@media(max-width:900px){
+  .ty-calendar-v58.ty-cal-hotel-v58 .ty-cal-months-v58{
+    grid-template-columns:1fr!important;
+    overflow:hidden!important;
+    flex:1 1 auto!important;
+    padding-bottom:12px!important;
+  }
+  .ty-calendar-v58.ty-cal-hotel-v58 #tyCalDoneV58{display:none!important}
+  .ty-calendar-v58.ty-cal-hotel-v58 .ty-cal-desktop-nav-v58{top:116px!important}
 }
 
 
