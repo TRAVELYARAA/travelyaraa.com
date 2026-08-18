@@ -4629,7 +4629,7 @@ window.addEventListener("pageshow", closeAllPickersOnLoadV10);
 (function(){
 "use strict";
 let AIRPORTS=[];
-const TY_V180_CITY_CACHE={airportsLoaded:false,hotelQuery:"",hotelRows:[],hotelTimer:null};
+const TY_V180_CITY_CACHE={airportsLoaded:false,hotelOkQuery:"",hotelRows:[],hotelTimer:null};
 const PAGES={flight:"/pages/results/flights.html",hotel:"/pages/results/hotels.html",cab:"/pages/results/cabs.html"};
 let calTarget="",calMode="single",calStep="start",draftStart=null,draftEnd=null,desktopOffset=0,calMin=null;
 let today=startDay(new Date()),maxDate=addMonths(today,12);const TY_CALENDAR_VISIBLE_MONTHS_V58=13;const TY_CALENDAR_MAX_DESKTOP_OFFSET_V58=11;function refreshBookingCalendarBoundsV58(){today=startDay(new Date());maxDate=addMonths(today,12);return{today,maxDate};}
@@ -4861,15 +4861,17 @@ function rankHotelCityRowsV181(rows, query){
 async function hotelCitySearchV181(term,limit){
   const q=String(term||"").trim();
   const cacheKey=q+"|"+(limit||30);
-  if(TY_V180_CITY_CACHE.hotelQuery===cacheKey)return TY_V180_CITY_CACHE.hotelRows;
-  TY_V180_CITY_CACHE.hotelQuery=cacheKey;
+  if(TY_V180_CITY_CACHE.hotelOkQuery===cacheKey)return {ok:true,rows:TY_V180_CITY_CACHE.hotelRows};
   try{
     const url=apiBaseV181()+"/api/hotels/static-cities?query="+encodeURIComponent(q)+"&limit="+encodeURIComponent(limit||30)+(q?"":"&popular=1");
     const res=await fetch(url,{cache:"no-store"});
     const data=await res.json().catch(()=>({}));
-    TY_V180_CITY_CACHE.hotelRows=normalizeHotelCityRowsV181(data);
-  }catch(e){TY_V180_CITY_CACHE.hotelRows=[];}
-  return TY_V180_CITY_CACHE.hotelRows;
+    if(!res.ok)throw new Error((data&&data.message)||(data&&data.code)||("HTTP "+res.status));
+    const rows=normalizeHotelCityRowsV181(data);
+    TY_V180_CITY_CACHE.hotelOkQuery=cacheKey;
+    TY_V180_CITY_CACHE.hotelRows=rows;
+    return {ok:true,rows:rows};
+  }catch(e){return {ok:false,rows:[]};}
 }
 function escHtml(v){return String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function escAttr(v){return escHtml(v)}
@@ -4964,8 +4966,10 @@ async function renderCityRows(){
     const t=S().cityTarget;const v=String(input.value||"").trim();
     if(isHotelTarget(t)){
       function numericHotelRows(list){ return (list||[]).filter(r=>/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))); }
-      box.innerHTML=cityStatusV181("Searching locations...","loading");
-      const live=await hotelCitySearchV181(v,v?40:20);if(String(input.value||"").trim()!==v)return;
+      box.innerHTML=cityStatusV181("Loading locations…","loading");
+      const search=await hotelCitySearchV181(v,v?40:20);if(String(input.value||"").trim()!==v)return;
+      if(!search.ok){box.innerHTML=cityStatusV181("Unable to load locations. Try again.","empty");bindCityButtonsV181(box);return;}
+      const live=search.rows;
       const recent=v?[]:numericHotelRows(readRecentV181(t));
       const rows=rankHotelCityRowsV181(numericHotelRows(live),v);
       box.innerHTML=(recent.length?cityLabelV181("Recent searches")+recent.map(r=>hotelRowHtmlV181(r,true)).join(""):"")+(rows.length?rows.map(r=>hotelRowHtmlV181(r,false)).join(""):cityStatusV181("Type a location and select an exact suggestion.","empty"));
