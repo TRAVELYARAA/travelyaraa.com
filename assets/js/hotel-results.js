@@ -61,6 +61,8 @@ function friendlyError(err){
   if (code === 'HOTEL_SEARCH_EXPIRED') return 'Hotel rates have expired. Please search again for current availability and price.';
   if (code === 'HOTEL_SEARCH_CONTEXT_REQUIRED') return 'Your hotel search session expired. Please search again, then continue.';
   if (code === 'HOTEL_CITY_CATALOG_EMPTY') return 'We couldn’t load hotels right now. Please try again.';
+  if (code === 'TRIPJACK_TIMEOUT') return 'Hotel search timed out. Please try again.';
+  if (code === 'TRIPJACK_NETWORK_ERROR') return 'Unable to reach the hotel supplier. Please try again.';
   if (Number(err && err.status) === 403 || code === 'TRIPJACK_API_ERROR' && /403|forbidden|not allowed|access/i.test(String((err && err.message) || ''))) {
     return 'Hotel price validation was declined by the supplier. Please choose another room or search again.';
   }
