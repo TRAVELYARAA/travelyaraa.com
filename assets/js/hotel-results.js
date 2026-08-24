@@ -33,7 +33,8 @@ const S = {
   guestIndex:0, detailHotel:null, detailStatus:'idle', detailError:'',
   resultsScrollY:0,
   ui:{ calOpen:false, calStep:'start', calOffset:0, cityOpen:false, guestOpen:false, cityQuery:'', cityRows:[], cityStatus:'',
-    galleryOpen:false, galleryIndex:0, sheet:null, editSearchOpen:false }
+    galleryOpen:false, galleryIndex:0, sheet:null, editSearchOpen:false, fareSheetOpen:false, aboutExpanded:false,
+    roomQuery:'', roomFilter:'all', roomGallery:{open:false, optionId:'', index:0} }
 };
 
 function q(sel, ctx){ return (ctx||document).querySelector(sel); }
@@ -65,9 +66,9 @@ function friendlyError(err){
   if (code === 'HOTEL_SEARCH_CONTEXT_REQUIRED') return 'Your hotel search session expired. Please search again, then continue.';
   if (code === 'HOTEL_CITY_CATALOG_EMPTY') return 'We couldn’t load hotels right now. Please try again.';
   if (code === 'TRIPJACK_TIMEOUT') return 'Hotel search timed out. Please try again.';
-  if (code === 'TRIPJACK_NETWORK_ERROR') return 'Unable to reach the hotel supplier. Please try again.';
+  if (code === 'TRIPJACK_NETWORK_ERROR') return 'Unable to reach hotel availability right now. Please try again.';
   if (Number(err && err.status) === 403 || code === 'TRIPJACK_API_ERROR' && /403|forbidden|not allowed|access/i.test(String((err && err.message) || ''))) {
-    return 'Hotel price validation was declined by the supplier. Please choose another room or search again.';
+    return 'Hotel price validation was declined. Please choose another room or search again.';
   }
   if (m.includes('city id') || m.includes('hotel city')) return 'Please select a valid hotel location from the suggestions and search again.';
   if (/failed to fetch|networkerror|load failed|network request failed/.test(m)) {
@@ -229,23 +230,267 @@ function cancelSummaryText(o){
   if(c.refundable) return 'Refundable (charges may apply)';
   return '';
 }
-function hotelAddressText(h){
+function hotelAddressParts(h){
   h=h||{};
-  const addr=String(h.address||'').trim();
-  const loc=String(firstText(h.locality,h.area,h.place,h.city,h.country)||'').trim();
-  if(!addr) return loc;
-  if(loc && !addr.toLowerCase().includes(loc.toLowerCase())) return addr+', '+loc;
-  return addr;
+  const raw=rawOf(h);
+  const ad=(typeof h.address==='object'&&h.address)||raw.ad||raw.address||{};
+  const street=firstText(
+    typeof h.address==='string'?h.address:'',
+    ad.adr, ad.addressLine1, ad.line1, ad.street, ad.address1,
+    deepFind(raw,['adr','addressLine1','street'])
+  );
+  const locality=firstText(h.locality,h.area,h.place,ad.locality,ad.area,ad.ln);
+  const city=firstText(h.city,h.cityName,ad.ctn,ad.city&&ad.city.name,ad.city,raw.ctn);
+  const state=firstText(h.state,h.stateName,h.province,ad.sn,ad.state&&ad.state.name,ad.state);
+  const country=firstText(h.country,h.countryName,ad.cn,ad.country&&ad.country.name,ad.country,raw.cnt);
+  const postal=firstText(h.postalCode,h.postal,ad.postalCode,ad.postal,ad.zip);
+  return {street:street,locality:locality,city:city,state:state,country:country,postal:postal};
+}
+function hotelAddressText(h){
+  const p=hotelAddressParts(h);
+  const bits=[];
+  [p.street,p.locality,p.city,p.state,p.country,p.postal].forEach(function(x){
+    const s=String(x||'').trim();
+    if(!s) return;
+    if(bits.some(function(b){ return b.toLowerCase()===s.toLowerCase(); })) return;
+    bits.push(s);
+  });
+  return bits.join(', ');
+}
+function looksLikeClockTime(v){
+  const s=String(v||'').trim();
+  if(!s) return false;
+  if(/^\d{1,2}:\d{2}(\s*[AaPp][Mm])?$/.test(s)) return true;
+  if(/^\d{1,2}\s*[AaPp][Mm]$/.test(s)) return true;
+  if(/\b(check[\s-]?in|check[\s-]?out)\b/i.test(s) && /\d/.test(s)) return true;
+  return false;
+}
+function hotelCheckTimes(h){
+  h=h||{};
+  const raw=rawOf(h);
+  const content=raw.content||raw.hotelContent||{};
+  const hInfo=raw.hInfo||raw.hotel||{};
+  const policies=h.policies||raw.policies||content.policies||{};
+  const pickTime=function(){
+    for(let i=0;i<arguments.length;i++){
+      const v=arguments[i];
+      if(v===undefined||v===null) continue;
+      const s=String(v).trim();
+      if(!s) continue;
+      if(looksLikeClockTime(s) || /[AaPp][Mm]|\d{1,2}:\d{2}/.test(s)) return s;
+    }
+    return '';
+  };
+  const checkIn=pickTime(
+    h.checkInTime, h.checkinTime, h.ciTime,
+    raw.checkInTime, raw.checkinTime, raw.ciTime, raw.cit,
+    content.checkInTime, content.checkinTime, content.ciTime, content.cit,
+    hInfo.checkInTime, hInfo.checkinTime, hInfo.ciTime, hInfo.cit,
+    policies.checkInTime, policies.checkinTime,
+    deepFind({content:content,hInfo:hInfo,policies:policies},['checkInTime','checkinTime','ciTime','cit','check_in_time'])
+  );
+  const checkOut=pickTime(
+    h.checkOutTime, h.checkoutTime, h.coTime,
+    raw.checkOutTime, raw.checkoutTime, raw.coTime, raw.cot,
+    content.checkOutTime, content.checkoutTime, content.coTime, content.cot,
+    hInfo.checkOutTime, hInfo.checkoutTime, hInfo.coTime, hInfo.cot,
+    policies.checkOutTime, policies.checkoutTime,
+    deepFind({content:content,hInfo:hInfo,policies:policies},['checkOutTime','checkoutTime','coTime','cot','check_out_time'])
+  );
+  return {checkIn:checkIn||'', checkOut:checkOut||''};
+}
+function countryCodeOptionsHtml(selected, query){
+  const sel=String(selected||'+91').trim()||'+91';
+  const q=lower(String(query||'').trim());
+  const list=arr(window.TY_COUNTRY_CODES);
+  const fallback=[['IN','India','+91'],['JP','Japan','+81'],['US','USA/Canada','+1'],['GB','United Kingdom','+44'],['AE','UAE','+971']];
+  const rows=list.length?list:fallback;
+  const filtered=rows.filter(function(row){
+    if(!q) return true;
+    const code=String(row[2]||'').trim();
+    const name=String(row[1]||'').trim();
+    const iso=String(row[0]||'').trim();
+    return lower(name+' '+code+' '+iso).indexOf(q)>=0;
+  });
+  const use=filtered.length?filtered:rows.filter(function(row){ return String(row[2]||'').trim()===sel; });
+  return (use.length?use:rows.slice(0,1)).map(function(row){
+    const code=String(row[2]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!code) return '';
+    const label=(name?name+' ':'')+code;
+    return '<option value="'+attr(code)+'"'+(code===sel?' selected':'')+'>'+esc(label)+'</option>';
+  }).filter(Boolean).join('');
+}
+function roomImagesOf(o, hotel){
+  const out=[];
+  const push=function(u){
+    const s=mediaUrl(u)||String(u||'').trim();
+    if(s&&/^https?:\/\//i.test(s)&&out.indexOf(s)<0) out.push(s);
+  };
+  const walk=function(node, depth){
+    if(depth>4||node==null) return;
+    if(typeof node==='string'){ push(node); return; }
+    if(Array.isArray(node)){ node.forEach(function(x){ walk(x, depth+1); }); return; }
+    if(typeof node!=='object') return;
+    push(node.url||node.src||node.imageUrl||node.image||node.hi||node.tns);
+    ['images','imgs','photos','gallery','media'].forEach(function(k){ if(node[k]) walk(node[k], depth+1); });
+  };
+  const rooms=arr(o&&o.rooms);
+  rooms.forEach(function(r){ walk(r&&(r.images||r.imgs||r.photos||r.media),0); push(r&&(r.image||r.imageUrl||r.heroImage)); });
+  walk(o&&o.raw&&(o.raw.images||o.raw.imgs||o.raw.photos),0);
+  push(o&&o.raw&&(o.raw.image||o.raw.heroImage));
+  if(out.length) return out;
+  const want=lower(o&&(o.roomSummary||o.roomType||''));
+  if(!want) return out;
+  const raw=rawOf(hotel||{});
+  const contentRooms=arr(raw.contentRooms).concat(arr(raw.rooms), arr(raw.content&&raw.content.rooms), arr(hotel&&hotel.contentRooms));
+  contentRooms.forEach(function(r){
+    if(!r||typeof r!=='object') return;
+    const nm=lower(r.name||r.roomName||r.roomType||r.roomCategory||r.rt||r.rc||'');
+    if(!nm||(nm!==want&&nm.indexOf(want)<0&&want.indexOf(nm)<0)) return;
+    walk(r.images||r.imgs||r.photos||r.media,0);
+    push(r.image||r.imageUrl||r.heroImage);
+  });
+  return out;
+}
+function customerSafeNote(text){
+  let s=String(text==null?'':text);
+  if(!s) return '';
+  s=s.replace(/\bTJ\s*Cash\b/gi,'wallet credits');
+  s=s.replace(/\bTrip\s*Jack\b/gi,'the property');
+  s=s.replace(/\bTripjack\b/gi,'the property');
+  s=s.replace(/\bTripJack\b/g,'the property');
+  s=s.replace(/\bTRIPJACK\b/g,'the property');
+  return s;
+}
+function cancellationTableHtml(o){
+  const c=cancellationOf(o||{});
+  const pd=arr(c.penalties);
+  if(!pd.length) return '';
+  const rows=pd.map(function(x){
+    const from=x.fromDate||x.fdt||x.from||'';
+    const to=x.toDate||x.tdt||x.to||'';
+    const amount=x.amount!=null?money(x.amount):(x.am!=null?money(x.am):'');
+    const pct=x.percent!=null?String(x.percent)+'%':(x.pp!=null?String(x.pp)+'%':'');
+    const charge=[amount,pct].filter(Boolean).join(' / ')||'As per policy';
+    return '<tr><td>'+esc(from?fmtDate(from):'—')+'</td><td>'+esc(to?fmtDate(to):'—')+'</td><td>'+esc(charge)+'</td></tr>';
+  }).join('');
+  return '<div class="tyh-cancel-table-wrap"><table class="tyh-cancel-table"><thead><tr><th>Cancellation on or after</th><th>on or before</th><th>Charges</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function surchargeFeesHtml(rawOrReview){
+  const rootObj=rawOrReview&&typeof rawOrReview==='object'?rawOrReview:{};
+  const candidates=[].concat(
+    arr(rootObj.mandatoryFees), arr(rootObj.excludedFees), arr(rootObj.surcharges),
+    arr(rootObj.fees), arr(rootObj.hotelFees),
+    arr(rootObj.hInfo&&rootObj.hInfo.mandatoryFees),
+    arr(rootObj.hInfo&&rootObj.hInfo.excludedFees),
+    arr(rootObj.hotel&&rootObj.hotel.mandatoryFees),
+    arr(rootObj.review&&rootObj.review.mandatoryFees)
+  );
+  const lines=[];
+  candidates.forEach(function(f){
+    if(f==null) return;
+    if(typeof f==='string'){
+      const t=customerSafeNote(f).trim();
+      if(t) lines.push(t);
+      return;
+    }
+    if(typeof f!=='object') return;
+    const label=customerSafeNote(firstText(f.name,f.label,f.description,f.type,f.msg,f.text));
+    const amt=f.amount!=null?money(f.amount):(f.am!=null?money(f.am):(f.price!=null?money(f.price):''));
+    const line=[label,amt].filter(Boolean).join(' — ');
+    if(line) lines.push(line);
+  });
+  if(!lines.length) return '';
+  return '<section class="tyh-panel tyh-surcharge"><h2>Mandatory / excluded fees</h2>'+
+    lines.map(function(t){ return '<p class="tyh-desc">'+esc(t)+'</p>'; }).join('')+
+  '</section>';
+}
+function fareSummaryBlockHtml(opts){
+  opts=opts||{};
+  const base=Number(opts.base||0);
+  const taxes=Number(opts.taxes||0);
+  const fees=Number(opts.fees||0);
+  const total=Number(opts.total||0);
+  const stickyClass=opts.stickyClass?(' '+String(opts.stickyClass)):'';
+  return '<aside class="tyh-fare-summary'+stickyClass+'">'+
+    '<h2>Fare summary</h2>'+
+    (base>0?'<div class="tyh-kv"><span>Room / Base</span><b>'+money(base)+'</b></div>':'')+
+    (taxes>0?'<div class="tyh-kv"><span>Taxes</span><b>'+money(taxes)+'</b></div>':'')+
+    (fees>0?'<div class="tyh-kv"><span>Fees</span><b>'+money(fees)+'</b></div>':'')+
+    '<div class="tyh-kv total"><span>Total payable</span><b>'+money(total)+'</b></div>'+
+    '<p class="tyh-muted">Payment is processed securely via Razorpay.</p>'+
+    (opts.ctaAttr?'<button type="button" class="tyh-cta" '+opts.ctaAttr+'>'+esc(opts.ctaLabel||'Continue')+'</button>':'')+
+  '</aside>';
+}
+function recommendedBookOption(h){
+  const ops=optionList(h).filter(function(o){ return !!realOptionId(o); });
+  if(!ops.length) return null;
+  let best=ops[0];
+  let bestPrice=Number(best.totalPrice||best.resultDisplayAmount||0);
+  ops.forEach(function(o){
+    const p=Number(o.totalPrice||o.resultDisplayAmount||0);
+    if(p>0 && (bestPrice<=0 || p<bestPrice)){ best=o; bestPrice=p; }
+  });
+  return best;
+}
+function optionHasBreakfast(o){
+  const meal=lower(o&&(o.mealBasis||o.boardBasis||''));
+  if(/breakfast|bb\b|bed\s*&?\s*breakfast|cp\b|continental/.test(meal)) return true;
+  const first=arr(o&&o.rooms)[0]||{};
+  const bits=[].concat(arr(first.inclusions),arr(o&&o.bookingNotes)).map(function(x){ return lower(typeof x==='string'?x:(x&&(x.msg||x.text||x.name||''))); }).join(' ');
+  return /breakfast/.test(bits);
+}
+function optionHasPan(o){
+  return !!(o&&(o.panRequired||(o.compliance&&o.compliance.panRequired)||(o.raw&&(o.raw.panRequired||o.raw.ipa))));
+}
+function roomOccupancyText(o){
+  const first=arr(o&&o.rooms)[0]||{};
+  const adults=first.adults!=null?Number(first.adults):Number(first.adt||0);
+  const children=first.children!=null?Number(first.children):Number(first.chd||0);
+  const bits=[];
+  if(Number.isFinite(adults)&&adults>0) bits.push(adults+' adult'+(adults===1?'':'s'));
+  if(Number.isFinite(children)&&children>0) bits.push(children+' child'+(children===1?'':'ren'));
+  return bits.join(' · ');
+}
+function roomCapacityMax(o){
+  const first=arr(o&&o.rooms)[0]||{};
+  const raw=o&&o.raw||{};
+  const vals=[first.maxAdults,first.maxGuests,first.maxOccupancy,first.occupancy,first.capacity,raw.maxAdults,raw.maxGuests,raw.maxOccupancy];
+  for(let i=0;i<vals.length;i++){
+    const n=Number(vals[i]);
+    if(Number.isFinite(n)&&n>0) return n;
+  }
+  const adults=first.adults!=null?Number(first.adults):Number(first.adt||0);
+  const children=first.children!=null?Number(first.children):Number(first.chd||0);
+  const sum=(Number.isFinite(adults)?adults:0)+(Number.isFinite(children)?children:0);
+  return sum>0?sum:0;
+}
+function roomAmenitiesList(o){
+  const first=arr(o&&o.rooms)[0]||{};
+  const vals=[].concat(arr(first.amenities),arr(first.facilities),arr(first.fcs),arr(first.inclusions),arr(o&&o.amenities));
+  return vals.map(amenityName).filter(Boolean).map(String);
 }
 function optionRequiresPassport(){ return !!(option().passportRequired || (option().compliance&&option().compliance.passportRequired)); }
 function optionRequiresPan(){ return !!(option().panRequired || (option().compliance&&option().compliance.panRequired)); }
 function allHotelImages(h){
   const out=[];
-  const push=function(u){ const s=String(u||'').trim(); if(s&&/^https?:\/\//i.test(s)&&out.indexOf(s)<0) out.push(s); };
+  const push=function(u){ const s=mediaUrl(u)||String(u||'').trim(); if(s&&/^https?:\/\//i.test(s)&&out.indexOf(s)<0) out.push(s); };
+  const walk=function(node, depth){
+    if(depth>5||node==null) return;
+    if(typeof node==='string'){ push(node); return; }
+    if(Array.isArray(node)){ node.forEach(function(x){ walk(x, depth+1); }); return; }
+    if(typeof node!=='object') return;
+    push(node.url||node.src||node.imageUrl||node.image||node.hi||node.tns||node.sz);
+    ['images','imgs','photos','gallery','media','hotelImages','contentImages'].forEach(function(k){ if(node[k]) walk(node[k], depth+1); });
+  };
   arr(h&&h.images).forEach(function(item){ push(typeof item==='string'?item:mediaUrl(item)); });
   push(h&&h.image); push(imageOf(h));
   const raw=rawOf(h);
-  arr(raw.images).forEach(function(item){ push(mediaUrl(item)); });
+  walk(raw.images,0); walk(raw.imgs,0); walk(raw.photos,0);
+  walk(raw.hotel&&raw.hotel.images,0); walk(raw.hInfo&&raw.hInfo.img,0); walk(raw.hInfo&&raw.hInfo.images,0);
+  walk(raw.content&&raw.content.images,0); walk(raw.data&&raw.data.images,0);
+  arr(raw.contentRooms||raw.rooms||[]).forEach(function(r){ walk(r&&(r.images||r.imgs||r.photos),0); });
   return out;
 }
 function cancellationPolicyBody(o){
@@ -259,7 +504,7 @@ function cancellationPolicyBody(o){
     const pct=x.percent!=null?String(x.percent)+'%':(x.pp!=null?String(x.pp)+'%':'');
     const when=[from?fmtDate(from):'', to?fmtDate(to):''].filter(Boolean).join(' → ');
     const charge=[amount,pct].filter(Boolean).join(' / ');
-    return '<div class="tyh-kv"><span>'+esc(when||'Period')+'</span><b>'+esc(charge||'As per supplier')+'</b></div>';
+    return '<div class="tyh-kv"><span>'+esc(when||'Period')+'</span><b>'+esc(charge||'As per policy')+'</b></div>';
   }).join('');
   return '<p><b>'+esc(intro)+'</b></p>'+(rows||'<p class="tyh-muted">No detailed cancellation slabs were returned for this rate.</p>');
 }
@@ -275,80 +520,88 @@ function realHotelId(h){ return String((h&&(h.hotelId||h.tjHotelId||h.id))||'').
 function realOptionId(o){ const id=String((o&&(o.optionId||o.id))||'').trim(); if(!id||/^room_\d+$/i.test(id)) return ''; return id; }
 function realReviewHash(h){ return String((h&&h.reviewHash)||'').trim(); }
 function hasPricingReviewContext(h){ return S.detailStatus==='ready' && !!realHotelId(h) && !!realReviewHash(h) && optionList(h).some(function(o){ return !!realOptionId(o); }); }
-function roomRateArticle(o, allowContinue){
+function roomRateArticle(o, allowContinue, hotel){
   const id=realOptionId(o);
-  const action=allowContinue&&id?'<button type="button" data-review-room="'+attr(id)+'">Continue</button>':'';
-
+  const action=allowContinue&&id?'<button type="button" class="tyh-cta" data-review-room="'+attr(id)+'">Select Room</button>':'';
   const c=o.cancellation||cancellationOf(o||{});
   const cancelLine=cancelSummaryText(o);
   const canViewCancelMore=arr(c.penalties).length>0;
-
   const first=arr(o.rooms)[0]||{};
-  const adults=first.adults!=null?Number(first.adults):Number(first.adt||0);
-  const children=first.children!=null?Number(first.children):Number(first.chd||0);
-  const occBits=[];
-  if(Number.isFinite(adults) && adults>0) occBits.push(adults+' adult'+(adults===1?'':'s'));
-  if(Number.isFinite(children) && children>0) occBits.push(children+' child'+(children===1?'':'ren'));
-  const occupancy=occBits.length?occBits.join(' · '):'';
-
-  const bedType=first.bedType||first.bed||first.bed_config&&first.bed_config.description||'';
-  const inclusions=arr(first.inclusions).filter(Boolean).slice(0,4);
-
-  const pushUrl=function(list,u){
-    const s=String(u||'').trim();
-    if(!s) return;
-    if(/^https?:\/\//i.test(s) && list.indexOf(s)<0) list.push(s);
-  };
-  const roomImgUrls=[];
-  arr(first.images).forEach(function(item){ pushUrl(roomImgUrls, mediaUrl(typeof item==='string'?item:item)); });
-  arr(first.imgs).forEach(function(item){ pushUrl(roomImgUrls, mediaUrl(item)); });
-  const raw=o.raw||{};
-  arr(raw.images).forEach(function(item){ pushUrl(roomImgUrls, mediaUrl(typeof item==='string'?item:item)); });
-  if(raw.image) pushUrl(roomImgUrls, mediaUrl(raw.image));
-  if(raw.heroImage) pushUrl(roomImgUrls, mediaUrl(raw.heroImage));
-  const roomImg=roomImgUrls[0]||'';
-
-  const baseFare=Number(o.baseFare||0);
-  const taxes=Number(o.taxes||0);
-
-  const viewCancelMore=canViewCancelMore && id
-    ? '<button type="button" data-open-cancel-sheet="'+attr(id)+'" style="margin-top:8px;height:38px;border:1px solid var(--ty-line);border-radius:13px;background:#fff;color:var(--ty-blue);font-weight:900;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;width:100%">View more</button>'
+  const occupancy=roomOccupancyText(o);
+  const bedType=first.bedType||first.bed||(first.bed_config&&first.bed_config.description)||'';
+  const amens=roomAmenitiesList(o).slice(0,6);
+  const imgs=roomImagesOf(o, hotel||S.detailHotel||{});
+  const roomImg=imgs[0]||'';
+  const photoCount=imgs.length;
+  const panLine=optionHasPan(o)?'PAN required for this rate':'';
+  const viewMore=canViewCancelMore&&id
+    ? '<button type="button" class="tyh-linkish" data-open-cancel-sheet="'+attr(id)+'">View more</button>'
     : '';
-
-  return '<article class="tyh-rate">'+
-    '<div class="tyh-rate-main">'+
-      (o.roomSummary||o.roomType ? '<b>'+esc(o.roomSummary||o.roomType)+'</b>' : '')+
-      (roomImg ? '<div style="margin-top:10px;border-radius:14px;overflow:hidden;height:84px;background:#eef6ff;display:flex;align-items:center;justify-content:center"><img src="'+attr(roomImg)+'" alt="" style="width:100%;height:100%;object-fit:cover"></div>' : '')+
-      (occupancy?'<p style="margin:8px 0 0;color:#344054;font-size:12px;font-weight:850">'+esc(occupancy)+'</p>':'')+
-      (bedType?'<p style="margin:6px 0 0;color:#344054;font-size:12px;font-weight:850">'+esc(bedType)+'</p>':'')+
-      (o.mealBasis?'<p style="margin:10px 0 0;color:var(--ty-muted);font-size:12px;font-weight:800">'+esc(o.mealBasis)+'</p>':'')+
-      (inclusions.length?'<p style="margin:6px 0 0;color:#344054;font-size:12px;font-weight:850">Includes: '+esc(inclusions.join(', '))+'</p>':'')+
-      (cancelLine?'<p style="margin:10px 0 0;color:#067647;font-size:12px;font-weight:950">'+esc(cancelLine)+'</p>':'')+
-      (viewCancelMore?viewCancelMore:'')+
-    '</div>'+
-    '<div class="tyh-rate-side">'+
-      '<strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong>'+
-      '<em>'+esc(stayNightsLabel())+'</em>'+
-      (baseFare>0?'<small style="color:var(--ty-muted);font-weight:900;font-size:11px;display:block;margin-top:4px">Base: '+esc(money(baseFare))+'</small>':'')+
-      (taxes>0?'<small style="color:var(--ty-muted);font-weight:900;font-size:11px;display:block;margin-top:4px">Taxes: '+esc(money(taxes))+'</small>':'')+
-      action+
-    '</div>'+
-  '</article>';
+  const photoBtn=id&&photoCount
+    ? '<button type="button" class="tyh-rate-photos" data-open-room-gallery="'+attr(id)+'">'+(photoCount>1?('+'+photoCount+' photos'):'View photo')+'</button>'
+    : '';
+  const leftCol='<div class="tyh-rate-media">'
+    +(roomImg?'<div class="tyh-rate-img"'+(id?' data-open-room-gallery="'+attr(id)+'"':'')+'><img src="'+attr(roomImg)+'" alt="" loading="lazy"></div>':'<div class="tyh-rate-img tyh-rate-img-empty">Room</div>')
+    +(amens.length?'<ul class="tyh-rate-amens">'+amens.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul>':'')
+    +photoBtn
+  +'</div>';
+  const midCol='<div class="tyh-rate-main">'
+    +(o.roomSummary||o.roomType?'<b class="tyh-rate-title">'+esc(o.roomSummary||o.roomType)+'</b>':'')
+    +(occupancy?'<p class="tyh-rate-meta">'+esc(occupancy)+'</p>':'')
+    +(bedType?'<p class="tyh-rate-meta">'+esc(bedType)+'</p>':'')
+    +(o.mealBasis?'<p class="tyh-rate-meal">'+esc(o.mealBasis)+'</p>':'')
+    +(cancelLine?'<p class="tyh-rate-cancel">'+esc(cancelLine)+'</p>':'')
+    +(panLine?'<p class="tyh-rate-pan">'+esc(panLine)+'</p>':'')
+    +viewMore
+  +'</div>';
+  const rightCol='<div class="tyh-rate-side">'
+    +'<strong>'+esc(money(o.totalPrice||o.resultDisplayAmount))+'</strong>'
+    +'<em>'+esc(stayNightsLabel())+'</em>'
+    +action
+  +'</div>';
+  return '<article class="tyh-rate" data-option-id="'+attr(id)+'">'+leftCol+midCol+rightCol+'</article>';
 }
 function roomRatesHtml(h){
   if(S.detailStatus==='loading'){
     const listing=optionList(h);
-    return (listing.length?'<div class="tyh-detail-rooms">'+listing.map(function(o){ return roomRateArticle(o,false); }).join('')+'</div>':'')+'<p class="tyh-muted">Loading live room rates…</p>';
+    return '<section class="tyh-rooms-block" id="tyhRoomTypes">'
+      +'<div class="tyh-rooms-head"><h3>Room types</h3><p class="tyh-muted">Loading live room rates…</p></div>'
+      +(listing.length?'<div class="tyh-detail-rooms">'+listing.map(function(o){ return roomRateArticle(o,false,h); }).join('')+'</div>':'')
+    +'</section>';
   }
   if(S.detailStatus==='error'){
-    return '<p class="tyh-muted">'+esc(S.detailError||'We couldn’t load hotels right now. Please try again.')+'</p><button type="button" data-retry-detail>Try again</button>';
+    return '<section class="tyh-rooms-block" id="tyhRoomTypes"><p class="tyh-muted">'+esc(S.detailError||'We couldn’t load hotels right now. Please try again.')+'</p><button type="button" data-retry-detail>Try again</button></section>';
   }
   if(!hasPricingReviewContext(h)){
-    return '<p class="tyh-muted">Live room rates are not ready yet. Please wait or try again.</p><button type="button" data-retry-detail>Try again</button>';
+    return '<section class="tyh-rooms-block" id="tyhRoomTypes"><p class="tyh-muted">Live room rates are not ready yet. Please wait or try again.</p><button type="button" data-retry-detail>Try again</button></section>';
   }
-  const ops=optionList(h).filter(function(o){ return !!realOptionId(o); });
-  if(!ops.length) return '<p class="tyh-muted">Room options are unavailable for this hotel.</p>';
-  // Group by supplier room identity/name only when safely derived from normalized roomSummary.
+  const allOps=optionList(h).filter(function(o){ return !!realOptionId(o); });
+  if(!allOps.length) return '<section class="tyh-rooms-block" id="tyhRoomTypes"><p class="tyh-muted">Room options are unavailable for this hotel.</p></section>';
+  const qStr=lower(S.ui.roomQuery||'');
+  const filter=String(S.ui.roomFilter||'all');
+  const hasRefundable=allOps.some(function(o){ return !!(o.freeCancellation||o.refundable); });
+  const hasBreakfast=allOps.some(optionHasBreakfast);
+  const hasPan=allOps.some(optionHasPan);
+  let ops=allOps.filter(function(o){
+    if(qStr){
+      const hay=lower([o.roomSummary,o.roomType,o.mealBasis,cancelSummaryText(o)].join(' '));
+      if(hay.indexOf(qStr)<0) return false;
+    }
+    if(filter==='refundable' && !(o.freeCancellation||o.refundable)) return false;
+    if(filter==='breakfast' && !optionHasBreakfast(o)) return false;
+    if(filter==='pan' && !optionHasPan(o)) return false;
+    return true;
+  });
+  const chip=function(key,label,show){
+    if(!show) return '';
+    return '<button type="button" class="tyh-room-chip'+(filter===key?' active':'')+'" data-room-filter="'+attr(key)+'">'+esc(label)+'</button>';
+  };
+  const filtersHtml='<div class="tyh-room-filters">'
+    +chip('all','All',true)
+    +chip('refundable','Refundable',hasRefundable)
+    +chip('breakfast','Breakfast',hasBreakfast)
+    +chip('pan','PAN required',hasPan)
+  +'</div>';
   const groups=new Map();
   ops.forEach(function(o){
     const key=String((o.roomSummary||o.roomType||'room')).trim().toLowerCase();
@@ -358,21 +611,26 @@ function roomRatesHtml(h){
   });
   const groupBlocks=Array.from(groups.entries()).map(function(entry,gi){
     const list=entry[1]||[];
-    if(list.length<=1) return roomRateArticle(list[0],true);
+    if(list.length<=1) return roomRateArticle(list[0],true,h);
     const first=list[0];
     const more=list.slice(1);
     const gKey='g'+gi;
-    return '<div>'+
-      roomRateArticle(first,true)+
-      '<div style="margin-top:6px">'+
-        '<button type="button" data-toggle-more-options="'+attr(gKey)+'" style="width:100%;height:42px;border:0;border-radius:13px;background:#fff;border:1px solid var(--ty-line);color:var(--ty-blue);font-weight:900">More options ('+esc(String(more.length))+')</button>'+
-      '</div>'+
-      '<div hidden data-more-options-content="'+attr(gKey)+'">'+
-        more.map(function(o){ return roomRateArticle(o,true); }).join('')+
-      '</div>'+
-    '</div>';
+    return '<div class="tyh-rate-group">'
+      +roomRateArticle(first,true,h)
+      +'<button type="button" class="tyh-more-opts" data-toggle-more-options="'+attr(gKey)+'">More options ('+esc(String(more.length))+')</button>'
+      +'<div hidden data-more-options-content="'+attr(gKey)+'">'
+        +more.map(function(o){ return roomRateArticle(o,true,h); }).join('')
+      +'</div>'
+    +'</div>';
   });
-  return '<div class="tyh-detail-rooms">'+groupBlocks.join('')+'</div>';
+  return '<section class="tyh-rooms-block" id="tyhRoomTypes">'
+    +'<div class="tyh-rooms-head">'
+      +'<div><h3>Room types</h3><p class="tyh-muted">Showing results '+esc(String(ops.length))+' of '+esc(String(allOps.length))+' room options</p></div>'
+      +'<label class="tyh-room-search"><span class="tyh-sr">Search rooms</span><input type="search" data-room-query placeholder="Search room types" value="'+attr(S.ui.roomQuery||'')+'"></label>'
+    +'</div>'
+    +filtersHtml
+    +(ops.length?'<div class="tyh-detail-rooms">'+groupBlocks.join('')+'</div>':'<p class="tyh-muted">No room options match your filters.</p>')
+  +'</section>';
 }
 function amenityName(x){ return typeof x==='string'?x:(x&&x.name||x&&x.label||x&&x.description||x&&x.value||''); }
 function amenitiesOf(h){ const raw=h.raw||h; const vals=[].concat(arr(h.amenities),arr(h.facilities),arr(raw.amenities),arr(raw.facilities),arr(raw.hotelFacilities),arr(raw.fl),arr(raw.inst).map(x=>x&&x.msg),arr(raw.ops&&raw.ops[0]&&raw.ops[0].ris&&raw.ops[0].ris[0]&&raw.ops[0].ris[0].fcs)); return vals.map(amenityName).filter(Boolean).map(String); }
@@ -390,11 +648,13 @@ function normHotel(h,i){
   const base={
     key:String(id||h.uid||('hotel_'+i)),
     id:id, hotelId:id, tjHotelId:id,
-    name:name, area:h.area||h.locality||h.location||'', address:typeof h.address==='string'?h.address:(h.address&&h.address.addressLine1)||h.ad||'',
-    city:h.city||h.cityName||context.cityName||'', country:h.country||h.countryName||h.cnt||context.countryName||'',
+    name:name, area:h.area||h.locality||h.location||'', address:typeof h.address==='string'?h.address:(h.address&&h.address.addressLine1)||(typeof h.ad==='string'?h.ad:(h.ad&&h.ad.adr))||'',
+    locality:h.locality||h.area||'', city:h.city||h.cityName||context.cityName||'', state:h.state||h.stateName||'', country:h.country||h.countryName||h.cnt||context.countryName||'',
+    postalCode:h.postalCode||h.postal||'',
+    latitude:h.latitude!=null?h.latitude:(h.lat!=null?h.lat:''), longitude:h.longitude!=null?h.longitude:(h.lng!=null?h.lng:''),
     star:Number(h.starRating||h.star||h.rt||0), rating:Number(h.userRating||h.rating||h.ur||0),
     ratingCount:ratingCountOf(Object.assign({},h,{raw:raw})),
-    image:imageOf(Object.assign({},h,{raw:raw})), amenities:amenitiesOf(Object.assign({},h,{raw:raw})),
+    image:imageOf(Object.assign({},h,{raw:raw})), images:allHotelImages(Object.assign({},h,{raw:raw})), amenities:amenitiesOf(Object.assign({},h,{raw:raw})),
     options:options, price:price, currency:h.currency||context.currency||'INR', reviewHash:h.reviewHash||raw.reviewHash||'', searchContext:context, correlationId:h.correlationId||context.correlationId||'', raw:raw
   };
   base.propertyType=propertyTypeOf(Object.assign({},base,h,{raw:raw}));
@@ -876,44 +1136,48 @@ function hotelDescription(h){
 function hotelHeroHtml(h){
   const imgs=allHotelImages(h);
   if(!imgs.length) return '';
+  const desktop=!isMobileHotelUi();
   const main=imgs[0];
-  const hasMore=imgs.length>1;
-  const countText='+'+esc(String(imgs.length))+' Photos';
-  const mainImg=(
-    hasMore
-      ? '<div data-open-gallery data-gallery-index="0" style="cursor:pointer">'
-      : ''
-  )+
-    '<img src="'+attr(main)+'" alt="'+attr(h.name)+'" />'+
-  (hasMore ? '</div>' : '')+
-  '<div style="position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.35);color:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900">'+countText+'</div>';
-
-  if(!hasMore){
-    return '<div style="position:relative">'+
-      '<div class="tyh-detail-img" style="height:auto;min-height:240px">'+mainImg+'</div>'+
-    '</div>';
+  const count=imgs.length;
+  if(desktop && count>1){
+    const sideA=imgs[1]||main;
+    const sideB=imgs[2]||imgs[1]||main;
+    const more=Math.max(0, count-3);
+    return '<div class="tyh-gallery-grid" aria-label="Hotel photos">'
+      +'<button type="button" class="tyh-gallery-main" data-open-gallery data-gallery-index="0"><img src="'+attr(main)+'" alt="'+attr(h.name||'Hotel')+'" loading="eager"></button>'
+      +'<div class="tyh-gallery-side">'
+        +'<button type="button" data-open-gallery data-gallery-index="1"><img src="'+attr(sideA)+'" alt="" loading="lazy"></button>'
+        +'<button type="button" class="tyh-gallery-more-wrap" data-open-gallery data-gallery-index="2">'
+          +'<img src="'+attr(sideB)+'" alt="" loading="lazy">'
+          +(more>0?'<span class="tyh-gallery-more">+'+esc(String(more))+' photos</span>':'')
+        +'</button>'
+      +'</div>'
+    +'</div>';
   }
-
+  const hasMore=count>1;
+  const countText='+'+esc(String(count))+' Photos';
+  const mainImg=(hasMore?'<div data-open-gallery data-gallery-index="0" style="cursor:pointer">':'')
+    +'<img src="'+attr(main)+'" alt="'+attr(h.name)+'" loading="eager">'
+    +(hasMore?'</div>':'')
+    +'<div class="tyh-gallery-badge">'+countText+'</div>';
+  if(!hasMore){
+    return '<div style="position:relative"><div class="tyh-detail-img" style="height:auto;min-height:240px">'+mainImg+'</div></div>';
+  }
   const thumbs=imgs.slice(1,3);
-  const remaining=imgs.length-1-thumbs.length;
+  const remaining=count-1-thumbs.length;
   const thumbsHtml=thumbs.map(function(u,ti){
     const idx=1+ti;
     const isLastThumb=ti===thumbs.length-1;
     const overlay=(remaining>0 && isLastThumb)
-      ? '<div style="position:absolute;inset:auto 8px 8px 8px;background:rgba(0,0,0,.55);color:#fff;border-radius:12px;padding:6px 8px;font-size:12px;font-weight:900;text-align:center">'+(remaining+1)+' Photos →</div>'
+      ? '<div class="tyh-thumb-more">'+(remaining+1)+' Photos →</div>'
       : '';
-    return '<div data-open-gallery data-gallery-index="'+idx+'" style="position:relative;width:96px;flex:0 0 auto;height:72px;border-radius:16px;overflow:hidden;background:#eef6ff;cursor:pointer">'+overlay+'<img src="'+attr(u)+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></div>';
+    return '<div data-open-gallery data-gallery-index="'+idx+'" class="tyh-thumb">'+overlay+'<img src="'+attr(u)+'" alt="" loading="lazy"></div>';
   }).join('');
-
-  const viewAll='<button type="button" data-open-gallery data-gallery-index="0" style="height:42px;border:0;border-radius:13px;background:var(--ty-orange);color:#fff;padding:0 16px;font-weight:900;font-size:14px;white-space:nowrap">View All Photos</button>';
-
-  return '<div style="position:relative">'+
-    '<div class="tyh-detail-img" style="height:auto;min-height:240px;position:relative">'+mainImg+'</div>'+
-    '<div style="display:flex;gap:12px;align-items:flex-start;margin-top:12px">'+
-      '<div style="display:flex;gap:10px;overflow:auto">'+thumbsHtml+'</div>'+
-      '<div style="flex:1;min-width:0">'+viewAll+'</div>'+
-    '</div>'+
-  '</div>';
+  const viewAll='<button type="button" data-open-gallery data-gallery-index="0" class="tyh-view-all-photos">View All Photos</button>';
+  return '<div style="position:relative">'
+    +'<div class="tyh-detail-img" style="height:auto;min-height:240px;position:relative">'+mainImg+'</div>'
+    +'<div class="tyh-mobile-thumbs">'+thumbsHtml+viewAll+'</div>'
+  +'</div>';
 }
 function galleryHtml(h){
   if(!S.ui.galleryOpen) return '';
@@ -923,16 +1187,44 @@ function galleryHtml(h){
   const prevDisabled=idx<=0;
   const nextDisabled=idx>=imgs.length-1;
   return '<div class="tyh-modal-bg" data-gallery-close></div>'+
-    '<section style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:90;width:min(980px,100%);background:#fff;border-radius:24px;box-shadow:0 30px 90px rgba(7,29,73,.28);overflow:hidden;max-height:90vh">'+
-      '<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--ty-line);background:#fff">'+
-        '<div style="color:var(--ty-navy);font-weight:950;font-size:16px">'+(idx+1)+' / '+imgs.length+'</div>'+
-        '<button type="button" data-gallery-close style="width:38px;height:38px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;font-size:22px;line-height:1">×</button>'+
-      '</header>'+
-      '<div data-gallery-stage style="position:relative;background:#000;display:grid;place-items:center;touch-action:pan-y">'+
-        '<button type="button" data-gallery-prev '+(prevDisabled?'disabled':'')+' style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:26px;font-weight:900;'+(prevDisabled?'opacity:.4':'cursor:pointer')+'">‹</button>'+
-        '<img src="'+attr(imgs[idx])+'" alt="'+attr(h.name||'Hotel')+'" style="max-width:100%;max-height:68vh;object-fit:contain;display:block">'+
-        '<button type="button" data-gallery-next '+(nextDisabled?'disabled':'')+' style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:26px;font-weight:900;'+(nextDisabled?'opacity:.4':'cursor:pointer')+'">›</button>'+
+    '<section class="tyh-gallery-modal" role="dialog" aria-label="Hotel photos">'+
+      '<header><div>'+(idx+1)+' / '+imgs.length+'</div><button type="button" data-gallery-close aria-label="Close">×</button></header>'+
+      '<div data-gallery-stage class="tyh-gallery-stage">'+
+        '<button type="button" data-gallery-prev '+(prevDisabled?'disabled':'')+'>‹</button>'+
+        '<img src="'+attr(imgs[idx])+'" alt="'+attr(h.name||'Hotel')+'">'+
+        '<button type="button" data-gallery-next '+(nextDisabled?'disabled':'')+'>›</button>'+
       '</div>'+
+    '</section>';
+}
+function roomGalleryHtml(h){
+  const rg=S.ui.roomGallery||{};
+  if(!rg.open||!rg.optionId) return '';
+  const opt=optionList(h).find(function(o){ return realOptionId(o)===String(rg.optionId); });
+  if(!opt) return '';
+  const imgs=roomImagesOf(opt,h);
+  if(!imgs.length) return '';
+  const idx=Math.max(0,Math.min(imgs.length-1,Number(rg.index||0)));
+  const prevDisabled=idx<=0;
+  const nextDisabled=idx>=imgs.length-1;
+  const cap=roomCapacityMax(opt);
+  const amens=roomAmenitiesList(opt);
+  const popular=amens.slice(0,4);
+  const moreN=Math.max(0, amens.length-popular.length);
+  return '<div class="tyh-modal-bg" data-room-gallery-close></div>'+
+    '<section class="tyh-gallery-modal tyh-room-gallery" role="dialog" aria-label="Room photos">'+
+      '<header>'+
+        '<div><strong>'+esc(opt.roomSummary||opt.roomType||'Room')+'</strong>'+
+          (cap>0?'<span class="tyh-muted"> · Fits max '+esc(String(cap))+'</span>':'')+
+          '<div class="tyh-muted" style="font-size:12px;margin-top:2px">'+(idx+1)+' / '+imgs.length+'</div>'+
+        '</div>'+
+        '<button type="button" data-room-gallery-close aria-label="Close">×</button>'+
+      '</header>'+
+      '<div data-room-gallery-stage class="tyh-gallery-stage">'+
+        '<button type="button" data-room-gallery-prev '+(prevDisabled?'disabled':'')+'>‹</button>'+
+        '<img src="'+attr(imgs[idx])+'" alt="">'+
+        '<button type="button" data-room-gallery-next '+(nextDisabled?'disabled':'')+'>›</button>'+
+      '</div>'+
+      (popular.length?'<div class="tyh-room-gallery-amens"><span class="tyh-muted">Popular with Guests</span><div class="tyh-facilities">'+popular.map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('')+(moreN?'<span>+'+esc(String(moreN))+' More</span>':'')+'</div></div>':'')+
     '</section>';
 }
 function hotelDetailSheetHtml(){
@@ -940,12 +1232,9 @@ function hotelDetailSheetHtml(){
   const title=String(S.ui.sheet.title||'Details');
   const body=String(S.ui.sheet.body||'');
   return '<div class="tyh-modal-bg" data-sheet-close></div>'+
-    '<section style="position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:91;width:min(980px,100%);background:#fff;border-radius:24px 24px 0 0;box-shadow:0 -12px 35px rgba(7,29,73,.18);max-height:86vh;overflow:auto">'+
-      '<header style="position:sticky;top:0;background:#fff;border-bottom:1px solid var(--ty-line);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px">'+
-        '<div style="color:var(--ty-navy);font-weight:950;font-size:16px">'+esc(title)+'</div>'+
-        '<button type="button" data-sheet-close style="width:38px;height:38px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;font-size:22px;line-height:1">×</button>'+
-      '</header>'+
-      '<div style="padding:16px 18px 18px">'+body+'</div>'+
+    '<section class="tyh-sheet-modal" role="dialog">'+
+      '<header><div>'+esc(title)+'</div><button type="button" data-sheet-close aria-label="Close">×</button></header>'+
+      '<div class="tyh-sheet-body">'+body+'</div>'+
     '</section>';
 }
 function openHotelGalleryAt(i){
@@ -955,6 +1244,7 @@ function openHotelGalleryAt(i){
   S.ui.galleryOpen=true;
   S.ui.galleryIndex=Math.max(0,Math.min(imgs.length-1,Number(i||0)));
   S.ui.sheet=null;
+  S.ui.roomGallery={open:false,optionId:'',index:0};
   renderHotelDetailsPlumbing();
 }
 function closeHotelGallery(){
@@ -962,9 +1252,27 @@ function closeHotelGallery(){
   S.ui.galleryIndex=0;
   renderHotelDetailsPlumbing();
 }
+function openRoomGallery(optionId, index){
+  const h=S.detailHotel||{};
+  const oid=String(optionId||'').trim();
+  if(!oid) return;
+  const opt=optionList(h).find(function(o){ return realOptionId(o)===oid; });
+  if(!opt) return;
+  const imgs=roomImagesOf(opt,h);
+  if(!imgs.length) return;
+  S.ui.roomGallery={open:true,optionId:oid,index:Math.max(0,Math.min(imgs.length-1,Number(index||0)))};
+  S.ui.galleryOpen=false;
+  S.ui.sheet=null;
+  renderHotelDetailsPlumbing();
+}
+function closeRoomGallery(){
+  S.ui.roomGallery={open:false,optionId:'',index:0};
+  renderHotelDetailsPlumbing();
+}
 function openHotelSheet(title, bodyHtml){
   S.ui.sheet={title:title, body:bodyHtml||''};
   S.ui.galleryOpen=false;
+  S.ui.roomGallery={open:false,optionId:'',index:0};
   renderHotelDetailsPlumbing();
 }
 function closeHotelSheet(){
@@ -978,91 +1286,103 @@ function renderHotelDetailsPlumbing(){
     const b=q('[data-back-results]',root); if(b) b.onclick=function(){ setPage('results'); renderResults(); };
     return;
   }
+  const desktop=!isMobileHotelUi();
   const starN=Math.round(Number(h.star||0));
   const stars=starN>0?'<div class="tyh-stars" aria-label="'+esc(starN)+' star">'+"★".repeat(Math.max(0,Math.min(5,starN)))+'</div>':'';
   const location=hotelAddressText(h);
-  const category=h.propertyType ? '<p class="tyh-ptype">'+esc(h.propertyType)+'</p>' : '';
-  const meal=mealBasisOf(h);
-  const cancel=hotelCancelText(h);
   const facilities=arr(h.amenities).filter(Boolean);
   const desc=hotelDescription(h);
   const roomsHtml=roomRatesHtml(h);
-
+  const times=hotelCheckTimes(h);
+  const rec=recommendedBookOption(h);
   const s=S.search||{};
   const ci=s.checkIn||s.checkinDate;
   const co=s.checkOut||s.checkoutDate;
-  const checkInBlock=(ci||co)
-    ? '<div class="tyh-kv"><span>Check-in</span><b>'+esc(fmtDate(ci)||'Pending')+'</b></div>'+
-      '<div class="tyh-kv"><span>Check-out</span><b>'+esc(fmtDate(co)||'Pending')+'</b></div>'
+  const ratingN=Number(h.rating||0);
+  const ratingCount=Number(h.ratingCount||0);
+  const ratingBlock=(Number.isFinite(ratingN)&&ratingN>0)
+    ? '<div class="tyh-book-rating"><strong>'+esc(String(ratingN.toFixed?ratingN.toFixed(1):ratingN))+'</strong>'+(ratingCount>0?'<span>'+esc(String(ratingCount))+' ratings</span>':'')+'</div>'
     : '';
 
   let mapHref='';
-  const lat=Number(h.latitude!=null? h.latitude : (h.lat!=null? h.lat : NaN));
-  const lng=Number(h.longitude!=null? h.longitude : (h.lng!=null? h.lng : NaN));
-  if(Number.isFinite(lat) && Number.isFinite(lng)){
-    mapHref='https://www.openstreetmap.org/?mlat='+encodeURIComponent(lat)+'&mlon='+encodeURIComponent(lng);
-  } else {
-    const q1=[h.address,(h.area||h.locality||h.place),h.city,h.country,h.name].filter(Boolean).join(', ');
-    if(q1) mapHref='https://www.openstreetmap.org/search?query='+encodeURIComponent(q1);
+  const lat=Number(h.latitude!=null?h.latitude:(h.lat!=null?h.lat:NaN));
+  const lng=Number(h.longitude!=null?h.longitude:(h.lng!=null?h.lng:NaN));
+  if(Number.isFinite(lat)&&Number.isFinite(lng)){
+    mapHref='https://www.openstreetmap.org/?mlat='+encodeURIComponent(lat)+'&mlon='+encodeURIComponent(lng)+'#map=17/'+encodeURIComponent(lat)+'/'+encodeURIComponent(lng);
   }
   const mapAction=mapHref
-    ? '<a href="'+attr(mapHref)+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;height:38px;border:1px solid var(--ty-line);border-radius:13px;padding:0 14px;color:var(--ty-blue);font-weight:900;text-decoration:none;margin-top:8px">View on map</a>'
+    ? '<a class="tyh-map-link" href="'+attr(mapHref)+'" target="_blank" rel="noopener">Show on map</a>'
     : '';
 
-  const aboutMax=240;
-  const hasLongDesc=!!desc && String(desc).length>aboutMax;
-  const aboutShort=hasLongDesc?String(desc).slice(0,aboutMax).replace(/\\s+\\S*$/,'')+'…':String(desc||'');
-  const aboutBlock=desc
-    ? '<section class="tyh-panel"><h2>About this property</h2>'+
-        '<p class="tyh-desc">'+esc(aboutShort)+'</p>'+(hasLongDesc?'<button type="button" data-open-hotel-sheet="description" style="margin-top:10px;height:42px;border:0;border-radius:13px;background:#fff;border:1px solid var(--ty-line);color:var(--ty-blue);font-weight:900;display:block;width:100%">View more</button>':'')+
-      '</section>'
+  const aboutFull=String(desc||'');
+  const aboutMax=280;
+  const hasLongDesc=aboutFull.length>aboutMax;
+  const aboutShown=(!hasLongDesc||S.ui.aboutExpanded)?aboutFull:(aboutFull.slice(0,aboutMax).replace(/\s+\S*$/,'')+'…');
+  const aboutBlock=aboutFull
+    ? '<section class="tyh-panel tyh-about"><h2>About this property</h2><p class="tyh-desc">'+esc(aboutShown)+'</p>'
+      +(hasLongDesc?'<button type="button" class="tyh-linkish" data-toggle-about>'+(S.ui.aboutExpanded?'Read less':'Read more')+'</button>':'')
+    +'</section>'
     : '';
 
-  const amenLimit=10;
+  const amenLimit=8;
   const amenShort=facilities.slice(0,amenLimit);
   const amenMore=facilities.length>amenLimit;
   const amenBlock=facilities.length
-    ? '<section class="tyh-panel"><h2>Amenities & facilities</h2><div class="tyh-facilities">'+amenShort.map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('')+'</div>'+(amenMore?'<button type="button" data-open-hotel-sheet="amenities" style="margin-top:10px;height:42px;border:0;border-radius:13px;background:#fff;border:1px solid var(--ty-line);color:var(--ty-blue);font-weight:900;display:block;width:100%">View more</button>':'')+'</section>'
-    : '';
-
-  const pol=policiesOf(h)||{};
-  const polRaw=[].concat(arr(pol.instructions),arr(pol.specialInstructions),arr(pol.knowBeforeYouGo)).filter(Boolean);
-  const polTexts=polRaw.map(function(x){ return String(x && (x.msg||x.text||x.description||x.type||x)) ; }).filter(Boolean);
-  const polLimit=5;
-  const polShort=polTexts.slice(0,polLimit);
-  const polMore=polTexts.length>polLimit;
-  const policyBlock=polTexts.length
-    ? '<section class="tyh-panel"><h2>Hotel policies</h2><div class="tyh-policy-box" style="margin-top:0">'+polShort.map(function(t){ return '<p style="margin:0 0 8px">'+esc(t)+'</p>'; }).join('')+'</div>'+(polMore?'<button type="button" data-open-hotel-sheet="policies" style="margin-top:10px;height:42px;border:0;border-radius:13px;background:#fff;border:1px solid var(--ty-line);color:var(--ty-blue);font-weight:900;display:block;width:100%">View more</button>':'')+'</section>'
+    ? '<section class="tyh-panel"><h2>Amenities</h2><div class="tyh-facilities">'+amenShort.map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('')+'</div>'
+      +(amenMore?'<button type="button" class="tyh-linkish" data-open-hotel-sheet="amenities">View more</button>':'')
+    +'</section>'
     : '';
 
   const hero=hotelHeroHtml(h);
-  const gallery=galleryHtml(h);
-  const sheet=hotelDetailSheetHtml();
+  const titleBlock='<div class="tyh-title-row"><h2>'+esc(h.name)+'</h2>'+stars+'</div>'
+    +(location?'<p class="tyh-location">'+esc(location)+'</p>':'')
+    +mapAction;
 
-  const content=modifySearchBar()+
-    '<main class="tyh-details-plumb"><article class="tyh-detail">'+
-      hero+
-      '<div class="tyh-detail-body">'+
-        '<div class="tyh-title-row">'+
-          '<h2>'+esc(h.name)+'</h2>'+
-          stars+
-          category+
-        '</div>'+
-        (location?'<p class="tyh-location">'+esc(location)+'</p>':'')+
-        mapAction+
-        (checkInBlock? '<div style="margin-top:12px">'+checkInBlock+'<div class="tyh-kv"><span>Nights</span><b>'+esc(String(nights(ci,co)))+'</b></div></div>':'')+
-        (meal?'<p class="tyh-meal">'+esc(meal)+'</p>':'')+
-        (cancel?'<p class="tyh-free">'+esc(cancel)+'</p>':'')+
-        '<div class="tyh-price"><small>'+esc(stayNightsLabel())+'</small><b>'+esc(money(h.price))+'</b></div>'+
-        aboutBlock+
-        amenBlock+
-        policyBlock+
-        '<h3>Room options</h3>'+
-        roomsHtml+
-      '</div>'+
-    '</article></main>'+
-    gallery+
-    sheet;
+  let bookBox='';
+  if(rec&&hasPricingReviewContext(h)){
+    const rid=realOptionId(rec);
+    const occ=roomOccupancyText(rec);
+    bookBox='<aside class="tyh-book-box">'
+      +'<div class="tyh-book-box-room"><b>'+esc(rec.roomSummary||rec.roomType||'Recommended room')+'</b>'
+        +(occ?'<p>'+esc(occ)+'</p>':'')
+        +(rec.mealBasis?'<p class="tyh-muted">'+esc(rec.mealBasis)+'</p>':'')
+      +'</div>'
+      +'<div class="tyh-book-box-price"><strong>'+esc(money(rec.totalPrice||rec.resultDisplayAmount))+'</strong><em>'+esc(stayNightsLabel())+'</em></div>'
+      +(rid?'<button type="button" class="tyh-cta" data-review-room="'+attr(rid)+'">Book Now</button>':'')
+      +'<button type="button" class="tyh-linkish" data-scroll-rooms>View all rooms</button>'
+      +ratingBlock
+      +((times.checkIn||times.checkOut)
+        ? '<div class="tyh-book-times">'
+          +(times.checkIn?'<div class="tyh-kv"><span>Check-in</span><b>'+esc(times.checkIn)+'</b></div>':'')
+          +(times.checkOut?'<div class="tyh-kv"><span>Check-out</span><b>'+esc(times.checkOut)+'</b></div>':'')
+        +'</div>'
+        : '')
+    +'</aside>';
+  } else if(desktop){
+    bookBox='<aside class="tyh-book-box"><p class="tyh-muted">'+(S.detailStatus==='loading'?'Loading live rates…':'Live rates will appear here once ready.')+'</p>'
+      +((ci||co)?'<div class="tyh-kv"><span>Stay</span><b>'+esc([fmtDate(ci),fmtDate(co)].filter(Boolean).join(' → '))+'</b></div>':'')
+      +ratingBlock+'</aside>';
+  }
+
+  const leftHead='<div class="tyh-detail-main">'
+    +hero
+    +'<div class="tyh-detail-body">'
+      +titleBlock
+      +aboutBlock
+      +amenBlock;
+  const leftRooms=roomsHtml+'</div></div>';
+
+  const content=modifySearchBar()
+    +'<main class="tyh-details-plumb'+(desktop?' tyh-detail-desk':' tyh-detail-mob')+'">'
+      +'<article class="tyh-detail">'
+        +(desktop
+          ? ('<div class="tyh-detail-grid">'+leftHead+leftRooms+bookBox+'</div>')
+          : (leftHead+(bookBox?'<div class="tyh-book-box-mobile">'+bookBox+'</div>':'')+leftRooms))
+      +'</article>'
+    +'</main>'
+    +galleryHtml(h)
+    +roomGalleryHtml(h)
+    +hotelDetailSheetHtml();
 
   shell(content,{title:h.name||'Hotel details', sub:'Hotel details'});
   bindResults();
@@ -1081,25 +1401,13 @@ function bindHotelDetailExtras(){
   });
 
   const prev=q('[data-gallery-prev]',root);
-  if(prev) prev.onclick=function(){
-    if(prev.disabled) return;
-    openHotelGalleryAt(Number(S.ui.galleryIndex||0)-1);
-  };
+  if(prev) prev.onclick=function(){ if(prev.disabled) return; openHotelGalleryAt(Number(S.ui.galleryIndex||0)-1); };
   const next=q('[data-gallery-next]',root);
-  if(next) next.onclick=function(){
-    if(next.disabled) return;
-    openHotelGalleryAt(Number(S.ui.galleryIndex||0)+1);
-  };
-
+  if(next) next.onclick=function(){ if(next.disabled) return; openHotelGalleryAt(Number(S.ui.galleryIndex||0)+1); };
   qa('[data-gallery-close]',root).forEach(function(b){
-    b.onclick=function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      closeHotelGallery();
-    };
+    b.onclick=function(e){ e.preventDefault(); e.stopPropagation(); closeHotelGallery(); };
   });
 
-  // Swipe navigation (mobile)
   const stage=q('[data-gallery-stage]',root);
   if(stage){
     let startX=0, startY=0, touched=false;
@@ -1121,12 +1429,68 @@ function bindHotelDetailExtras(){
     });
   }
 
-  qa('[data-sheet-close]',root).forEach(function(b){
+  qa('[data-open-room-gallery]',root).forEach(function(b){
     b.onclick=function(e){
       e.preventDefault();
       e.stopPropagation();
-      closeHotelSheet();
+      openRoomGallery(b.getAttribute('data-open-room-gallery')||b.dataset.openRoomGallery||'');
     };
+  });
+  const rprev=q('[data-room-gallery-prev]',root);
+  if(rprev) rprev.onclick=function(){
+    if(rprev.disabled) return;
+    const rg=S.ui.roomGallery||{};
+    openRoomGallery(rg.optionId, Number(rg.index||0)-1);
+  };
+  const rnext=q('[data-room-gallery-next]',root);
+  if(rnext) rnext.onclick=function(){
+    if(rnext.disabled) return;
+    const rg=S.ui.roomGallery||{};
+    openRoomGallery(rg.optionId, Number(rg.index||0)+1);
+  };
+  qa('[data-room-gallery-close]',root).forEach(function(b){
+    b.onclick=function(e){ e.preventDefault(); e.stopPropagation(); closeRoomGallery(); };
+  });
+  const rstage=q('[data-room-gallery-stage]',root);
+  if(rstage){
+    let sx=0, sy=0, touched=false;
+    rstage.addEventListener('touchstart',function(e){
+      const t=(e.changedTouches&&e.changedTouches[0])||null;
+      if(!t) return;
+      sx=t.clientX; sy=t.clientY; touched=true;
+    },{passive:true});
+    rstage.addEventListener('touchend',function(e){
+      if(!touched) return;
+      touched=false;
+      const t=(e.changedTouches&&e.changedTouches[0])||null;
+      if(!t) return;
+      const dx=t.clientX-sx, dy=t.clientY-sy;
+      if(Math.abs(dx)<40 || Math.abs(dx)<Math.abs(dy)) return;
+      const rg=S.ui.roomGallery||{};
+      if(dx<0) openRoomGallery(rg.optionId, Number(rg.index||0)+1);
+      else openRoomGallery(rg.optionId, Number(rg.index||0)-1);
+    });
+  }
+
+  if(!window.__tyhGalleryKeysBound){
+    window.__tyhGalleryKeysBound=true;
+    document.addEventListener('keydown',function(e){
+      if(currentStep()!=='hotel-details') return;
+      if(S.ui.roomGallery&&S.ui.roomGallery.open){
+        if(e.key==='Escape'){ closeRoomGallery(); return; }
+        if(e.key==='ArrowLeft'){ openRoomGallery(S.ui.roomGallery.optionId, Number(S.ui.roomGallery.index||0)-1); return; }
+        if(e.key==='ArrowRight'){ openRoomGallery(S.ui.roomGallery.optionId, Number(S.ui.roomGallery.index||0)+1); return; }
+      }
+      if(S.ui.galleryOpen){
+        if(e.key==='Escape'){ closeHotelGallery(); return; }
+        if(e.key==='ArrowLeft'){ openHotelGalleryAt(Number(S.ui.galleryIndex||0)-1); return; }
+        if(e.key==='ArrowRight'){ openHotelGalleryAt(Number(S.ui.galleryIndex||0)+1); return; }
+      }
+    });
+  }
+
+  qa('[data-sheet-close]',root).forEach(function(b){
+    b.onclick=function(e){ e.preventDefault(); e.stopPropagation(); closeHotelSheet(); };
   });
 
   qa('[data-open-hotel-sheet]',root).forEach(function(b){
@@ -1137,20 +1501,19 @@ function bindHotelDetailExtras(){
       const hh=S.detailHotel||{};
       if(type==='description'){
         const full=hotelDescription(hh)||'';
-        openHotelSheet('About this property', full?('<p style=\"margin:0;white-space:pre-wrap\">'+esc(full)+'</p>'):'<p class=\"tyh-muted\">No description available.</p>');
+        openHotelSheet('About this property', full?('<p style="margin:0;white-space:pre-wrap">'+esc(full)+'</p>'):'<p class="tyh-muted">No description available.</p>');
         return;
       }
       if(type==='amenities'){
         const list=arr(hh.amenities).filter(Boolean);
-        openHotelSheet('Amenities & facilities', list.length?'<div style=\"display:flex;flex-wrap:wrap;gap:8px\">'+list.map(a=>'<span style=\"background:#f2f4f7;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800\">'+esc(a)+'</span>').join('')+'</div>':'<p class=\"tyh-muted\">No amenities available.</p>');
+        openHotelSheet('Amenities & facilities', list.length?'<div class="tyh-facilities">'+list.map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('')+'</div>':'<p class="tyh-muted">No amenities available.</p>');
         return;
       }
       if(type==='policies'){
         const pol=policiesOf(hh)||{};
         const polRaw=[].concat(arr(pol.instructions),arr(pol.specialInstructions),arr(pol.knowBeforeYouGo)).filter(Boolean);
-        const texts=polRaw.map(x=>String(x && (x.msg||x.text||x.description||x.type||x))).filter(Boolean);
-        openHotelSheet('Hotel policies', texts.length?texts.map(t=>'<p style=\"margin:0 0 10px\">'+esc(t)+'</p>').join(''):'<p class=\"tyh-muted\">No policies available.</p>');
-        return;
+        const texts=polRaw.map(function(x){ return customerSafeNote(String(x && (x.msg||x.text||x.description||x.type||x))); }).filter(Boolean);
+        openHotelSheet('Hotel policies', texts.length?texts.map(function(t){ return '<p style="margin:0 0 10px">'+esc(t)+'</p>'; }).join(''):'<p class="tyh-muted">No policies available.</p>');
       }
     };
   });
@@ -1162,18 +1525,50 @@ function bindHotelDetailExtras(){
       const optId=String(b.dataset.openCancelSheet||'');
       const hh=S.detailHotel||{};
       const opt=optionList(hh).find(function(o){ return realOptionId(o)===optId; });
-      openHotelSheet('Cancellation policy', opt?cancellationPolicyBody(opt):'<p class=\"tyh-muted\">Cancellation details unavailable.</p>');
+      const body=(opt?(cancellationPolicyBody(opt)+cancellationTableHtml(opt)):'<p class="tyh-muted">Cancellation details unavailable.</p>');
+      openHotelSheet('Cancellation policy', body);
     };
   });
 
   qa('[data-toggle-more-options]',root).forEach(function(b){
     b.onclick=function(){
       const key=String(b.dataset.toggleMoreOptions||'');
-      const target=q('[data-more-options-content=\"'+key+'\"]',root);
+      const target=q('[data-more-options-content="'+key+'"]',root);
       if(!target) return;
       target.hidden=!target.hidden;
     };
   });
+
+  const aboutBtn=q('[data-toggle-about]',root);
+  if(aboutBtn) aboutBtn.onclick=function(){
+    S.ui.aboutExpanded=!S.ui.aboutExpanded;
+    renderHotelDetailsPlumbing();
+  };
+
+  const roomQuery=q('[data-room-query]',root);
+  if(roomQuery){
+    roomQuery.oninput=function(){
+      S.ui.roomQuery=String(roomQuery.value||'');
+      clearTimeout(S.ui.roomQueryTimer);
+      S.ui.roomQueryTimer=setTimeout(function(){
+        const keep=S.ui.roomQuery;
+        renderHotelDetailsPlumbing();
+        const n=q('[data-room-query]',root);
+        if(n){ n.focus(); n.value=keep; try{ n.setSelectionRange(keep.length,keep.length);}catch(e){} }
+      },160);
+    };
+  }
+  qa('[data-room-filter]',root).forEach(function(b){
+    b.onclick=function(){
+      S.ui.roomFilter=String(b.dataset.roomFilter||'all');
+      renderHotelDetailsPlumbing();
+    };
+  });
+  const scrollRooms=q('[data-scroll-rooms]',root);
+  if(scrollRooms) scrollRooms.onclick=function(){
+    const el=q('#tyhRoomTypes',root)||q('.tyh-rooms-block',root);
+    if(el) try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ el.scrollIntoView(true); }
+  };
 }
 function openHotelDetails(h){
   const id=String((h&& (h.hotelId||h.id))||'');
@@ -1181,6 +1576,10 @@ function openHotelDetails(h){
   S.detailHotel=h;
   S.detailStatus='loading';
   S.detailError='';
+  S.ui.aboutExpanded=false;
+  S.ui.roomQuery='';
+  S.ui.roomFilter='all';
+  S.ui.roomGallery={open:false,optionId:'',index:0};
   save(KEY.selectedListing,{
     hotel:h,
     search:Object.assign({}, S.search, {searchContext:(h&&h.searchContext)||(S.search&&S.search.searchContext)||{}}),
@@ -1199,6 +1598,16 @@ function applyPricedHotel(listingHotel, merged){
   const id=realHotelId(listingHotel);
   if(!merged || realHotelId(merged)!==id) return;
   if(!tyhStillOnHotelDetails(id)) return;
+  const listingImgs=allHotelImages(listingHotel);
+  const mergedImgs=allHotelImages(merged);
+  if((!arr(merged.images).length || !mergedImgs.length) && listingImgs.length){
+    merged=Object.assign({}, merged, {
+      images:listingImgs,
+      image:merged.image||listingHotel.image||listingImgs[0]
+    });
+  } else if(arr(merged.images).length===0 && arr(listingHotel.images).length){
+    merged=Object.assign({}, merged, {images:arr(listingHotel.images), image:merged.image||listingHotel.image});
+  }
   S.detailHotel=merged;
   S.roomHotel=null;
   S.detailStatus='ready';
@@ -1387,8 +1796,14 @@ async function openRooms(h, silent){
       price:detailHotel.price||h.price,
       reviewHash:reviewHash,
       searchContext:d.searchContext||context,
-      raw:detailHotel.raw
-    }, detailHotel, {hotelId:hid,id:hid,tjHotelId:hid,reviewHash:reviewHash,options:detailHotel.options,searchContext:d.searchContext||context});
+      raw:detailHotel.raw,
+      images:(allHotelImages(detailHotel).length?allHotelImages(detailHotel):allHotelImages(h)),
+      image:detailHotel.image||h.image||imageOf(h),
+      amenities:(arr(detailHotel.amenities).length?detailHotel.amenities:h.amenities),
+      address:hotelAddressText(detailHotel)||hotelAddressText(h)||h.address,
+      star:detailHotel.star||h.star
+    }, detailHotel, {hotelId:hid,id:hid,tjHotelId:hid,reviewHash:reviewHash,options:detailHotel.options,searchContext:d.searchContext||context,
+      images:(allHotelImages(detailHotel).length?allHotelImages(detailHotel):allHotelImages(h))});
     if(!reviewHash || !optionList(merged).some(function(o){ return !!realOptionId(o); })){
       const err=new Error('Live room rates are not ready yet. Please try again.');
       err.status=409;
@@ -1472,20 +1887,29 @@ function renderGuestStep(){
   const guests=arr(d.guests).length?d.guests:defaultGuests();
   const i=Math.max(0,Math.min(S.guestIndex,guests.length-1));
   const g=guests[i]||{};
-  const contact=d.contact||{};
+  let contact=Object.assign({}, d.contact||{});
+  try{
+    const profile=JSON.parse(localStorage.getItem('ty_user_profile')||'null')||tyhRecognizedLoggedInUser()||{};
+    if(!contact.email && profile.email) contact.email=profile.email;
+    if(!contact.phone && (profile.phone||profile.phoneNumber)) contact.phone=String(profile.phone||profile.phoneNumber||'').replace(/\D/g,'');
+    if(!contact.countryCode && profile.countryCode) contact.countryCode=profile.countryCode;
+  }catch(e){}
+  if(!contact.countryCode) contact.countryCode='+91';
+  if((!d.contact||!d.contact.email||!d.contact.phone) && (contact.email||contact.phone)){
+    setDraft({contact:Object.assign({}, d.contact||{}, {email:contact.email||(d.contact&&d.contact.email)||'', phone:contact.phone||(d.contact&&d.contact.phone)||'', countryCode:contact.countryCode})});
+  }
   const gst=d.gst||{};
   const needPass=optionRequiresPassport();
   const needPan=optionRequiresPan();
   const leadExtra=(i===0?(needPass?'<label>Passport Number<input data-gfield="passport" value="'+attr(g.passport||'')+'" placeholder="Passport Number"></label>':'')+(needPan?'<label>PAN<input data-gfield="pan" value="'+attr(g.pan||'')+'" placeholder="PAN"></label>':''):'');
-
   const s=d.searchPayload||S.search||{};
   const ci=s.checkIn||s.checkinDate, co=s.checkOut||s.checkoutDate;
   const roomSlot=String(g.room||1);
   const slotLabel='ROOM '+roomSlot+' • '+String(g.type||'Guest')+' '+String(i+1);
+  const guestsTabs=guests.map(function(x,idx){ return '<button type="button" class="'+(idx===i?'active':'')+'" data-guest-tab="'+idx+'">'+esc(x.type||'Guest')+' '+(idx+1)+'</button>'; }).join('');
+  const desktop=!isMobileHotelUi();
 
-  const guestsTabs=guests.map((x,idx)=>'<button type="button" class="'+(idx===i?'active':'')+'" data-guest-tab="'+idx+'">'+esc(x.type||'Guest')+' '+(idx+1)+'</button>').join('');
-
-  const content='<main class="tyh-book">'
+  const content='<main class="tyh-book tyh-book-flow'+(desktop?' tyh-guest-desk':'')+'">'
     +'<section class="tyh-summary-card">'
       +hotelMiniCard(hotel(),option())
       +'<div class="tyh-kv"><span>Check-in</span><b>'+esc(fmtDate(ci)||'Pending')+'</b></div>'
@@ -1497,20 +1921,24 @@ function renderGuestStep(){
       +(i===0?'<small class="tyh-muted">Only Lead Guest Name is Required</small>':'')
       +'<p class="tyh-muted" style="margin:-6px 0 12px;font-size:12px;font-weight:900;">'+esc(slotLabel)+'</p>'
       +'<div class="tyh-tabs">'+guestsTabs+'</div>'
-      +'<div class="tyh-form-grid" data-guest-form="'+i+'">'
-        +'<label>Title<select data-gfield="title"><option '+(g.title==='Mr'?'selected':'')+'>Mr</option><option '+(g.title==='Ms'?'selected':'')+'>Ms</option><option '+(g.title==='Mrs'?'selected':'')+'>Mrs</option><option '+(g.title==='Master'?'selected':'')+'>Master</option></select></label>'
+      +'<div class="tyh-form-grid tyh-guest-names-grid" data-guest-form="'+i+'">'
+        +'<label class="tyh-guest-title">Title<select data-gfield="title"><option '+(g.title==='Mr'?'selected':'')+'>Mr</option><option '+(g.title==='Ms'?'selected':'')+'>Ms</option><option '+(g.title==='Mrs'?'selected':'')+'>Mrs</option><option '+(g.title==='Master'?'selected':'')+'>Master</option></select></label>'
         +'<label>First Name<input data-gfield="firstName" value="'+attr(g.firstName||'')+'" placeholder="First Name"></label>'
         +'<label>Last Name<input data-gfield="lastName" value="'+attr(g.lastName||'')+'" placeholder="Last Name"></label>'
         +(g.type==='Child'?'<label>Age<input data-gfield="age" value="'+attr(g.age||'')+'" placeholder="Child age"></label>':'')
         +leadExtra
       +'</div>'
+      +'<button type="button" class="tyh-linkish" data-save-guest style="margin-top:10px">Save guest details</button>'
     +'</section>'
     +'<section class="tyh-panel">'
       +'<h2>Contact details</h2>'
-      +'<div class="tyh-form-grid">'
-        +'<label>Email<input data-contact="email" type="email" value="'+attr(contact.email||'')+'" placeholder="Email"></label>'
-        +'<label>Country code<select data-contact="countryCode"><option value="+91" '+((contact.countryCode||'+91')==='+91'?'selected':'')+'>India +91</option><option value="+81" '+(contact.countryCode==='+81'?'selected':'')+'>Japan +81</option><option value="+1" '+(contact.countryCode==='+1'?'selected':'')+'>USA/Canada +1</option><option value="+44" '+(contact.countryCode==='+44'?'selected':'')+'>United Kingdom +44</option><option value="+971" '+(contact.countryCode==='+971'?'selected':'')+'>UAE +971</option></select></label>'
-        +'<label>Mobile<input data-contact="phone" inputmode="numeric" value="'+attr(contact.phone||'')+'" placeholder="Mobile number"></label>'
+      +'<div class="tyh-form-grid tyh-contact-grid">'
+        +'<label class="tyh-contact-email">Email<input data-contact="email" type="email" value="'+attr(contact.email||'')+'" placeholder="Email"></label>'
+        +'<label class="tyh-ccode">Country code'
+          +'<input type="search" class="tyh-ccode-filter" data-ccode-filter placeholder="Search country or +code" autocomplete="off">'
+          +'<select data-contact="countryCode">'+countryCodeOptionsHtml(contact.countryCode||'+91')+'</select>'
+        +'</label>'
+        +'<label class="tyh-contact-phone">Mobile<input data-contact="phone" inputmode="numeric" value="'+attr(contact.phone||'')+'" placeholder="Mobile number"></label>'
       +'</div>'
       +'<label class="tyh-check"><input type="checkbox" data-agreement checked required> I agree to TravelYaraa <a href="/legal/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>, <a href="/legal/user-agreement.html" target="_blank" rel="noopener">User Agreement</a> and <a href="/legal/terms-and-conditions.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</label>'
     +'</section>'
@@ -1525,7 +1953,32 @@ function renderGuestStep(){
   shell(content,{title:'Guest details',sub:(hotel().name||'Hotel booking')});
   bindGuest();
 }
-function bindGuest(){ qa('[data-guest-tab]',root).forEach(b=>b.onclick=()=>{ saveGuest(S.guestIndex); S.guestIndex=Number(b.dataset.guestTab||0); renderGuestStep(); }); qa('[data-contact]',root).forEach(i=>i.oninput=()=>{ const d=draft(), c=Object.assign({},d.contact||{}); c[i.dataset.contact]=i.value; setDraft({contact:c}); }); const ge=q('[data-gst-enabled]',root); if(ge) ge.onchange=e=>{ const d=draft(), g=Object.assign({},d.gst||{}); g.enabled=e.target.checked; setDraft({gst:g}); renderGuestStep(); }; qa('[data-gst]',root).forEach(i=>i.oninput=()=>{ const d=draft(), g=Object.assign({},d.gst||{}); g[i.dataset.gst]=i.value; setDraft({gst:g}); }); const cont=q('[data-continue]',root); if(cont) cont.onclick=()=>{ if(validateGuest()){ saveGuest(S.guestIndex); setPage('review'); renderReviewStep(); } }; }
+function bindGuest(){
+  qa('[data-guest-tab]',root).forEach(function(b){ b.onclick=function(){ saveGuest(S.guestIndex); S.guestIndex=Number(b.dataset.guestTab||0); renderGuestStep(); }; });
+  const saveBtn=q('[data-save-guest]',root);
+  if(saveBtn) saveBtn.onclick=function(){ saveGuest(S.guestIndex); alert('Guest details saved.'); };
+  qa('[data-contact]',root).forEach(function(i){ i.oninput=i.onchange=function(){ const d=draft(), c=Object.assign({},d.contact||{}); c[i.dataset.contact]=i.value; setDraft({contact:c}); }; });
+  const ccodeFilter=q('[data-ccode-filter]',root);
+  const ccodeSelect=q('select[data-contact="countryCode"]',root);
+  if(ccodeFilter&&ccodeSelect){
+    ccodeFilter.oninput=function(){
+      const selected=ccodeSelect.value||((draft().contact||{}).countryCode)||'+91';
+      ccodeSelect.innerHTML=countryCodeOptionsHtml(selected, ccodeFilter.value);
+      if(ccodeSelect.value!==selected && ccodeSelect.options.length){
+        const still=Array.prototype.some.call(ccodeSelect.options,function(o){ return o.value===selected; });
+        if(still) ccodeSelect.value=selected;
+      }
+      const d=draft(), c=Object.assign({},d.contact||{});
+      c.countryCode=ccodeSelect.value||selected;
+      setDraft({contact:c});
+    };
+  }
+  const ge=q('[data-gst-enabled]',root);
+  if(ge) ge.onchange=function(e){ const d=draft(), g=Object.assign({},d.gst||{}); g.enabled=e.target.checked; setDraft({gst:g}); renderGuestStep(); };
+  qa('[data-gst]',root).forEach(function(i){ i.oninput=function(){ const d=draft(), g=Object.assign({},d.gst||{}); g[i.dataset.gst]=i.value; setDraft({gst:g}); }; });
+  const cont=q('[data-continue]',root);
+  if(cont) cont.onclick=function(){ if(validateGuest()){ saveGuest(S.guestIndex); setPage('review'); renderReviewStep(); } };
+}
 function validateGuest(){
   saveGuest(S.guestIndex);
   const d=draft();
@@ -1549,7 +2002,7 @@ function validateGuest(){
   return true;
 }
 function totalAmount(){ const d=draft(); return Number(d.finalPayableAmount||option().totalPrice||hotel().price||0); }
-function hotelMiniCard(h,o){ return '<article class="tyh-mini"><div class="tyh-mini-img">'+(imageOf(h)?'<img src="'+attr(imageOf(h))+'" alt="'+attr(h.name||'Hotel')+'">':'<span>H</span>')+'</div><div><h2>'+esc(h.name||'Hotel')+'</h2><p>'+esc([h.address,h.area].filter(Boolean).join(' • '))+'</p><div class="tyh-stars">'+('★'.repeat(Math.max(0,Math.min(5,Math.round(h.star||0)))))+'</div><p class="tyh-room-name">'+esc(o.roomSummary||o.roomType||'Selected room')+'</p></div></article>'; }
+function hotelMiniCard(h,o){ return '<article class="tyh-mini"><div class="tyh-mini-img">'+(imageOf(h)?'<img src="'+attr(imageOf(h))+'" alt="'+attr(h.name||'Hotel')+'">':'<span>H</span>')+'</div><div><h2>'+esc(h.name||'Hotel')+'</h2><p>'+esc(hotelAddressText(h)||[h.address,h.area].filter(Boolean).join(' • '))+'</p><div class="tyh-stars">'+('★'.repeat(Math.max(0,Math.min(5,Math.round(h.star||0)))))+'</div><p class="tyh-room-name">'+esc(o.roomSummary||o.roomType||'Selected room')+'</p></div></article>'; }
 function renderReviewStep(){
   const d=draft();
   const s=d.searchPayload||S.search||{};
@@ -1574,16 +2027,25 @@ function renderReviewStep(){
   const raw=reviewRaw();
   const pol=policiesOf(h);
   const notes=[].concat(arr(o.bookingNotes),arr(raw.bookingNotes),arr(raw.instructions),arr(raw.hInfo&&raw.hInfo.inst),arr(h.raw&&h.raw.inst),[pol.instructions,pol.specialInstructions,pol.knowBeforeYouGo].filter(Boolean));
-  const notesHtml=notes.map(x=>'<p>'+esc(x&&x.msg||x&&x.description||x&&x.text||x)+'</p>').join('');
+  const notesHtml=notes.map(function(x){ return '<p>'+esc(customerSafeNote(x&&x.msg||x&&x.description||x&&x.text||x))+'</p>'; }).join('');
+  const cancelTable=cancellationTableHtml(o);
+  const surcharge=surchargeFeesHtml(raw)||surchargeFeesHtml(d.tripjackReviewRaw)||'';
   const policyDefault=cancellationPolicyBody(o) + (notesHtml?'<div style="margin-top:12px"><p class="tyh-muted" style="margin:0 0 8px;font-size:13px;font-weight:900">Hotel policies</p>'+notesHtml+'</div>':'');
-  const content='<main class="tyh-book tyh-review">'
-    +'<section class="tyh-summary-card">'
-      +(img?'<div class="tyh-detail-img" style="cursor:default;min-height:220px"><img src="'+attr(img)+'" alt="'+esc(h.name||'Hotel')+'" style="height:220px"></div>':'')
-      +'<div>'
-        +'<h2>'+esc(h.name||'Hotel')+'</h2>'
-        +(stars?stars:'')
-        +(loc?'<p class="tyh-location">'+esc(loc)+'</p>':'')
-      +'</div>'
+  const desktop=!isMobileHotelUi();
+  const fareBlock=fareSummaryBlockHtml({
+    base:baseFare, taxes:taxes, fees:mf, total:finalPay,
+    ctaAttr:desktop?'data-pay':'',
+    ctaLabel:'PROCEED TO PAY',
+    stickyClass:desktop?'tyh-fare-sticky':''
+  });
+  const fareSheet=(!desktop && S.ui.fareSheetOpen)
+    ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:baseFare,taxes:taxes,fees:mf,total:finalPay})+'</div></section>'
+    : '';
+
+  const leftMain='<div class="tyh-review-main">'
+    +'<section class="tyh-summary-card tyh-review-hotel">'
+      +(img?'<div class="tyh-detail-img tyh-review-hero"><img src="'+attr(img)+'" alt="'+esc(h.name||'Hotel')+'"></div>':'')
+      +'<div><h2>'+esc(h.name||'Hotel')+'</h2>'+(stars?stars:'')+(loc?'<p class="tyh-location">'+esc(loc)+'</p>':'')+'</div>'
     +'</section>'
     +'<section class="tyh-panel">'
       +'<h2>Stay details</h2>'
@@ -1596,37 +2058,71 @@ function renderReviewStep(){
       +(cancel?'<div class="tyh-kv"><span>Cancellation</span><b>'+esc(cancel)+'</b></div>':'')
     +'</section>'
     +'<section class="tyh-panel">'
-      +'<h2>Guest names</h2>'
-      +arr(d.guests).map((g2,i)=>'<div class="tyh-guest-row"><span>'+esc((g2.type||'Guest')+' '+(i+1))+'</span><b>'+esc([g2.title,g2.firstName,g2.lastName].filter(Boolean).join(' '))+'</b></div>').join('')
+      +'<div class="tyh-panel-head"><h2>Guest names</h2><button type="button" class="tyh-linkish" data-edit-guests>Edit Guest Details</button></div>'
+      +arr(d.guests).map(function(g2,gi){ return '<div class="tyh-guest-row"><span>'+esc((g2.type||'Guest')+' '+(gi+1))+'</span><b>'+esc([g2.title,g2.firstName,g2.lastName].filter(Boolean).join(' '))+'</b></div>'; }).join('')
     +'</section>'
     +'<section class="tyh-panel">'
       +'<h2>Contact details</h2>'
       +'<div class="tyh-kv"><span>Mobile</span><b>'+esc(contactMobile||'Pending')+'</b></div>'
       +'<div class="tyh-kv"><span>Email</span><b>'+esc(contactEmail||'Pending')+'</b></div>'
     +'</section>'
+    +(cancelTable?'<section class="tyh-panel"><h2>Cancellation charges</h2>'+cancelTable+'</section>':'')
+    +surcharge
     +'<section class="tyh-panel">'
       +'<h2>Important information</h2>'
       +'<div class="tyh-policy-actions"><button type="button" data-policy="cancel">Cancellation policy</button><button type="button" data-policy="hotel">Hotel rules</button><button type="button" data-policy="payment">Payment details</button></div>'
       +'<div class="tyh-policy-box" id="tyHotelPolicyBox">'+policyDefault+'</div>'
     +'</section>'
     +'<section class="tyh-panel">'
-      +'<h2>Price details</h2>'
-      +(baseFare>0?'<div class="tyh-kv"><span>Room / Base amount</span><b>'+money(baseFare)+'</b></div>':'')
-      +(taxes>0?'<div class="tyh-kv"><span>Taxes</span><b>'+money(taxes)+'</b></div>':'')
-      +(mf>0?'<div class="tyh-kv"><span>Fees</span><b>'+money(mf)+'</b></div>':'')
-      +'<div class="tyh-kv total"><span>Total payable</span><b>'+money(finalPay)+'</b></div>'
-      +'<p class="tyh-muted">Payment is processed securely via Razorpay.</p>'
+      +'<h2>Special request <small>optional</small></h2>'
+      +'<label><textarea data-special-request rows="3" placeholder="Any special request for the hotel">'+esc(d.specialRequest||'')+'</textarea></label>'
     +'</section>'
-    +'<div class="tyh-bottom">'
-      +'<div><span>Fare Details</span><b>'+money(finalPay)+'</b></div>'
-      +'<button type="button" data-pay>PROCEED TO PAY</button>'
-    +'</div>'
+  +'</div>';
+
+  const content='<main class="tyh-book tyh-book-flow tyh-review'+(desktop?' tyh-review-desk':'')+'">'
+    +(desktop?('<div class="tyh-review-grid">'+leftMain+fareBlock+'</div>'):leftMain)
+    +(!desktop
+      ? '<div class="tyh-bottom"><button type="button" class="tyh-fare-tap" data-open-fare-sheet><span>Fare Details</span><b>'+money(finalPay)+'</b></button><button type="button" data-pay>PROCEED TO PAY</button></div>'
+      : '')
+    +fareSheet
   +'</main>';
   shell(content,{title:'Review booking',sub:h.name||'Hotel'});
   bindReview();
 }
-function bindReview(){ qa('[data-policy]',root).forEach(b=>b.onclick=()=>showPolicy(b.dataset.policy)); const pay=q('[data-pay]',root); if(pay) pay.onclick=()=>proceedToPayment(); }
-function showPolicy(type){ const raw=reviewRaw(); const h=hotel(); let html=''; if(type==='cancel'){ const selected=option(); const c=selected.cancellation||cancellationOf(selected.raw||selected)||{}; const pd=arr(c.penalties); const intro=c.refundable===false?'This room is non-refundable.':(c.freeCancellation?'Free cancellation'+(c.freeCancellationUntil?' until '+fmtDate(c.freeCancellationUntil):'')+'.':'Cancellation charges may apply.'); html='<p><b>'+esc(intro)+'</b></p>'+(pd.length?pd.map(x=>'<p>'+esc([x.fromDate||x.fdt,x.toDate||x.tdt,x.amount!=null?money(x.amount):(x.am!=null?money(x.am):''),x.percent!=null?x.percent+'%':(x.pp!=null?x.pp+'%':'')].filter(Boolean).join(' • '))+'</p>').join(''):''); } else if(type==='hotel'){ const notes=[].concat(arr(option().bookingNotes),arr(raw.bookingNotes),arr(raw.instructions),arr(raw.hInfo&&raw.hInfo.inst),arr(h.raw&&h.raw.inst)); html=notes.map(x=>'<p>'+esc(x&&x.msg||x&&x.description||x&&x.text||x)+'</p>').join('') || 'Hotel rules will be shown from the Tripjack booking details when supplied.'; } else { html='Final amount will be charged through Razorpay only after server-side payment order creation. Hotel booking is submitted to Tripjack only after payment signature and gateway amount verification.'; } const box=q('#tyHotelPolicyBox',root); if(box) box.innerHTML=html; }
+function bindReview(){
+  qa('[data-policy]',root).forEach(function(b){ b.onclick=function(){ showPolicy(b.dataset.policy); }; });
+  const pay=q('[data-pay]',root); if(pay) pay.onclick=function(){ proceedToPayment(); };
+  qa('[data-edit-guests]',root).forEach(function(b){
+    b.onclick=function(){ setPage('guest'); renderGuestStep(); };
+  });
+  const special=q('[data-special-request]',root);
+  if(special) special.oninput=function(){ setDraft({specialRequest:String(special.value||'')}); };
+  qa('[data-open-fare-sheet]',root).forEach(function(b){
+    b.onclick=function(){ S.ui.fareSheetOpen=true; renderReviewStep(); };
+  });
+  qa('[data-fare-sheet-close]',root).forEach(function(b){
+    b.onclick=function(){ S.ui.fareSheetOpen=false; renderReviewStep(); };
+  });
+}
+function showPolicy(type){
+  const raw=reviewRaw();
+  const h=hotel();
+  let html='';
+  if(type==='cancel'){
+    const selected=option();
+    const c=selected.cancellation||cancellationOf(selected.raw||selected)||{};
+    const pd=arr(c.penalties);
+    const intro=c.refundable===false?'This room is non-refundable.':(c.freeCancellation?'Free cancellation'+(c.freeCancellationUntil?' until '+fmtDate(c.freeCancellationUntil):'')+'.':'Cancellation charges may apply.');
+    html='<p><b>'+esc(intro)+'</b></p>'+(pd.length?pd.map(function(x){ return '<p>'+esc([x.fromDate||x.fdt,x.toDate||x.tdt,x.amount!=null?money(x.amount):(x.am!=null?money(x.am):''),x.percent!=null?x.percent+'%':(x.pp!=null?x.pp+'%':'')].filter(Boolean).join(' • '))+'</p>'; }).join(''):'')+cancellationTableHtml(selected);
+  } else if(type==='hotel'){
+    const notes=[].concat(arr(option().bookingNotes),arr(raw.bookingNotes),arr(raw.instructions),arr(raw.hInfo&&raw.hInfo.inst),arr(h.raw&&h.raw.inst));
+    html=notes.map(function(x){ return '<p>'+esc(customerSafeNote(x&&x.msg||x&&x.description||x&&x.text||x))+'</p>'; }).join('') || 'Hotel rules will be shown from the booking details when supplied by the property.';
+  } else {
+    html='Final amount is charged through Razorpay only after TravelYaraa creates a payment order on the server. Your hotel booking is confirmed only after payment signature and gateway amount verification.';
+  }
+  const box=q('#tyHotelPolicyBox',root);
+  if(box) box.innerHTML=html;
+}
 function loadRazorpay(){ if(window.Razorpay) return Promise.resolve(); return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src='https://checkout.razorpay.com/v1/checkout.js'; s.onload=resolve; s.onerror=()=>reject(new Error('Payment gateway could not be loaded.')); document.head.appendChild(s); }); }
 
 function tyhGuestAuthToken(){ try{return localStorage.getItem("ty_user_auth_token") || "";}catch(e){return "";} }
@@ -2037,7 +2533,7 @@ function hotelPolicyHtml(b){
   if(inst.length){
     policies.push('<div class="tyh-policy-box"><b>Hotel instructions</b>'+inst.map(x=>'<p>'+esc(x)+'</p>').join('')+'</div>');
   }
-  return policies.join('') || '<div class="tyh-policy-box">Hotel rules and cancellation policy will be shown from Tripjack booking details when available.</div>';
+  return policies.join('') || '<div class="tyh-policy-box">Hotel rules and cancellation policy will be shown from booking details when available.</div>';
 }
 function hotelContactHtml(b){
   const order=hotelOrderInfo(b);
@@ -2070,7 +2566,7 @@ function hotelStatusCardHtml(b){
     +'<div class="tyh-status-hotel-body">'
       +'<h2>'+esc(hotelNameFromStatus(b))+'</h2>'
       +(stars?'<div class="tyh-stars">'+stars+'</div>':'')
-      +'<p>'+esc(addr||info.location||'Hotel address will be shown from Tripjack booking details.')+'</p>'
+      +'<p>'+esc(addr||info.location||'Hotel address will be shown from booking details when available.')+'</p>'
       +(ph?'<p><b>Hotel phone:</b> '+esc(ph)+'</p>':'')
       +'<div class="tyh-status-mini-grid">'
         +'<p><small>Check-in</small><strong>'+esc(dates.checkIn?fmtDate(dates.checkIn):'Pending')+'</strong></p>'
@@ -2233,12 +2729,32 @@ window.addEventListener('popstate',()=>{
 });
 
 function css(){ return `
-:root{--ty-navy:#071d49;--ty-blue:#0062e3;--ty-orange:#ef6614;--ty-bg:#f4f7fb;--ty-line:#e4ecf7;--ty-text:#101828;--ty-muted:#667085;--ty-soft:#eef6ff;--ty-green:#067647;--ty-red:#b42318}*{box-sizing:border-box}body.ty-hotel-page,body.travel-page{margin:0;background:var(--ty-bg);font-family:Inter,Arial,sans-serif;color:var(--ty-text);text-transform:none}.tyh-page{min-height:100vh;background:var(--ty-bg);padding-bottom:110px}.tyh-top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--ty-line);box-shadow:0 4px 16px rgba(7,29,73,.04)}.tyh-back{width:42px;height:42px;border:0;border-radius:14px;background:#f1f6ff;color:var(--ty-navy);font-size:30px;font-weight:900;line-height:1}.tyh-top-title{min-width:0;flex:1}.tyh-top h1{margin:0;color:var(--ty-navy);font-size:20px;font-weight:900;letter-spacing:0}.tyh-top p{margin:3px 0 0;color:var(--ty-muted);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tyh-status-pill{background:#e7f8ef;color:#067647;border:1px solid #c8f1da;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900}.tyh-results{max-width:1180px;margin:14px auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px;padding:0 14px}.tyh-filter{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;position:sticky;top:76px;align-self:start}.tyh-filter h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-filter h3{font-size:14px;margin:14px 0 8px;color:var(--ty-navy)}.tyh-filter label{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:750;color:#344054;line-height:1.3}.tyh-filter input[type=number]{width:100%;height:38px;border:1px solid var(--ty-line);border-radius:10px;padding:0 10px;margin:5px 0;font-size:14px}.tyh-filter-actions{display:flex;gap:8px;border-top:1px solid var(--ty-line);padding-top:12px;margin-top:12px}.tyh-filter-actions button{flex:1;height:40px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);font-weight:900}.tyh-filter-actions button:first-child{border:0;background:var(--ty-orange);color:#fff}.tyh-search-line{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px}.tyh-search-line strong{display:block;color:var(--ty-navy);font-size:18px}.tyh-search-line span{display:block;color:var(--ty-muted);font-size:12px;margin-top:3px}.tyh-search-line button{display:none;border:1px solid var(--ty-line);background:#fff;border-radius:12px;height:38px;padding:0 12px;font-weight:900;color:var(--ty-navy)}.tyh-sort{display:flex;gap:10px;overflow:auto;margin-bottom:12px}.tyh-sort button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;color:var(--ty-navy);white-space:nowrap}.tyh-sort button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-cards{display:grid;gap:14px}.tyh-card{background:#fff;border:1px solid var(--ty-line);border-radius:20px;box-shadow:0 10px 28px rgba(7,29,73,.07);display:grid;grid-template-columns:230px minmax(0,1fr) 190px;overflow:hidden}.tyh-img{min-height:178px;background:#eef6ff;display:grid;place-items:center;color:var(--ty-blue);font-size:42px;font-weight:900}.tyh-img img{width:100%;height:100%;object-fit:cover}.tyh-info{padding:16px;min-width:0}.tyh-info h2{margin:0 0 6px;color:#101828;font-size:20px;line-height:1.25;font-weight:900;letter-spacing:0}.tyh-info p{margin:0;color:var(--ty-muted);font-size:13px;font-weight:700;line-height:1.35}.tyh-stars{color:#f5b301;margin:9px 0;font-size:14px;letter-spacing:1px}.tyh-tags{display:flex;gap:6px;flex-wrap:wrap}.tyh-tags span,.tyh-rate span{background:#f2f4f7;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800;color:#344054}.tyh-price{border-left:1px solid var(--ty-line);padding:16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:7px;text-align:right}.tyh-price em{background:#067647;color:#fff;border-radius:9px;padding:5px 8px;font-size:12px;font-style:normal;font-weight:900}.tyh-price b{font-size:22px;color:#101828}.tyh-price small{color:var(--ty-muted);font-size:11px;font-weight:700}.tyh-price button,.tyh-rate button,.tyh-bottom button,.tyh-actions button,.tyh-empty button{height:42px;border:0;border-radius:13px;background:var(--ty-orange);color:#fff;padding:0 16px;font-weight:900;font-size:14px}.tyh-empty{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:28px;text-align:center;margin:12px}.tyh-empty h2{margin:0 0 8px;color:var(--ty-navy)}.tyh-empty p,.tyh-muted{color:var(--ty-muted);font-weight:700}.tyh-modal-bg{position:fixed;inset:0;background:rgba(7,29,73,.45);z-index:70}.tyh-room{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:80;width:min(780px,100%);max-height:86vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;box-shadow:0 -12px 35px rgba(7,29,73,.18)}.tyh-room header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--ty-line);padding:16px;display:flex;justify-content:space-between;gap:12px}.tyh-room h2{margin:0;color:var(--ty-navy);font-size:19px}.tyh-room header p{margin:4px 0 0;color:var(--ty-muted);font-size:12px}.tyh-room header button{width:38px;height:38px;border:0;border-radius:12px;background:#f2f4f7;font-size:24px}.tyh-room-body{padding:16px}.tyh-rate{border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px;display:grid;grid-template-columns:minmax(0,1fr) 148px;gap:12px;align-items:stretch}
+:root{--ty-navy:#071d49;--ty-blue:#0062e3;--ty-orange:#eb814b;--ty-cta:#eb814b;--ty-bg:#f4f7fb;--ty-line:#e4ecf7;--ty-text:#101828;--ty-muted:#667085;--ty-soft:#eef6ff;--ty-green:#067647;--ty-red:#b42318}*{box-sizing:border-box}body.ty-hotel-page,body.travel-page{margin:0;background:var(--ty-bg);font-family:Inter,Arial,sans-serif;color:var(--ty-text);text-transform:none}.tyh-page{min-height:100vh;background:var(--ty-bg);padding-bottom:110px}.tyh-top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--ty-line);box-shadow:0 4px 16px rgba(7,29,73,.04)}.tyh-back{width:42px;height:42px;border:0;border-radius:14px;background:#f1f6ff;color:var(--ty-navy);font-size:30px;font-weight:900;line-height:1}.tyh-top-title{min-width:0;flex:1}.tyh-top h1{margin:0;color:var(--ty-navy);font-size:20px;font-weight:900;letter-spacing:0}.tyh-top p{margin:3px 0 0;color:var(--ty-muted);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tyh-status-pill{background:#e7f8ef;color:#067647;border:1px solid #c8f1da;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:900}.tyh-results{max-width:1180px;margin:14px auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px;padding:0 14px}.tyh-filter{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;position:sticky;top:76px;align-self:start}.tyh-filter h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-filter h3{font-size:14px;margin:14px 0 8px;color:var(--ty-navy)}.tyh-filter label{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:750;color:#344054;line-height:1.3}.tyh-filter input[type=number]{width:100%;height:38px;border:1px solid var(--ty-line);border-radius:10px;padding:0 10px;margin:5px 0;font-size:14px}.tyh-filter-actions{display:flex;gap:8px;border-top:1px solid var(--ty-line);padding-top:12px;margin-top:12px}.tyh-filter-actions button{flex:1;height:40px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);font-weight:900}.tyh-filter-actions button:first-child{border:0;background:var(--ty-cta);color:#fff}.tyh-search-line{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px}.tyh-search-line strong{display:block;color:var(--ty-navy);font-size:18px}.tyh-search-line span{display:block;color:var(--ty-muted);font-size:12px;margin-top:3px}.tyh-search-line button{display:none;border:1px solid var(--ty-line);background:#fff;border-radius:12px;height:38px;padding:0 12px;font-weight:900;color:var(--ty-navy)}.tyh-sort{display:flex;gap:10px;overflow:auto;margin-bottom:12px}.tyh-sort button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;padding:10px 14px;font-weight:900;color:var(--ty-navy);white-space:nowrap}.tyh-sort button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-cards{display:grid;gap:14px}.tyh-card{background:#fff;border:1px solid var(--ty-line);border-radius:20px;box-shadow:0 10px 28px rgba(7,29,73,.07);display:grid;grid-template-columns:230px minmax(0,1fr) 190px;overflow:hidden}.tyh-img{min-height:178px;background:#eef6ff;display:grid;place-items:center;color:var(--ty-blue);font-size:42px;font-weight:900}.tyh-img img{width:100%;height:100%;object-fit:cover}.tyh-info{padding:16px;min-width:0}.tyh-info h2{margin:0 0 6px;color:#101828;font-size:20px;line-height:1.25;font-weight:900;letter-spacing:0}.tyh-info p{margin:0;color:var(--ty-muted);font-size:13px;font-weight:700;line-height:1.35}.tyh-stars{color:#f5b301;margin:9px 0;font-size:14px;letter-spacing:1px}.tyh-tags{display:flex;gap:6px;flex-wrap:wrap}.tyh-tags span,.tyh-rate span{background:#f2f4f7;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800;color:#344054}.tyh-price{border-left:1px solid var(--ty-line);padding:16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:7px;text-align:right}.tyh-price em{background:#067647;color:#fff;border-radius:9px;padding:5px 8px;font-size:12px;font-style:normal;font-weight:900}.tyh-price b{font-size:22px;color:#101828}.tyh-price small{color:var(--ty-muted);font-size:11px;font-weight:700}.tyh-price button,.tyh-cta,.tyh-bottom button[data-continue],.tyh-bottom button[data-pay],.tyh-actions button,.tyh-empty button{height:42px;border:0;border-radius:13px;background:var(--ty-cta);color:#fff;padding:0 16px;font-weight:900;font-size:14px;cursor:pointer}.tyh-empty{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:28px;text-align:center;margin:12px}.tyh-empty h2{margin:0 0 8px;color:var(--ty-navy)}.tyh-empty p,.tyh-muted{color:var(--ty-muted);font-weight:700}.tyh-modal-bg{position:fixed;inset:0;background:rgba(7,29,73,.45);z-index:70}.tyh-room{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:80;width:min(780px,100%);max-height:86vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;box-shadow:0 -12px 35px rgba(7,29,73,.18)}.tyh-room header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--ty-line);padding:16px;display:flex;justify-content:space-between;gap:12px}.tyh-room h2{margin:0;color:var(--ty-navy);font-size:19px}.tyh-room header p{margin:4px 0 0;color:var(--ty-muted);font-size:12px}.tyh-room header button{width:38px;height:38px;border:0;border-radius:12px;background:#f2f4f7;font-size:24px}.tyh-room-body{padding:16px}.tyh-rate{border:1px solid var(--ty-line);border-radius:16px;padding:14px;margin-bottom:12px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;background:#fff}
+.tyh-rate-media{min-width:0}
+.tyh-rate-img{border-radius:14px;overflow:hidden;height:140px;background:#eef6ff;cursor:pointer}
+.tyh-rate-img img{width:100%;height:100%;object-fit:cover;display:block}
+.tyh-rate-img-empty{display:grid;place-items:center;color:var(--ty-blue);font-weight:900}
+.tyh-rate-amens{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px}
+.tyh-rate-amens li{font-size:12px;font-weight:800;color:#344054}
+.tyh-rate-photos,.tyh-more-opts,.tyh-linkish{margin-top:8px;height:38px;border:1px solid var(--ty-line);border-radius:13px;background:#fff;color:var(--ty-blue);font-weight:900;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;width:100%}
+.tyh-linkish{width:auto;height:auto;padding:6px 0;border:0;background:transparent;text-decoration:underline}
 .tyh-rate-main{min-width:0}
-.tyh-rate-side{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;gap:6px;width:148px}
-.tyh-rate-side strong{display:block;text-align:right;margin:0;font-size:18px;line-height:1.2}
-.tyh-rate-side em{display:block;text-align:right;font-style:normal;color:var(--ty-muted);font-size:12px;font-weight:700;margin:0 0 auto}
-.tyh-rate-side button{width:100%;margin-top:8px}.tyh-rate b{display:block;color:#101828;font-size:15px;line-height:1.3}.tyh-rate p{margin:6px 0;color:var(--ty-muted);font-size:12px}.tyh-book,.tyh-status{max-width:920px;margin:14px auto;padding:0 14px;display:grid;gap:14px}.tyh-summary-card,.tyh-panel,.tyh-actions,.tyh-confirm{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}.tyh-mini{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center}.tyh-mini-img{height:115px;border-radius:14px;background:#eef6ff;display:grid;place-items:center;overflow:hidden;color:var(--ty-blue);font-size:40px;font-weight:900}.tyh-mini-img img{width:100%;height:100%;object-fit:cover}.tyh-mini h2{margin:0 0 6px;color:var(--ty-navy);font-size:21px;line-height:1.25}.tyh-mini p{margin:0;color:var(--ty-muted);font-size:13px;line-height:1.35}.tyh-room-name{margin-top:8px!important;color:#344054!important;font-weight:800}.tyh-panel h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-panel h2 small{font-size:12px;color:var(--ty-muted);font-weight:700}.tyh-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.tyh-tabs button{border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);border-radius:999px;padding:9px 12px;font-size:13px;font-weight:900;white-space:nowrap}.tyh-tabs button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tyh-form-grid label{font-size:12px;color:#344054;font-weight:850;display:grid;gap:6px}.tyh-form-grid input,.tyh-form-grid select{height:44px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px;font-size:14px;background:#fff;color:#101828}.tyh-check{display:flex!important;align-items:flex-start;gap:10px;color:#344054;font-size:13px;font-weight:750;line-height:1.4}.tyh-kv,.tyh-guest-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #eef2f7;padding:11px 0;align-items:center}.tyh-kv:first-of-type,.tyh-guest-row:first-of-type{border-top:0}.tyh-kv span,.tyh-guest-row span{color:var(--ty-muted);font-size:13px;font-weight:750}.tyh-kv b,.tyh-guest-row b{color:#101828;text-align:right;font-size:14px}.tyh-kv.total b{font-size:21px;color:var(--ty-blue)}.tyh-policy-actions{display:flex;gap:8px;flex-wrap:wrap}.tyh-policy-actions button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;color:var(--ty-blue);font-weight:900;padding:9px 12px}.tyh-policy-box{margin-top:12px;background:#f8fbff;border:1px solid var(--ty-line);border-radius:14px;padding:12px;color:#344054;font-size:13px;line-height:1.45}.tyh-bottom{position:sticky;bottom:0;z-index:40;background:#101827;color:#fff;border-radius:22px 22px 0 0;margin:4px -14px -110px;padding:16px 18px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}.tyh-bottom span{display:block;font-size:12px;font-weight:800;color:#cbd5e1}.tyh-bottom b{font-size:22px}.tyh-bottom button{min-width:190px;border-radius:999px}.tyh-confirm{background:#ecfdf3;border-color:#bbf7d0}.tyh-confirm.failed{background:#fff1f2;border-color:#fecdd3}.tyh-confirm.pending{background:#fff7ed;border-color:#fed7aa}.tyh-confirm h2{margin:0 0 8px;font-size:24px;color:var(--ty-navy)}.tyh-confirm p{margin:0 0 10px;color:#344054}.tyh-confirm span{display:inline-flex;background:#fff;border-radius:999px;padding:7px 11px;color:#344054;font-weight:900;font-size:12px}.tyh-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tyh-actions button{background:#fff;color:var(--ty-navy);border:1px solid var(--ty-line)}.tyh-actions button:nth-child(1),.tyh-actions button:nth-child(2){background:var(--ty-blue);color:#fff;border:0}.tyh-actions button:disabled{opacity:.45;cursor:not-allowed}
+.tyh-rate-title{display:block;color:#101828;font-size:16px;line-height:1.3}
+.tyh-rate-meta,.tyh-rate-meal{margin:6px 0 0;color:#344054;font-size:12px;font-weight:850}
+.tyh-rate-meal{color:var(--ty-muted);font-weight:800}
+.tyh-rate-cancel{margin:10px 0 0;color:#067647;font-size:12px;font-weight:950}
+.tyh-rate-pan{margin:6px 0 0;color:#b54708;font-size:12px;font-weight:850}
+.tyh-rate-side{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:6px}
+.tyh-rate-side strong{display:block;margin:0;font-size:20px;line-height:1.2}
+.tyh-rate-side em{display:block;font-style:normal;color:var(--ty-muted);font-size:12px;font-weight:700}
+.tyh-rate-side .tyh-cta{width:100%;margin-top:8px}
+@media(min-width:861px){
+.tyh-rate{grid-template-columns:180px minmax(0,1fr) 160px;align-items:stretch}
+.tyh-rate-side{align-items:flex-end;width:160px}
+.tyh-rate-side strong,.tyh-rate-side em{text-align:right}
+.tyh-rate-img{height:160px}
+}
+.tyh-book,.tyh-status{max-width:920px;margin:14px auto;padding:0 14px;display:grid;gap:14px}.tyh-summary-card,.tyh-panel,.tyh-actions,.tyh-confirm{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}.tyh-mini{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center}.tyh-mini-img{height:115px;border-radius:14px;background:#eef6ff;display:grid;place-items:center;overflow:hidden;color:var(--ty-blue);font-size:40px;font-weight:900}.tyh-mini-img img{width:100%;height:100%;object-fit:cover}.tyh-mini h2{margin:0 0 6px;color:var(--ty-navy);font-size:21px;line-height:1.25}.tyh-mini p{margin:0;color:var(--ty-muted);font-size:13px;line-height:1.35}.tyh-room-name{margin-top:8px!important;color:#344054!important;font-weight:800}.tyh-panel h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-panel h2 small{font-size:12px;color:var(--ty-muted);font-weight:700}.tyh-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.tyh-tabs button{border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);border-radius:999px;padding:9px 12px;font-size:13px;font-weight:900;white-space:nowrap}.tyh-tabs button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tyh-form-grid label{font-size:12px;color:#344054;font-weight:850;display:grid;gap:6px}.tyh-form-grid input,.tyh-form-grid select{height:44px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px;font-size:14px;background:#fff;color:#101828}.tyh-check{display:flex!important;align-items:flex-start;gap:10px;color:#344054;font-size:13px;font-weight:750;line-height:1.4}.tyh-kv,.tyh-guest-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #eef2f7;padding:11px 0;align-items:center}.tyh-kv:first-of-type,.tyh-guest-row:first-of-type{border-top:0}.tyh-kv span,.tyh-guest-row span{color:var(--ty-muted);font-size:13px;font-weight:750}.tyh-kv b,.tyh-guest-row b{color:#101828;text-align:right;font-size:14px}.tyh-kv.total b{font-size:21px;color:var(--ty-blue)}.tyh-policy-actions{display:flex;gap:8px;flex-wrap:wrap}.tyh-policy-actions button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;color:var(--ty-blue);font-weight:900;padding:9px 12px}.tyh-policy-box{margin-top:12px;background:#f8fbff;border:1px solid var(--ty-line);border-radius:14px;padding:12px;color:#344054;font-size:13px;line-height:1.45}.tyh-bottom{position:sticky;bottom:0;z-index:40;background:#101827;color:#fff;border-radius:22px 22px 0 0;margin:4px -14px -110px;padding:16px 18px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}.tyh-bottom span{display:block;font-size:12px;font-weight:800;color:#cbd5e1}.tyh-bottom b{font-size:22px}.tyh-bottom button{min-width:190px;border-radius:999px}.tyh-confirm{background:#ecfdf3;border-color:#bbf7d0}.tyh-confirm.failed{background:#fff1f2;border-color:#fecdd3}.tyh-confirm.pending{background:#fff7ed;border-color:#fed7aa}.tyh-confirm h2{margin:0 0 8px;font-size:24px;color:var(--ty-navy)}.tyh-confirm p{margin:0 0 10px;color:#344054}.tyh-confirm span{display:inline-flex;background:#fff;border-radius:999px;padding:7px 11px;color:#344054;font-weight:900;font-size:12px}.tyh-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tyh-actions button{background:#fff;color:var(--ty-navy);border:1px solid var(--ty-line)}.tyh-actions button:nth-child(1),.tyh-actions button:nth-child(2){background:var(--ty-blue);color:#fff;border:0}.tyh-actions button:disabled{opacity:.45;cursor:not-allowed}
 .tyh-hotel-status-page{max-width:980px}
 .tyh-status-hotel-card{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:stretch}
 .tyh-status-hotel-img{border-radius:16px;overflow:hidden;min-height:150px;background:#eef6ff;display:grid;place-items:center;color:var(--ty-blue);font-size:46px;font-weight:900}
@@ -2423,6 +2939,89 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-bottom{left:0;right:0;margin:4px -10px -28px;border-radius:20px 20px 0 0}
 .tyh-bottom button{min-width:0;flex:1}
 .tyh-actions{grid-template-columns:1fr}
+}
+.tyh-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.tyh-gallery-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:8px;border-radius:18px;overflow:hidden;min-height:320px;background:#eaf2ff}
+.tyh-gallery-main,.tyh-gallery-side button{border:0;padding:0;background:#dbe7f5;cursor:pointer;display:block;width:100%;height:100%;overflow:hidden;position:relative}
+.tyh-gallery-main{min-height:320px}
+.tyh-gallery-main img,.tyh-gallery-side img{width:100%;height:100%;object-fit:cover;display:block}
+.tyh-gallery-side{display:grid;grid-template-rows:1fr 1fr;gap:8px;min-height:320px}
+.tyh-gallery-more{position:absolute;inset:0;display:grid;place-items:center;background:rgba(7,29,73,.45);color:#fff;font-weight:950;font-size:18px}
+.tyh-gallery-more-wrap{position:relative}
+.tyh-gallery-badge{position:absolute;right:12px;bottom:12px;background:rgba(16,24,40,.72);color:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}
+.tyh-mobile-thumbs{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:8px}
+.tyh-thumb{position:relative;border-radius:12px;overflow:hidden;height:72px;background:#eaf2ff;cursor:pointer}
+.tyh-thumb img{width:100%;height:100%;object-fit:cover}
+.tyh-thumb-more{position:absolute;inset:0;display:grid;place-items:center;background:rgba(7,29,73,.5);color:#fff;font-weight:900;font-size:12px}
+.tyh-view-all-photos{border:1px solid var(--ty-line);border-radius:12px;background:#fff;color:var(--ty-blue);font-weight:900;padding:0 12px}
+.tyh-gallery-modal,.tyh-sheet-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:91;width:min(980px,100%);background:#fff;border-radius:24px;box-shadow:0 30px 90px rgba(7,29,73,.28);overflow:hidden;max-height:90vh}
+.tyh-sheet-modal{top:auto;bottom:0;transform:translateX(-50%);border-radius:24px 24px 0 0;max-height:86vh;overflow:auto}
+.tyh-gallery-modal header,.tyh-sheet-modal header,.tyh-fare-sheet header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--ty-line);background:#fff;position:sticky;top:0;z-index:3}
+.tyh-gallery-modal header button,.tyh-sheet-modal header button,.tyh-fare-sheet header button{position:relative;z-index:4;width:38px;height:38px;border-radius:12px;border:1px solid var(--ty-line);background:#fff;font-size:22px;line-height:1;cursor:pointer}
+.tyh-gallery-stage{position:relative;background:#000;display:grid;place-items:center;touch-action:pan-y;min-height:280px}
+.tyh-gallery-stage img{max-width:100%;max-height:68vh;object-fit:contain;display:block}
+.tyh-gallery-stage button{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:26px;font-weight:900;cursor:pointer}
+.tyh-gallery-stage button:disabled{opacity:.4;cursor:default}
+.tyh-gallery-stage [data-gallery-prev],.tyh-gallery-stage [data-room-gallery-prev]{left:12px}
+.tyh-gallery-stage [data-gallery-next],.tyh-gallery-stage [data-room-gallery-next]{right:12px}
+.tyh-sheet-body{padding:16px 18px 18px}
+.tyh-room-gallery-amens{padding:12px 16px 16px;border-top:1px solid var(--ty-line)}
+.tyh-detail-desk .tyh-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:stretch}
+.tyh-detail-main{min-width:0}
+.tyh-book-box{position:sticky;top:84px;align-self:start;height:fit-content;background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.06);display:grid;gap:10px}
+.tyh-book-box-room b{display:block;color:var(--ty-navy);font-size:15px}
+.tyh-book-box-room p{margin:4px 0 0;font-size:12px;color:#344054;font-weight:800}
+.tyh-book-box-price strong{display:block;font-size:22px}
+.tyh-book-box-price em{display:block;font-style:normal;color:var(--ty-muted);font-size:12px;font-weight:700}
+.tyh-book-box .tyh-cta{width:100%}
+.tyh-book-rating{display:flex;align-items:baseline;gap:8px}
+.tyh-book-rating strong{font-size:20px;color:var(--ty-navy)}
+.tyh-book-times{border-top:1px solid var(--ty-line);padding-top:8px}
+.tyh-map-link{display:inline-flex;align-items:center;height:36px;margin-top:8px;color:var(--ty-blue);font-weight:900;text-decoration:none}
+.tyh-rooms-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:8px 0 12px}
+.tyh-rooms-head h3{margin:0;color:var(--ty-navy);font-size:18px}
+.tyh-room-search{display:block;min-width:220px}
+.tyh-room-search input{width:100%;height:40px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px}
+.tyh-room-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tyh-room-chip{border:1px solid var(--ty-line);background:#fff;border-radius:999px;padding:8px 12px;font-weight:900;color:var(--ty-navy);cursor:pointer}
+.tyh-room-chip.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}
+.tyh-cancel-table-wrap{overflow:auto}
+.tyh-cancel-table{width:100%;border-collapse:collapse;font-size:13px}
+.tyh-cancel-table th,.tyh-cancel-table td{border:1px solid var(--ty-line);padding:8px 10px;text-align:left}
+.tyh-cancel-table th{background:#f8fbff;color:var(--ty-navy);font-weight:900}
+.tyh-review-desk{max-width:1100px}
+.tyh-review-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:stretch}
+.tyh-fare-summary{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}
+.tyh-fare-summary h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}
+.tyh-fare-summary .tyh-cta{width:100%;margin-top:12px}
+.tyh-fare-sticky{position:sticky;top:84px;align-self:start;height:fit-content}
+.tyh-fare-sheet{position:fixed;left:0;right:0;bottom:0;z-index:93;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -14px 40px rgba(0,0,0,.2);max-height:78vh;overflow:auto}
+.tyh-fare-tap{display:flex;flex-direction:column;align-items:flex-start;background:transparent;border:0;color:#fff;padding:0;text-align:left;cursor:pointer}
+.tyh-fare-tap span{font-size:12px;font-weight:800;color:#cbd5e1}
+.tyh-fare-tap b{font-size:22px}
+.tyh-panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+.tyh-panel-head h2{margin:0}
+.tyh-guest-names-grid{grid-template-columns:110px minmax(0,1fr) minmax(0,1fr)}
+.tyh-guest-title{max-width:110px}
+.tyh-ccode{max-width:140px}
+.tyh-ccode-filter{height:34px!important;margin-bottom:6px;font-size:12px!important;font-weight:700!important}
+.tyh-contact-grid{grid-template-columns:minmax(0,1.4fr) 140px minmax(0,1fr)}
+.tyh-book-flow{position:relative;overflow-x:clip}
+.tyh-book.tyh-book-flow:before{content:'TravelYaraa';pointer-events:none;position:absolute;left:0;right:0;top:18%;height:140px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:clamp(28px,6vw,56px);font-weight:900;letter-spacing:.1em;color:rgba(7,29,73,.03);transform:rotate(-18deg);white-space:nowrap;z-index:0;overflow:hidden;max-width:100%}
+.tyh-book.tyh-book-flow > *{position:relative;z-index:1}
+.tyh-page{overflow-x:clip}
+.tyh-review-hero{min-height:220px;border-radius:16px;overflow:hidden;margin-bottom:12px}
+.tyh-review-hero img{width:100%;height:220px;object-fit:cover;display:block}
+.tyh-panel textarea{width:100%;min-height:84px;border:1px solid var(--ty-line);border-radius:12px;padding:10px 12px;font:inherit;resize:vertical}
+@media(max-width:860px){
+.tyh-gallery-grid{display:none}
+.tyh-detail-desk .tyh-detail-grid,.tyh-review-grid{display:block}
+.tyh-book-box{position:static;margin-top:12px}
+.tyh-fare-sticky{position:static}
+.tyh-guest-names-grid,.tyh-contact-grid{grid-template-columns:1fr}
+.tyh-guest-title,.tyh-ccode{max-width:none}
+.tyh-bottom{display:flex}
+.tyh-bottom button[data-pay],.tyh-bottom button[data-continue]{min-width:0;flex:1}
 }
 `; }
 
