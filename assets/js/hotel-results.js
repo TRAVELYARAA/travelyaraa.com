@@ -113,7 +113,11 @@ function searchPayload(){
   const p = read(KEY.payload,{}) || {};
   const s = read(KEY.search,{}) || {};
   const live = s.livePayload || p.livePayload || p || {};
-  return Object.assign({}, live, { service:'hotel', type:'hotel' });
+  const out = Object.assign({}, live, { service:'hotel', type:'hotel' });
+  out.nationality=String(out.nationality||'IN').toUpperCase()||'IN';
+  out.countryOfResidence=String(out.countryOfResidence||out.residenceCountry||'IN').toUpperCase()||'IN';
+  out.residenceCountry=out.countryOfResidence;
+  return out;
 }
 
 
@@ -329,6 +333,48 @@ function countryCodeOptionsHtml(selected, query){
     return '<option value="'+attr(code)+'"'+(code===sel?' selected':'')+'>'+esc(label)+'</option>';
   }).filter(Boolean).join('');
 }
+function countryIsoRows(){
+  return arr(window.TY_COUNTRY_CODES).filter(function(row){ return row && row[0] && row[1]; });
+}
+function countryIsoOptionsHtml(selected, query){
+  const sel=String(selected||'IN').trim().toUpperCase()||'IN';
+  const q=lower(query||'');
+  let rows=countryIsoRows();
+  if(q){
+    rows=rows.filter(function(row){
+      return lower(String(row[0]||'')+' '+String(row[1]||'')).indexOf(q)>=0;
+    });
+  }
+  if(!rows.length) rows=countryIsoRows().filter(function(row){ return String(row[0]||'').toUpperCase()===sel; });
+  if(!rows.length) rows=[['IN','India','+91']];
+  return rows.map(function(row){
+    const iso=String(row[0]||'').toUpperCase();
+    const name=String(row[1]||'');
+    return '<option value="'+attr(iso)+'"'+(iso===sel?' selected':'')+'>'+esc(name+' ('+iso+')')+'</option>';
+  }).join('');
+}
+function countryNameFromIso(iso){
+  const want=String(iso||'').toUpperCase();
+  const hit=countryIsoRows().find(function(row){ return String(row[0]||'').toUpperCase()===want; });
+  return hit?String(hit[1]||want):want;
+}
+function searchNationality(){
+  const s=S.search||searchPayload()||{};
+  return String(s.nationality||'IN').toUpperCase()||'IN';
+}
+function searchResidenceCountry(){
+  const s=S.search||searchPayload()||{};
+  return String(s.countryOfResidence||s.residenceCountry||'IN').toUpperCase()||'IN';
+}
+function nationalityResidenceFieldsHtml(compact){
+  const nat=searchNationality();
+  const res=searchResidenceCountry();
+  const cls=compact?'tyh-nat-grid compact':'tyh-nat-grid';
+  return '<div class="'+cls+'">'
+    +'<label>Nationality<select data-search-nationality>'+countryIsoOptionsHtml(nat)+'</select></label>'
+    +'<label>Country of Residence<select data-search-residence>'+countryIsoOptionsHtml(res)+'</select></label>'
+  +'</div>';
+}
 function roomImagesOf(o, hotel){
   const out=[];
   const push=function(u){
@@ -336,27 +382,36 @@ function roomImagesOf(o, hotel){
     if(s&&/^https?:\/\//i.test(s)&&out.indexOf(s)<0) out.push(s);
   };
   const walk=function(node, depth){
-    if(depth>4||node==null) return;
+    if(depth>5||node==null) return;
     if(typeof node==='string'){ push(node); return; }
     if(Array.isArray(node)){ node.forEach(function(x){ walk(x, depth+1); }); return; }
     if(typeof node!=='object') return;
-    push(node.url||node.src||node.imageUrl||node.image||node.hi||node.tns);
-    ['images','imgs','photos','gallery','media'].forEach(function(k){ if(node[k]) walk(node[k], depth+1); });
+    push(node.url||node.src||node.imageUrl||node.image||node.hi||node.tns||node.sz||node.lurl||node.burl);
+    ['images','imgs','photos','gallery','media','tp','typedPhotos','roomImages','imageList'].forEach(function(k){ if(node[k]) walk(node[k], depth+1); });
   };
-  const rooms=arr(o&&o.rooms);
-  rooms.forEach(function(r){ walk(r&&(r.images||r.imgs||r.photos||r.media),0); push(r&&(r.image||r.imageUrl||r.heroImage)); });
-  walk(o&&o.raw&&(o.raw.images||o.raw.imgs||o.raw.photos),0);
+  const rooms=arr(o&&o.rooms).concat(arr(o&&o.roomInfo), arr(o&&o.ris));
+  rooms.forEach(function(r){
+    if(!r) return;
+    walk(r.images||r.imgs||r.photos||r.media||r.tp,0);
+    walk(r.raw&&(r.raw.images||r.raw.imgs||r.raw.photos||r.raw.tp),0);
+    push(r.image||r.imageUrl||r.heroImage);
+    push(r.raw&&(r.raw.image||r.raw.imageUrl));
+  });
+  walk(o&&o.raw&&(o.raw.images||o.raw.imgs||o.raw.photos||o.raw.tp),0);
   push(o&&o.raw&&(o.raw.image||o.raw.heroImage));
   if(out.length) return out;
+  // Match property content rooms by name/category only — never fall back to hotel hero.
   const want=lower(o&&(o.roomSummary||o.roomType||''));
   if(!want) return out;
   const raw=rawOf(hotel||{});
-  const contentRooms=arr(raw.contentRooms).concat(arr(raw.rooms), arr(raw.content&&raw.content.rooms), arr(hotel&&hotel.contentRooms));
+  const contentRooms=arr(raw.contentRooms).concat(arr(raw.rooms), arr(raw.content&&raw.content.rooms), arr(hotel&&hotel.contentRooms), arr(raw.hInfo&&raw.hInfo.rooms));
   contentRooms.forEach(function(r){
     if(!r||typeof r!=='object') return;
-    const nm=lower(r.name||r.roomName||r.roomType||r.roomCategory||r.rt||r.rc||'');
-    if(!nm||(nm!==want&&nm.indexOf(want)<0&&want.indexOf(nm)<0)) return;
-    walk(r.images||r.imgs||r.photos||r.media,0);
+    const nm=lower(r.name||r.roomName||r.roomType||r.roomCategory||r.rt||r.rc||r.title||'');
+    if(!nm) return;
+    const matched=nm===want||nm.indexOf(want)>=0||want.indexOf(nm)>=0||want.split(/\s+/).filter(function(w){return w.length>3;}).some(function(w){ return nm.indexOf(w)>=0; });
+    if(!matched) return;
+    walk(r.images||r.imgs||r.photos||r.media||r.tp,0);
     push(r.image||r.imageUrl||r.heroImage);
   });
   return out;
@@ -414,28 +469,80 @@ function surchargeFeesHtml(rawOrReview){
     lines.map(function(t){ return '<p class="tyh-desc">'+esc(t)+'</p>'; }).join('')+
   '</section>';
 }
+function hotelServiceFeeRate(){ return 0.05; }
+function hotelSellAmount(o,h){
+  o=o||option(); h=h||hotel();
+  return Math.max(0, Number(priceOf(o,h)||o.totalPrice||o.resultDisplayAmount||h.price||0));
+}
+function hotelServiceFeeAmount(sell){
+  sell=Number(sell||0);
+  return sell>0 ? Math.round(sell * hotelServiceFeeRate()) : 0;
+}
+function hotelFareParts(d){
+  d=d||draft();
+  const o=d.option||option();
+  const h=d.hotel||hotel();
+  const sell=hotelSellAmount(o,h);
+  const base=Number(o.baseFare||0);
+  const taxes=Number(o.taxes||h.taxes||0);
+  const mf=Number(o.managementFee||0)+Number(o.managementFeeTax||0);
+  const roomBase=base>0?base:Math.max(0, sell-taxes-mf);
+  const taxesFees=Math.max(0, taxes+mf);
+  const storedFee=Number(d.travelYaraaServiceFee||d.serviceFee||0);
+  const serviceFee=storedFee>0?storedFee:hotelServiceFeeAmount(sell);
+  const applied=d.appliedOffer||null;
+  const discount=applied?Math.max(0,Number(applied.discountAmount||d.discountAmount||0)):Math.max(0,Number(d.discountAmount||0));
+  let total;
+  if(applied && Number(applied.finalPayableAmount)>0) total=Number(applied.finalPayableAmount);
+  else if(Number(d.finalPayableAmount)>0 && (applied||discount>0||storedFee>0)) total=Number(d.finalPayableAmount);
+  else total=Math.max(0, sell+serviceFee-discount);
+  return {
+    roomBase:roomBase,
+    taxesFees:taxesFees,
+    serviceFee:serviceFee,
+    sell:sell,
+    discount:discount,
+    total:total,
+    occupancy:occupancySummaryText(d)
+  };
+}
+function syncHotelPayableDraft(extra){
+  const parts=hotelFareParts();
+  const patch=Object.assign({
+    baseBookingAmount:parts.sell,
+    travelYaraaServiceFee:parts.serviceFee,
+    serviceFee:parts.serviceFee,
+    finalPayableAmount:parts.total
+  }, extra||{});
+  return setDraft(patch);
+}
 function fareSummaryBlockHtml(opts){
   opts=opts||{};
   const base=Number(opts.base||0);
-  const taxes=Number(opts.taxes||0);
-  const fees=Number(opts.fees||0);
+  const taxesFees=Number(opts.taxesFees!=null?opts.taxesFees:(Number(opts.taxes||0)+Number(opts.fees||0)));
+  const serviceFee=Number(opts.serviceFee||0);
   const discount=Math.max(0, Number(opts.discount||0));
   const total=Number(opts.total||0);
   const stickyClass=opts.stickyClass?(' '+String(opts.stickyClass)):'';
   const occ=String(opts.occupancy||'').trim();
   return '<aside class="tyh-fare-summary'+stickyClass+'">'+
     '<h2>Fare summary</h2>'+
-    (base>0?'<div class="tyh-kv"><span>Room / Base</span><b>'+money(base)+'</b></div>':'')+
+    '<div class="tyh-kv"><span>Room / Base amount</span><b>'+money(base)+'</b></div>'+
     (occ?'<div class="tyh-kv"><span>Guests</span><b>'+esc(occ)+'</b></div>':'')+
-    (taxes>0?'<div class="tyh-kv"><span>Taxes</span><b>'+money(taxes)+'</b></div>':'')+
-    (fees>0?'<div class="tyh-kv"><span>Fees</span><b>'+money(fees)+'</b></div>':'')+
+    '<div class="tyh-kv"><span>Taxes &amp; fees</span><b>'+money(taxesFees)+'</b></div>'+
+    '<div class="tyh-kv"><span>TravelYaraa service fee</span><b>'+money(serviceFee)+'</b></div>'+
     (discount>0?'<div class="tyh-kv tyh-discount-row"><span>Offer discount</span><b>-'+money(discount)+'</b></div>':'')+
-    (opts.couponHtml||'')+
     '<div class="tyh-kv total"><span>Total payable</span><b>'+money(total)+'</b></div>'+
-    (opts.ctaAttr
-      ? ('<button type="button" class="tyh-cta'+(opts.ctaDisabled?' tyh-cta-soft-disabled':'')+'" '+opts.ctaAttr+' aria-disabled="'+(opts.ctaDisabled?'true':'false')+'">'+esc(opts.ctaLabel||'Continue')+'</button>')
-      : '')+
   '</aside>';
+}
+function hotelSideRailHtml(opts){
+  opts=opts||{};
+  const fare=fareSummaryBlockHtml(opts);
+  const offers=opts.offersHtml||'';
+  const cta=opts.ctaAttr
+    ? ('<button type="button" class="tyh-cta tyh-side-cta'+(opts.ctaDisabled?' tyh-cta-soft-disabled':'')+'" '+opts.ctaAttr+' aria-disabled="'+(opts.ctaDisabled?'true':'false')+'">'+esc(opts.ctaLabel||'Continue')+'</button>')
+    : '';
+  return '<div class="tyh-side-rail'+(opts.stickyClass?' '+String(opts.stickyClass).trim():'')+'">'+fare+offers+cta+'</div>';
 }
 function occupancySummaryText(d){
   d=d||draft();
@@ -476,10 +583,27 @@ function hotelRulesHtml(h,o,raw){
     if(rows.some(function(r){ return r.text===t; })) return;
     rows.push({label:'',text:t});
   });
-  if(!rows.length) return '<p class="tyh-muted">No hotel rules were provided for this property.</p>';
-  return rows.map(function(r){
-    return '<div class="tyh-rule-row">'+(r.label?'<b>'+esc(r.label)+'</b>':'')+'<p>'+esc(r.text)+'</p></div>';
-  }).join('');
+  if(rows.length){
+    return '<div class="tyh-rules-api"><p class="tyh-rules-source">Property rules</p>'+rows.map(function(r){
+      return '<div class="tyh-rule-row">'+(r.label?'<b>'+esc(r.label)+'</b>':'')+'<p>'+esc(r.text)+'</p></div>';
+    }).join('')+'</div>';
+  }
+  // Neutral fallback — clearly labelled, not presented as property-specific API data.
+  const general=[
+    'Carry valid government-issued photo identification/passport where required.',
+    'Guests must satisfy the property\'s minimum check-in age.',
+    'Entry/check-in may be refused if required ID cannot be produced.',
+    'Extra beds and meals depend on property availability and may incur charges.',
+    'Early check-in and late check-out depend on property availability.',
+    'Smoking is allowed only where property policy permits.',
+    'Pets are allowed only where property policy permits.',
+    'Local taxes/deposits may be collected by the hotel where applicable.',
+    'Special requests are subject to property confirmation.',
+    'Guests must follow property safety/conduct requirements.',
+    'Foreign nationals may need valid passport/visa documentation where legally required.',
+    'Damage/security charges may apply according to the property\'s own policy.'
+  ];
+  return '<div class="tyh-rules-fallback"><p class="tyh-rules-source">General stay requirements</p><p class="tyh-muted">No property-specific hotel rules were supplied for this stay. The guidance below is general TravelYaraa information only.</p><ul>'+general.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul></div>';
 }
 function recommendedBookOption(h){
   const ops=optionList(h).filter(function(o){ return !!realOptionId(o); });
@@ -599,7 +723,7 @@ function roomRateArticle(o, allowContinue, hotel){
     ? '<button type="button" class="tyh-rate-photos" data-open-room-gallery="'+attr(id)+'">'+(photoCount>1?('+'+photoCount+' photos'):'View photo')+'</button>'
     : '';
   const leftCol='<div class="tyh-rate-media">'
-    +(roomImg?'<div class="tyh-rate-img"'+(id?' data-open-room-gallery="'+attr(id)+'"':'')+'><img src="'+attr(roomImg)+'" alt="" loading="lazy"></div>':'<div class="tyh-rate-img tyh-rate-img-empty">Room</div>')
+    +(roomImg?'<div class="tyh-rate-img"'+(id?' data-open-room-gallery="'+attr(id)+'"':'')+'><img src="'+attr(roomImg)+'" alt="" loading="lazy"></div>':'<div class="tyh-rate-img tyh-rate-img-empty" aria-hidden="true"></div>')
     +(amens.length?'<ul class="tyh-rate-amens">'+amens.map(function(a){ return '<li>'+esc(a)+'</li>'; }).join('')+'</ul>':'')
     +photoBtn
   +'</div>';
@@ -758,7 +882,7 @@ async function loadResults(){
   // Never wipe an open Hotel Detail view with the Results pending shell.
   // Detail refresh/back-forward restore depends on search hydration via setResults → maybeShowHotelDetailsFromUrl.
   const keepHotelDetails=currentStep()==='hotel-details';
-  const searchKey=JSON.stringify({regionId:String(S.search.regionId||S.search.cityId||''),checkIn:S.search.checkIn||S.search.checkinDate||'',checkOut:S.search.checkOut||S.search.checkoutDate||'',rooms:S.search.rooms||[]});
+  const searchKey=JSON.stringify({regionId:String(S.search.regionId||S.search.cityId||''),checkIn:S.search.checkIn||S.search.checkinDate||'',checkOut:S.search.checkOut||S.search.checkoutDate||'',rooms:S.search.rooms||[],nationality:String(S.search.nationality||'IN').toUpperCase(),countryOfResidence:String(S.search.countryOfResidence||S.search.residenceCountry||'IN').toUpperCase()});
   const reuseInFlight=!!(hotelSearchLock && hotelSearchLock.key===searchKey);
   // Avoid painting an empty Results pending shell when Detail must stay mounted,
   // or when the same search is already in-flight / already has cards to show.
@@ -1021,14 +1145,36 @@ function modifySearchBar(){
   const s=S.search||{};
   const dates=searchDates();
   const dest=s.cityName||s.city||'';
-  const sub=s.area||s.fullRegionName||'';
-  return '<form class="tyh-modify" data-modify-search>'
-    +'<button type="button" class="tyh-mod-box tyh-mod-city" data-open-city><small>City / Area / Property</small><b>'+esc(dest||'Select location')+'</b>'+(sub?'<em>'+esc(sub)+'</em>':'')+'</button>'
-    +'<button type="button" class="tyh-mod-box" data-open-cal="start"><small>Check-in</small><b>'+esc(fmtDate(dates.checkIn))+'</b></button>'
-    +'<button type="button" class="tyh-mod-box" data-open-cal="end"><small>Check-out</small><b>'+esc(fmtDate(dates.checkOut))+'</b></button>'
-    +'<button type="button" class="tyh-mod-box" data-open-guest><small>Rooms &amp; Guests</small><b>'+esc(guestSummary())+'</b></button>'
-    +'<button type="submit" class="tyh-mod-search">Search</button></form>'
+  const nat=countryNameFromIso(searchNationality());
+  const res=countryNameFromIso(searchResidenceCountry());
+  return '<section class="tyh-search-compact" aria-label="Current hotel search">'
+    +'<div class="tyh-search-compact-main">'
+      +'<strong>'+esc(dest||'Select location')+'</strong>'
+      +'<span>'+esc(fmtDate(dates.checkIn))+' – '+esc(fmtDate(dates.checkOut))+' · '+esc(guestSummary())+'</span>'
+      +'<em>Nationality: '+esc(nat)+' · Residence: '+esc(res)+'</em>'
+    +'</div>'
+    +'<button type="button" class="tyh-search-compact-edit" data-open-edit-search><i aria-hidden="true">✎</i> Edit</button>'
+  +'</section>'
+    +(S.ui.editSearchOpen?desktopEditSearchSheet():'')
     +cityPickerHtml()+guestPopupHtml()+calendarHtml();
+}
+function desktopEditSearchSheet(){
+  const s=S.search||{};
+  const dates=searchDates();
+  const dest=s.cityName||s.city||'';
+  const sub=s.area||s.fullRegionName||'';
+  return '<div class="tyh-pop-bg" data-edit-search-close></div>'
+    +'<section class="tyh-edit-sheet tyh-edit-sheet-desk" role="dialog" aria-label="Edit search">'
+      +'<header><h2>Edit search</h2><button type="button" data-edit-search-close aria-label="Close">×</button></header>'
+      +'<form class="tyh-edit-form" data-modify-search>'
+        +'<button type="button" class="tyh-mod-box tyh-mod-city" data-open-city><small>City / Area / Property</small><b>'+esc(dest||'Select location')+'</b>'+(sub?'<em>'+esc(sub)+'</em>':'')+'</button>'
+        +'<button type="button" class="tyh-mod-box" data-open-cal="start"><small>Check-in</small><b>'+esc(fmtDate(dates.checkIn))+'</b></button>'
+        +'<button type="button" class="tyh-mod-box" data-open-cal="end"><small>Check-out</small><b>'+esc(fmtDate(dates.checkOut))+'</b></button>'
+        +'<button type="button" class="tyh-mod-box" data-open-guest><small>Rooms &amp; Guests</small><b>'+esc(guestSummary())+'</b></button>'
+        +'<div class="tyh-more-opts-block"><h3>More options</h3>'+nationalityResidenceFieldsHtml(false)+'</div>'
+        +'<button type="submit" class="tyh-mod-search tyh-edit-search-btn">Search</button>'
+      +'</form>'
+    +'</section>';
 }
 function mobileSearchSummaryHtml(){
   const s=S.search||{};
@@ -1041,6 +1187,7 @@ function mobileSearchSummaryHtml(){
       +'<div class="tyh-m-summary-main">'
         +'<b>'+esc(fmtDate(dates.checkIn))+' – '+esc(fmtDate(dates.checkOut))+'</b>'
         +'<span>'+esc(guestSummary())+'</span>'
+        +'<em>'+esc(countryNameFromIso(searchNationality()))+' · Res: '+esc(countryNameFromIso(searchResidenceCountry()))+'</em>'
       +'</div>'
       +'<span class="tyh-m-edit"><i aria-hidden="true">✎</i> Edit search</span>'
     +'</button>'
@@ -1060,6 +1207,7 @@ function mobileEditSearchSheet(){
         +'<button type="button" class="tyh-mod-box" data-open-cal="start"><small>Check-in</small><b>'+esc(fmtDate(dates.checkIn))+'</b></button>'
         +'<button type="button" class="tyh-mod-box" data-open-cal="end"><small>Check-out</small><b>'+esc(fmtDate(dates.checkOut))+'</b></button>'
         +'<button type="button" class="tyh-mod-box" data-open-guest><small>Rooms &amp; Guests</small><b>'+esc(guestSummary())+'</b></button>'
+        +'<div class="tyh-more-opts-block"><h3>More options</h3>'+nationalityResidenceFieldsHtml(true)+'</div>'
         +'<button type="submit" class="tyh-mod-search tyh-edit-search-btn">Search</button>'
       +'</form>'
     +'</section>'
@@ -1146,7 +1294,9 @@ function persistHotelSearch(patch){
   live.children=children;
   live.service='hotel';
   live.type='hotel';
-  live.nationality=live.nationality||'IN';
+  live.nationality=String(live.nationality||'IN').toUpperCase();
+  live.countryOfResidence=String(live.countryOfResidence||live.residenceCountry||'IN').toUpperCase();
+  live.residenceCountry=live.countryOfResidence;
   live.currency=live.currency||'INR';
   S.search=live;
   save(KEY.payload, live);
@@ -1716,7 +1866,14 @@ function bindResults(){
     e.preventDefault();
     const dates=searchDates();
     const keepY=isMobileHotelUi()?window.scrollY||0:0;
-    persistHotelSearch({checkIn:dates.checkIn, checkOut:dates.checkOut, roomCount:guestState().rooms, adults:guestState().adults, children:guestState().children});
+    const natEl=q('[data-search-nationality]',root);
+    const resEl=q('[data-search-residence]',root);
+    persistHotelSearch({
+      checkIn:dates.checkIn, checkOut:dates.checkOut,
+      roomCount:guestState().rooms, adults:guestState().adults, children:guestState().children,
+      nationality:(natEl&&natEl.value)||searchNationality(),
+      countryOfResidence:(resEl&&resEl.value)||searchResidenceCountry()
+    });
     S.ui.calOpen=false; S.ui.cityOpen=false; S.ui.guestOpen=false; S.ui.editSearchOpen=false;
     S.resultsScrollY=keepY;
     setPage('results');
@@ -1737,6 +1894,16 @@ function bindResults(){
       S.ui.editSearchOpen=false;
       renderResults();
       if(S.resultsScrollY){ try{ window.scrollTo(0, S.resultsScrollY); }catch(e){} }
+    };
+  });
+  qa('[data-search-nationality]',root).forEach(function(sel){
+    sel.onchange=function(){
+      persistHotelSearch({nationality:sel.value||'IN'});
+    };
+  });
+  qa('[data-search-residence]',root).forEach(function(sel){
+    sel.onchange=function(){
+      persistHotelSearch({countryOfResidence:sel.value||'IN', residenceCountry:sel.value||'IN'});
     };
   });
   qa('[data-open-city]',root).forEach(function(b){ b.onclick=async function(){ S.ui.cityOpen=true; S.ui.calOpen=false; S.ui.guestOpen=false; S.ui.cityStatus='Searching locations...'; S.ui.cityRows=[]; rerenderKeepUi(); const rows=await fetchHotelCities(S.ui.cityQuery||''); S.ui.cityRows=rows; S.ui.cityStatus=rows.length?'':'Type a location and select an exact suggestion.'; rerenderKeepUi(); const inp=q('[data-city-input]',root); if(inp) inp.focus(); }; });
@@ -1946,7 +2113,9 @@ async function startReview(h, optionId){
     S.review=res;
     const reviewBookingId=reviewData.bookingId||raw.bookingId||res.bookingId||'';
     if(!reviewBookingId) throw new Error('Hotel review could not be completed. Please select the room again.');
-    const draft={service:'hotel',hotel:S.selectedHotel,selected:S.selectedHotel,option:reviewedOption,optionId:oid,reviewHash:realReviewHash(hotel),searchContext:res.searchContext||context,tripjackReviewRaw:raw,tripjackReviewBookingId:reviewBookingId,cancellationPolicyRaw:reviewedOption.cancellationPolicy||{},finalPayableAmount:reviewedAmount,baseBookingAmount:reviewedAmount,searchPayload:Object.assign({},S.search,{searchContext:res.searchContext||context}),contact:{countryCode:'+91'},guests:defaultGuests(),gst:{enabled:false},clientRequestId:newHotelClientRequestId(),createdAt:new Date().toISOString()};
+    const natIso=String((S.search&&S.search.nationality)||'IN').toUpperCase();
+    const resIso=String((S.search&&(S.search.countryOfResidence||S.search.residenceCountry))||'IN').toUpperCase();
+    const draft={service:'hotel',hotel:S.selectedHotel,selected:S.selectedHotel,option:reviewedOption,optionId:oid,reviewHash:realReviewHash(hotel),searchContext:res.searchContext||context,tripjackReviewRaw:raw,tripjackReviewBookingId:reviewBookingId,cancellationPolicyRaw:reviewedOption.cancellationPolicy||{},baseBookingAmount:reviewedAmount,travelYaraaServiceFee:hotelServiceFeeAmount(reviewedAmount),serviceFee:hotelServiceFeeAmount(reviewedAmount),finalPayableAmount:reviewedAmount+hotelServiceFeeAmount(reviewedAmount),searchPayload:Object.assign({},S.search,{searchContext:res.searchContext||context,nationality:natIso,countryOfResidence:resIso,residenceCountry:resIso}),nationality:natIso,countryOfResidence:resIso,residenceCountry:resIso,contact:{countryCode:'+91'},guests:defaultGuests(),gst:{enabled:false},clientRequestId:newHotelClientRequestId(),createdAt:new Date().toISOString()};
     save(KEY.selected,{service:'hotel',hotel:S.selectedHotel,option:reviewedOption,optionId:oid,review:res,search:S.search});
     save(KEY.draft,draft);
     setPage('guest');
@@ -2017,17 +2186,15 @@ function renderGuestStep(){
   const guestsTabs=guests.map(function(x,idx){ return '<button type="button" class="'+(idx===i?'active':'')+'" data-guest-tab="'+idx+'">'+esc(x.type||'Guest')+' '+(idx+1)+'</button>'; }).join('');
   const desktop=!isMobileHotelUi();
   const complete=guestsAreComplete(Object.assign({},d,{guests:guests,contact:contact}));
-  const taxes=Number(o.taxes||h.taxes||0);
-  const mf=Number(o.managementFee||0)+Number(o.managementFeeTax||0);
-  const baseFare=Number(o.baseFare||0);
-  const applied=d.appliedOffer||null;
-  const discount=applied?Math.max(0,Number(applied.discountAmount||0)):0;
-  const finalPay=totalAmount();
-  const couponHtml=hotelCouponHtml(applied);
-  const fareBlock=fareSummaryBlockHtml({
-    base:baseFare, taxes:taxes, fees:mf, discount:discount, total:finalPay,
+  syncHotelPayableDraft();
+  const parts=hotelFareParts(Object.assign({},draft(),{guests:guests}));
+  const applied=draft().appliedOffer||null;
+  const finalPay=parts.total;
+  const offersHtml=hotelCouponHtml(applied);
+  const fareBlock=hotelSideRailHtml({
+    base:parts.roomBase, taxesFees:parts.taxesFees, serviceFee:parts.serviceFee, discount:parts.discount, total:finalPay,
     occupancy:occupancySummaryText(Object.assign({},d,{guests:guests})),
-    couponHtml:couponHtml,
+    offersHtml:offersHtml,
     ctaAttr:desktop?'data-continue':'',
     ctaLabel:'Continue',
     ctaDisabled:!complete,
@@ -2077,7 +2244,7 @@ function renderGuestStep(){
       ? '<div class="tyh-bottom"><button type="button" class="tyh-fare-tap" data-open-fare-sheet><span>Fare Details</span><b>'+money(finalPay)+'</b></button><button type="button" class="'+(complete?'':'tyh-cta-soft-disabled')+'" data-continue'+(complete?' aria-disabled="false"':' aria-disabled="true"')+'>Continue</button></div>'
       : '')
     +((!desktop && S.ui.fareSheetOpen)
-      ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:baseFare,taxes:taxes,fees:mf,discount:discount,total:finalPay,occupancy:occupancySummaryText(Object.assign({},d,{guests:guests})),couponHtml:couponHtml})+'</div></section>'
+      ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:parts.roomBase,taxesFees:parts.taxesFees,serviceFee:parts.serviceFee,discount:parts.discount,total:finalPay,occupancy:occupancySummaryText(Object.assign({},d,{guests:guests}))})+offersHtml+'</div></section>'
       : '')
   +'</main>';
 
@@ -2094,17 +2261,26 @@ function hotelCouponHtml(applied){
   const offers=arr(S.ui.hotelOffers);
   if(!offers.length && !applied) return '';
   if(applied){
-    return '<div class="tyh-coupon-box">'
-      +'<div class="tyh-kv"><span>Offer '+esc(applied.offerCode||applied.code||'')+'</span><b>-'+money(applied.discountAmount||0)+'</b></div>'
-      +'<button type="button" class="tyh-linkish" data-remove-hotel-offer>Remove offer</button>'
-    +'</div>';
+    const code=applied.offerCode||applied.code||'';
+    return '<section class="tyh-offers-card">'
+      +'<h2>TravelYaraa offers</h2>'
+      +'<article class="tyh-offer-item applied">'
+        +'<div><b>'+esc(code)+'</b><span>Applied</span><p>You saved '+money(applied.discountAmount||0)+'</p></div>'
+        +'<button type="button" class="tyh-linkish" data-remove-hotel-offer>Remove</button>'
+      +'</article>'
+    +'</section>';
   }
-  return '<div class="tyh-coupon-box">'
-    +'<label>TravelYaraa offer<code></code></label>'
+  return '<section class="tyh-offers-card">'
+    +'<h2>TravelYaraa offers</h2>'
     +offers.map(function(o){
-      return '<button type="button" class="tyh-offer-chip" data-apply-hotel-offer="'+attr(o.code||o.offerCode)+'">'+esc((o.code||o.offerCode)+' · '+(o.title||'Apply'))+'</button>';
+      const code=o.code||o.offerCode||'';
+      const title=o.title||o.customer_text||'TravelYaraa offer';
+      return '<article class="tyh-offer-item">'
+        +'<div><b>'+esc(code)+'</b><p>'+esc(title)+'</p></div>'
+        +'<button type="button" class="tyh-cta tyh-offer-apply" data-apply-hotel-offer="'+attr(code)+'">Apply</button>'
+      +'</article>';
     }).join('')
-  +'</div>';
+  +'</section>';
 }
 async function refreshHotelOffers(){
   try{
@@ -2115,22 +2291,24 @@ async function refreshHotelOffers(){
     const next=offers.map(function(o){ return o.code||o.offerCode; }).join('|');
     S.ui.hotelOffers=offers;
     if(offers.length && currentStep()==='guest' && prev!==next){
-      const box=q('.tyh-coupon-box',root);
       const validating=q('[data-guest-validate]',root);
       const busy=S.ui.pendingGuestValidation || (validating && !validating.hidden && String(validating.textContent||'').trim());
-      if(!box && !(draft().appliedOffer) && !busy) renderGuestStep();
+      if(!q('.tyh-offers-card',root) && !(draft().appliedOffer) && !busy) renderGuestStep();
     }
   }catch(e){ S.ui.hotelOffers=[]; }
 }
 async function applyHotelOffer(code){
-  const amount=basePayableAmount();
+  const sell=hotelSellAmount();
+  const serviceFee=hotelServiceFeeAmount(sell);
+  const amount=sell+serviceFee;
   const profile=tyhRecognizedLoggedInUser()||{};
   const contact=(draft().contact||{});
   const body={
     service:'hotel',
     offerCode:String(code||'').trim(),
     bookingAmount:amount,
-    convenienceFee:0,
+    convenienceFee:serviceFee,
+    travelYaraaServiceFee:serviceFee,
     userId:profile.userId||profile.uid||contact.email||'',
     email:contact.email||profile.email||'',
     phone:contact.phone||profile.phone||''
@@ -2144,15 +2322,17 @@ async function applyHotelOffer(code){
     offerCode:res.offerCode||res.code||code,
     discountAmount:discount,
     finalPayableAmount:finalPay,
-    baseBookingAmount:amount
+    baseBookingAmount:sell,
+    travelYaraaServiceFee:serviceFee,
+    serviceFee:serviceFee
   });
   if(currentStep()==='guest') renderGuestStep();
   else if(currentStep()==='review') renderReviewStep();
 }
 async function removeHotelOffer(){
   try{ await api('/api/offers/remove',{service:'hotel'}); }catch(e){}
-  const base=basePayableAmount();
-  setDraft({appliedOffer:null,offerCode:null,discountAmount:0,finalPayableAmount:base});
+  setDraft({appliedOffer:null,offerCode:null,discountAmount:0});
+  syncHotelPayableDraft();
   if(currentStep()==='guest') renderGuestStep();
   else if(currentStep()==='review') renderReviewStep();
 }
@@ -2274,14 +2454,10 @@ function validateGuest(){
   return true;
 }
 function totalAmount(){
-  const d=draft();
-  const applied=d.appliedOffer||null;
-  if(applied && Number(applied.finalPayableAmount)>0) return Number(applied.finalPayableAmount);
-  return Number(d.finalPayableAmount||option().totalPrice||hotel().price||0);
+  return hotelFareParts().total;
 }
 function basePayableAmount(){
-  const d=draft();
-  return Number(d.baseBookingAmount||d.finalPayableAmount||option().totalPrice||hotel().price||0);
+  return hotelSellAmount();
 }
 function guestRoomOccupancyLabel(guests){
   guests=arr(guests);
@@ -2395,10 +2571,7 @@ function renderReviewStep(){
   const ci=s.checkIn||s.checkinDate, co=s.checkOut||s.checkoutDate;
   const rooms=Math.max(1, Number(s.roomCount||arr(s.rooms).length||1));
   const guestsCount=arr(d.guests).length;
-  const taxes=Number(o.taxes||h.taxes||0);
-  const mf=Number(o.managementFee||0)+Number(o.managementFeeTax||0);
   const cancel=cancelSummaryText(o);
-  const baseFare=Number(o.baseFare||0);
   const contact=d.contact||{};
   const contactMobile=[contact.countryCode||'+91', contact.phone||''].filter(Boolean).join(' ');
   const contactEmail=contact.email||'';
@@ -2407,27 +2580,27 @@ function renderReviewStep(){
   const loc=hotelAddressText(h);
   const starN=Math.max(0,Math.min(5,Math.round(h.star||0)));
   const stars=starN?'<div class="tyh-stars" aria-label="'+esc(starN)+' star">'+"★".repeat(starN)+'</div>':'';
+  syncHotelPayableDraft();
+  const parts=hotelFareParts(d);
   const applied=d.appliedOffer||null;
-  const discount=applied?Math.max(0,Number(applied.discountAmount||0)):0;
-  const finalPay=totalAmount();
+  const finalPay=parts.total;
   const raw=reviewRaw();
   const times=hotelCheckTimes(h);
-  const rulesHtml=hotelRulesHtml(h,o,raw);
   const cancelTable=cancellationTableHtml(o);
   const surcharge=surchargeFeesHtml(raw)||surchargeFeesHtml(d.tripjackReviewRaw)||'';
   const policyDefault=cancellationPolicyBody(o);
   const desktop=!isMobileHotelUi();
-  const couponHtml=hotelCouponHtml(applied);
-  const fareBlock=fareSummaryBlockHtml({
-    base:baseFare, taxes:taxes, fees:mf, discount:discount, total:finalPay,
+  const offersHtml=hotelCouponHtml(applied);
+  const fareBlock=hotelSideRailHtml({
+    base:parts.roomBase, taxesFees:parts.taxesFees, serviceFee:parts.serviceFee, discount:parts.discount, total:finalPay,
     occupancy:occupancySummaryText(d),
-    couponHtml:couponHtml,
+    offersHtml:offersHtml,
     ctaAttr:desktop?'data-pay':'',
     ctaLabel:'PROCEED TO PAY',
     stickyClass:desktop?'tyh-fare-sticky':''
   });
   const fareSheet=(!desktop && S.ui.fareSheetOpen)
-    ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:baseFare,taxes:taxes,fees:mf,discount:discount,total:finalPay,occupancy:occupancySummaryText(d),couponHtml:couponHtml})+'</div></section>'
+    ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:parts.roomBase,taxesFees:parts.taxesFees,serviceFee:parts.serviceFee,discount:parts.discount,total:finalPay,occupancy:occupancySummaryText(d)})+offersHtml+'</div></section>'
     : '';
 
   const leftMain='<div class="tyh-review-main">'
@@ -2448,6 +2621,8 @@ function renderReviewStep(){
     +'<section class="tyh-panel">'
       +'<div class="tyh-panel-head"><h2>Guest names</h2><button type="button" class="tyh-linkish" data-edit-guests>Edit Guest</button></div>'
       +arr(d.guests).map(function(g2,gi){ return '<div class="tyh-guest-row"><span>'+esc((g2.type||'Guest')+' '+(gi+1))+'</span><b>'+esc([g2.title,g2.firstName,g2.lastName].filter(Boolean).join(' '))+'</b></div>'; }).join('')
+      +'<div class="tyh-kv"><span>Nationality</span><b>'+esc(countryNameFromIso(d.nationality||s.nationality||searchNationality()))+'</b></div>'
+      +'<div class="tyh-kv"><span>Country of Residence</span><b>'+esc(countryNameFromIso(d.countryOfResidence||s.countryOfResidence||s.residenceCountry||searchResidenceCountry()))+'</b></div>'
     +'</section>'
     +'<section class="tyh-panel">'
       +'<h2>Contact details</h2>'
@@ -2458,12 +2633,8 @@ function renderReviewStep(){
     +surcharge
     +'<section class="tyh-panel">'
       +'<h2>Important information</h2>'
-      +'<div class="tyh-policy-actions"><button type="button" class="active" data-policy="cancel">Cancellation policy</button><button type="button" data-policy="hotel">Hotel rules</button></div>'
-      +'<div class="tyh-policy-box" id="tyHotelPolicyBox">'+policyDefault+'</div>'
-    +'</section>'
-    +'<section class="tyh-panel">'
-      +'<h2>Hotel rules</h2>'
-      +'<div class="tyh-rules-box">'+rulesHtml+'</div>'
+      +'<div class="tyh-policy-actions"><button type="button" data-policy="cancel">Cancellation policy</button><button type="button" data-policy="hotel">Hotel rules</button></div>'
+      +'<p class="tyh-muted">Tap a policy above to view details.</p>'
     +'</section>'
     +'<section class="tyh-panel">'
       +'<h2>Special request <small>optional</small></h2>'
@@ -2512,8 +2683,10 @@ function bindReview(){
 function showPolicy(type){
   const raw=reviewRaw();
   const h=hotel();
+  let title='Cancellation policy';
   let html='';
   if(type==='hotel'){
+    title='Hotel rules';
     html=hotelRulesHtml(h, option(), raw);
   } else {
     const selected=option();
@@ -2522,8 +2695,7 @@ function showPolicy(type){
     const intro=c.refundable===false?'This room is non-refundable.':(c.freeCancellation?'Free cancellation'+(c.freeCancellationUntil?' until '+fmtDate(c.freeCancellationUntil):'')+'.':'Cancellation charges may apply.');
     html='<p><b>'+esc(intro)+'</b></p>'+(pd.length?pd.map(function(x){ return '<p>'+esc([x.fromDate||x.fdt,x.toDate||x.tdt,x.amount!=null?money(x.amount):(x.am!=null?money(x.am):''),x.percent!=null?x.percent+'%':(x.pp!=null?x.pp+'%':'')].filter(Boolean).join(' • '))+'</p>'; }).join(''):'')+cancellationTableHtml(selected);
   }
-  const box=q('#tyHotelPolicyBox',root);
-  if(box) box.innerHTML=html;
+  openHotelSheet(title, html);
 }
 function loadRazorpay(){ if(window.Razorpay) return Promise.resolve(); return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src='https://checkout.razorpay.com/v1/checkout.js'; s.onload=resolve; s.onerror=()=>reject(new Error('Payment gateway could not be loaded.')); document.head.appendChild(s); }); }
 
@@ -2722,7 +2894,12 @@ async function proceedToPayment(){
     const d=draft();
     const clientRequestId=d.clientRequestId||newHotelClientRequestId();
     if(!d.clientRequestId) setDraft({clientRequestId});
-    const payload={ service:'hotel', clientRequestId, search:d.searchPayload||S.search, selectedResult:Object.assign({},hotel(),{service:'hotel',hotelId:hotel().hotelId||hotel().id,optionId:d.optionId||option().optionId||option().id,rawOption:option().raw||option()}), details:Object.assign({},d,{clientRequestId,searchPayload:d.searchPayload||S.search,offerCode:d.offerCode||(d.appliedOffer&&(d.appliedOffer.offerCode||d.appliedOffer.code))||null,appliedOffer:d.appliedOffer||null,discountAmount:d.discountAmount||0}), supplier:'tripjack', tripjackReviewRaw:reviewRaw() };
+    const parts=hotelFareParts(d);
+    const searchPay=Object.assign({}, d.searchPayload||S.search||{}, {
+      nationality:d.nationality||(d.searchPayload&&d.searchPayload.nationality)||searchNationality(),
+      countryOfResidence:d.countryOfResidence||(d.searchPayload&&d.searchPayload.countryOfResidence)||searchResidenceCountry()
+    });
+    const payload={ service:'hotel', clientRequestId, search:searchPay, selectedResult:Object.assign({},hotel(),{service:'hotel',hotelId:hotel().hotelId||hotel().id,optionId:d.optionId||option().optionId||option().id,rawOption:option().raw||option()}), details:Object.assign({},d,{clientRequestId,searchPayload:searchPay,nationality:searchPay.nationality,countryOfResidence:searchPay.countryOfResidence,offerCode:d.offerCode||(d.appliedOffer&&(d.appliedOffer.offerCode||d.appliedOffer.code))||null,appliedOffer:d.appliedOffer||null,discountAmount:d.discountAmount||0,baseBookingAmount:parts.sell,travelYaraaServiceFee:parts.serviceFee,serviceFee:parts.serviceFee,convenienceFee:parts.serviceFee,finalPayableAmount:parts.total}), supplier:'tripjack', tripjackReviewRaw:reviewRaw() };
     await tyhRequireGuestOtpBeforePayment(payload);
     if(!tyhGuestAuthToken()){
       throw new Error('Please log in to your TravelYaraa account.');
@@ -2964,7 +3141,7 @@ function hotelStatusCardHtml(b){
   const stars='★'.repeat(Math.max(0,Math.min(5,Math.round(Number(h.rt||h.star||hotel().star||0)))));
   const img=imageOf(h)||imageOf(hotel());
   return '<section class="tyh-summary-card tyh-status-hotel-card">'
-    +'<div class="tyh-status-hotel-img">'+(img?'<img src="'+attr(img)+'" alt="'+attr(hotelNameFromStatus(b))+'">':'<span>H</span>')+'</div>'
+    +'<div class="tyh-status-hotel-img">'+(img?'<img src="'+attr(img)+'" alt="'+attr(hotelNameFromStatus(b))+'">':'<span class="tyh-img-fallback" aria-hidden="true"></span>')+'</div>'
     +'<div class="tyh-status-hotel-body">'
       +'<h2>'+esc(hotelNameFromStatus(b))+'</h2>'
       +(stars?'<div class="tyh-stars">'+stars+'</div>':'')
@@ -3007,7 +3184,10 @@ function renderStatus(b, raw){
       +'<div class="tyh-kv"><span>Hotel reference</span><b>'+esc(reference)+'</b></div>'
       +'</section>'
       +'<section class="tyh-panel"><h2>Room details</h2>'+hotelRoomsHtml(b)+'</section>'
-      +'<section class="tyh-panel"><h2>Guest details</h2>'+statusGuests(b).join('')+'</section>'
+      +'<section class="tyh-panel"><h2>Guest details</h2>'+statusGuests(b).join('')
+        +'<div class="tyh-kv"><span>Nationality</span><b>'+esc(countryNameFromIso((b.details&&b.details.nationality)||(b.search&&b.search.nationality)||draft().nationality||searchNationality()))+'</b></div>'
+        +'<div class="tyh-kv"><span>Country of Residence</span><b>'+esc(countryNameFromIso((b.details&&(b.details.countryOfResidence||b.details.residenceCountry))||(b.search&&(b.search.countryOfResidence||b.search.residenceCountry))||draft().countryOfResidence||searchResidenceCountry()))+'</b></div>'
+      +'</section>'
       +'<section class="tyh-panel"><h2>Contact details</h2>'+hotelContactHtml(b)+'</section>'
       +'<section class="tyh-panel"><h2>Payment summary</h2>'+hotelPaymentHtml(b)+'</section>'
       +'<section class="tyh-panel"><h2>Hotel policy</h2>'+hotelPolicyHtml(b)+'</section>'
@@ -3135,7 +3315,7 @@ function css(){ return `
 .tyh-rate-media{min-width:0}
 .tyh-rate-img{border-radius:14px;overflow:hidden;height:140px;background:#eef6ff;cursor:pointer}
 .tyh-rate-img img{width:100%;height:100%;object-fit:cover;display:block}
-.tyh-rate-img-empty{display:grid;place-items:center;color:var(--ty-blue);font-weight:900}
+.tyh-rate-img-empty{background:linear-gradient(135deg,#e8eef8,#f7f9fc);border:1px dashed #d0dbea}
 .tyh-rate-amens{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px}
 .tyh-rate-amens li{font-size:12px;font-weight:800;color:#344054}
 .tyh-rate-photos,.tyh-more-opts,.tyh-linkish{margin-top:8px;height:38px;border:1px solid var(--ty-line);border-radius:13px;background:#fff;color:var(--ty-blue);font-weight:900;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;width:100%}
@@ -3419,7 +3599,45 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-mini-body{min-width:0}
 .tyh-stay-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .tyh-img-fallback{display:block;width:100%;height:100%;background:linear-gradient(135deg,#e8eef8,#f7f9fc)}
-.tyh-discount-row b{color:var(--ty-green)!important}
+.tyh-rate-img-empty{background:linear-gradient(135deg,#e8eef8,#f7f9fc);border:1px dashed #d0dbea}
+.tyh-rate-img-empty:before{content:'';width:36px;height:28px;border-radius:6px;border:2px solid #b8c7dc;opacity:.55}
+.tyh-search-compact{max-width:1180px;margin:12px auto 0;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border:1px solid var(--ty-line);border-radius:16px;box-shadow:0 8px 20px rgba(7,29,73,.05)}
+.tyh-search-compact-main{min-width:0;display:grid;gap:3px}
+.tyh-search-compact-main strong{color:var(--ty-navy);font-size:16px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tyh-search-compact-main span,.tyh-search-compact-main em,.tyh-m-summary-main em{display:block;font-style:normal;color:var(--ty-muted);font-size:12px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tyh-search-compact-edit{flex:0 0 auto;height:40px;border:1px solid var(--ty-line);border-radius:12px;background:#fff;color:var(--ty-blue);font-weight:900;padding:0 14px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.tyh-edit-sheet-desk{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100% - 28px));border-radius:20px;max-height:min(88vh,760px)}
+.tyh-more-opts-block{border:1px solid var(--ty-line);border-radius:14px;padding:12px;background:#f8fbff}
+.tyh-more-opts-block h3{margin:0 0 10px;color:var(--ty-navy);font-size:14px}
+.tyh-nat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tyh-nat-grid.compact{grid-template-columns:1fr}
+.tyh-nat-grid label{display:grid;gap:6px;font-size:12px;font-weight:850;color:#344054}
+.tyh-nat-grid select{height:44px;border:1px solid var(--ty-line);border-radius:12px;padding:0 10px;background:#fff;font-size:14px;color:#101828;width:100%}
+.tyh-side-rail{display:grid;gap:12px;align-content:start}
+.tyh-side-rail .tyh-fare-summary{margin:0}
+.tyh-side-cta{width:100%;height:48px;border-radius:14px}
+.tyh-offers-card{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:14px;box-shadow:0 10px 24px rgba(7,29,73,.05);display:grid;gap:10px}
+.tyh-offers-card h2{margin:0;color:var(--ty-navy);font-size:16px}
+.tyh-offer-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--ty-line);border-radius:14px;padding:10px 12px;background:#f8fbff}
+.tyh-offer-item.applied{background:#ecfdf3;border-color:#bbf7d0}
+.tyh-offer-item b{display:block;color:var(--ty-navy);font-size:13px}
+.tyh-offer-item p,.tyh-offer-item span{margin:2px 0 0;color:#344054;font-size:12px;font-weight:750}
+.tyh-offer-apply{height:36px!important;padding:0 12px!important;font-size:12px!important;border-radius:999px!important}
+.tyh-rules-source{margin:0 0 10px;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--ty-navy)}
+.tyh-rules-fallback ul{margin:8px 0 0;padding-left:18px;color:#344054;font-size:13px;line-height:1.45}
+.tyh-rules-fallback li{margin:0 0 6px}
+.tyh-guest-panel,.tyh-fare-summary,.tyh-offers-card,.tyh-panel{background:#fff}
+@media(min-width:861px){
+.tyh-bottom{display:none!important}
+.tyh-page{padding-bottom:28px}
+}
+@media(max-width:860px){
+.tyh-nat-grid{grid-template-columns:1fr}
+.tyh-search-compact{margin:10px 10px 0;padding:12px}
+.tyh-offers-card,.tyh-fare-summary{width:100%;max-width:100%}
+.tyh-offer-item{flex-wrap:wrap}
+.tyh-page,.tyh-book,.tyh-status{overflow-x:clip}
+}
 .tyh-coupon-box{margin:10px 0;padding-top:10px;border-top:1px dashed var(--ty-line);display:grid;gap:8px}
 .tyh-offer-chip{border:1px solid var(--ty-line);background:#fff;border-radius:12px;padding:8px 10px;text-align:left;font-weight:800;color:var(--ty-navy);cursor:pointer}
 .tyh-offer-chip:hover{border-color:var(--ty-blue);background:#eef6ff}
