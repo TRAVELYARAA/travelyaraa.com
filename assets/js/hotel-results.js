@@ -193,31 +193,102 @@ function mediaUrl(v){
   return mediaUrl(String(href||''));
 }
 function imageOf(h){ const raw=h.raw||h; const imgs=[h.image,h.imageUrl,h.heroImage,h.thumbnail,mediaUrl(h.images&&h.images[0]),mediaUrl(h.imgs&&h.imgs[0]),mediaUrl(raw.heroImage),mediaUrl(raw.images&&raw.images[0]),mediaUrl(raw.img&&raw.img[0])].filter(Boolean); return String(imgs[0]||''); }
+function firstPositiveAmount(){
+  for(let i=0;i<arguments.length;i++){
+    const n=Number(arguments[i]);
+    if(Number.isFinite(n)&&n>0) return n;
+  }
+  return 0;
+}
+function optionHasCustomerDisplayAmount(o){
+  o=o||{};
+  const pb=o.pricingBreakup||o.priceBreakup||o.priceBreakdown||{};
+  const raw=o.raw||{};
+  return firstPositiveAmount(
+    o.resultDisplayAmount, o.displayPrice, o.finalPrice, o.finalPayableAmount,
+    pb.resultDisplayAmount, pb.displayPrice, pb.sellAmount, pb.customerAmount, pb.customerPrice, pb.finalAmount, pb.finalPayableAmount,
+    raw.resultDisplayAmount, raw.displayPrice, raw.finalPrice, raw.finalPayableAmount
+  )>0;
+}
+function optionSupplierTotalAmount(o){
+  o=o||{};
+  const raw=o.raw||{};
+  const display=firstPositiveAmount(
+    o.resultDisplayAmount, o.displayPrice, o.finalPrice,
+    raw.resultDisplayAmount, raw.displayPrice
+  );
+  const candidates=[
+    o.supplierTotalPrice,
+    // Bare totalPrice is supplier only when a higher display/sell amount also exists on the same payload.
+    (display>0 ? firstPositiveAmount(raw.totalPrice, o.totalPrice, raw.tp, o.tp) : 0),
+    (!display ? firstPositiveAmount(raw.totalPrice, o.totalPrice, raw.tp, o.tp) : 0)
+  ];
+  for(let i=0;i<candidates.length;i++){
+    const n=Number(candidates[i]||0);
+    if(!(n>0)) continue;
+    // Ignore values that are clearly the customer sell (equal/near display).
+    if(display>0 && Math.abs(n-display)<1) continue;
+    if(display>0 && n>display+0.5) continue;
+    return n;
+  }
+  return 0;
+}
 function customerStayPrice(o,h){
   // Prefer customer sell/display amounts (markup already included). Priority order — never max-of-all
   // (max-of-all mixed net/sell fields and caused false price-change + Guest/payment drift).
+  // IMPORTANT: do NOT treat bare totalPrice as customer sell when display/sell fields exist on search/detail.
+  // Review often returns only totalPrice (pre-markup). That must not be misread as a price drop.
   const pb=(o&&(o.pricingBreakup||o.priceBreakup||o.priceBreakdown))||{};
   const raw=(o&&o.raw)||{};
   const tfcs=(o&&o.tfcs)||raw.tfcs||{};
-  function firstPositive(){
-    for(let i=0;i<arguments.length;i++){
-      const n=Number(arguments[i]);
-      if(Number.isFinite(n)&&n>0) return n;
-    }
-    return 0;
-  }
-  const preferred=firstPositive(
+  const preferred=firstPositiveAmount(
     o&&o.resultDisplayAmount, o&&o.displayPrice,
     pb.resultDisplayAmount, pb.displayPrice, pb.sellAmount, pb.customerAmount, pb.customerPrice, pb.finalAmount, pb.finalPayableAmount,
-    o&&o.totalPrice, o&&o.finalPrice, o&&o.totalAmount,
-    raw.resultDisplayAmount, raw.displayPrice, raw.totalPrice,
+    o&&o.finalPrice, o&&o.finalPayableAmount, o&&o.totalAmount,
+    raw.resultDisplayAmount, raw.displayPrice, raw.finalPrice, raw.finalPayableAmount,
+    // totalPrice / tp / TF only when they are the sole available customer amount on this object
+    (!optionHasCustomerDisplayAmount(o)?(o&&o.totalPrice):0),
     o&&o.tp, raw.tp, tfcs.TF, tfcs.tf, o&&o.amount, o&&o.price, tfcs.NP
   );
   if(preferred>0) return preferred;
   if(o&&(o.optionId||o.id||o.pricing||o.cancellation||o.roomInfo||o.roomSummary)) return 0;
-  return firstPositive(h&&h.resultDisplayAmount, h&&h.displayPrice, h&&h.price);
+  return firstPositiveAmount(h&&h.resultDisplayAmount, h&&h.displayPrice, h&&h.price);
 }
 function priceOf(o,h){ return customerStayPrice(o,h); }
+function resolveReviewedCustomerSell(reviewedOption, selectedBefore, hotelCtx, currentAuthAmount){
+  // Map review payloads that omit resultDisplayAmount back onto the customer sell scale.
+  // Search/Detail: resultDisplayAmount ≈ supplier totalPrice × markup (e.g. 2000 → 2160).
+  // Review: often only totalPrice (2000). Comparing those directly caused fake ₹2161→₹2001 popups.
+  const currentAuth=hotelMoneyRound(Math.max(0, Number(currentAuthAmount||0)||priceOf(selectedBefore, hotelCtx)));
+  const reviewDisplay=firstPositiveAmount(
+    reviewedOption&&reviewedOption.resultDisplayAmount, reviewedOption&&reviewedOption.displayPrice,
+    reviewedOption&&reviewedOption.finalPrice, reviewedOption&&reviewedOption.finalPayableAmount,
+    reviewedOption&&reviewedOption.pricingBreakup&&reviewedOption.pricingBreakup.sellAmount,
+    reviewedOption&&reviewedOption.raw&&reviewedOption.raw.resultDisplayAmount,
+    reviewedOption&&reviewedOption.raw&&reviewedOption.raw.displayPrice
+  );
+  if(reviewDisplay>0) return hotelMoneyRound(reviewDisplay);
+
+  const reviewSupplier=optionSupplierTotalAmount(reviewedOption)||(!optionHasCustomerDisplayAmount(reviewedOption)?firstPositiveAmount(reviewedOption&&reviewedOption.totalPrice):0);
+  const beforeSupplier=optionSupplierTotalAmount(selectedBefore);
+  const beforeSell=hotelMoneyRound(firstPositiveAmount(priceOf(selectedBefore, hotelCtx), currentAuth));
+
+  // Review omitted customer display fields.
+  if(reviewSupplier>0){
+    if(beforeSupplier>0 && beforeSell>0 && beforeSupplier < beforeSell-0.5){
+      // Reliable markup ratio from detail selection.
+      if(Math.abs(reviewSupplier-beforeSupplier)<1) return beforeSell;
+      return hotelMoneyRound(reviewSupplier*(beforeSell/beforeSupplier));
+    }
+    // No reliable supplier/display split left on the selected option.
+    // Never treat a lower bare totalPrice as a customer price drop vs accepted display sell.
+    if(currentAuth>0 && reviewSupplier<=currentAuth+0.5) return currentAuth;
+    // Bare review total higher than accepted sell → genuine increase on the only available field.
+    if(currentAuth>0 && reviewSupplier>currentAuth+0.5) return hotelMoneyRound(reviewSupplier);
+  }
+  const fallback=hotelMoneyRound(priceOf(reviewedOption, hotelCtx)||currentAuth);
+  return fallback>0?fallback:currentAuth;
+}
 function tyhAssertPriceChain(label, parts){
   try{
     if(!(typeof location!=='undefined' && /[?&]tyhDebug=1(?:&|$)/.test(location.search))) return;
@@ -467,18 +538,12 @@ function roomImagesOf(o, hotel){
     });
   }
   if(out.length) return out;
-  // Last resort: one real hotel main/hero image as visual fallback (not claimed as room-specific).
-  const hotelImgs=allHotelImages(hotel||{});
-  const hero=hotelImgs[0]||imageOf(hotel||{});
-  if(hero) out.push(hero);
+  // No valid room/interior image from API — do NOT fall back to hotel exterior/hero.
   return out;
 }
 function roomImageIsHotelFallback(o, hotel){
-  // True when the only available visual is the hotel hero (no room/content images).
-  const hero=imageOf(hotel||{})||(allHotelImages(hotel||{})[0]||'');
-  if(!hero) return false;
-  const imgs=roomImagesOf(o, hotel);
-  return imgs.length===1 && imgs[0]===hero;
+  // Legacy helper: hotel-exterior fallback is no longer used for room media.
+  return false;
 }
 function customerSafeNote(text){
   let s=String(text==null?'':text);
@@ -868,9 +933,13 @@ function normOption(op, h, i){
   const meal=op.mealBasis||op.boardBasis||op.mb||first.mealBasis||first.boardBasis||first.mb||'';
   const panRequired=!!(op.panRequired||op.ipa||(op.compliance&&op.compliance.panRequired)||op.isPanRequired);
   const passportRequired=!!(op.passportRequired||(op.compliance&&op.compliance.passportRequired));
+  const sell=priceOf(op,h);
+  const listedTotal=firstPositiveAmount(op.totalPrice, op.tp, op.raw&&op.raw.totalPrice, op.raw&&op.raw.tp, op.supplierTotalPrice);
+  // Keep supplier total only when it is clearly below customer sell (markup case).
+  const supplierTotal=(listedTotal>0 && sell>0 && listedTotal < sell-0.5) ? listedTotal : (op.supplierTotalPrice||0);
   return {
     id:id, optionId:id, roomType:String(roomName), roomSummary:String(roomName), mealBasis:String(meal),
-    totalPrice:priceOf(op,h), resultDisplayAmount:priceOf(op,h),
+    totalPrice:sell, resultDisplayAmount:sell, supplierTotalPrice:supplierTotal||0,
     baseFare:Number(op.baseFare||op.pricing&&op.pricing.basePrice||0),
     taxes:Number(op.taxes||op.pricing&&op.pricing.taxes||0),
     managementFee:Number(op.managementFee||op.mf||0),
@@ -920,7 +989,6 @@ function roomTypeMediaHtml(o, hotel){
   hotel=hotel||{};
   const imgs=roomImagesOf(o, hotel);
   const src=imgs[0]||'';
-  const isFallback=roomImageIsHotelFallback(o, hotel);
   const more=Math.max(0, imgs.length-1);
   const first=arr(o.rooms)[0]||{};
   const bedType=first.bedType||first.bed||(first.bed_config&&first.bed_config.description)||first.bt||'';
@@ -938,11 +1006,10 @@ function roomTypeMediaHtml(o, hotel){
     : (src && id ? '<button type="button" class="tyh-room-photo-count" data-open-room-gallery="'+attr(id)+'">View photos</button>' : '');
   return '<div class="tyh-room-media">'
     +(src
-      ? '<div class="tyh-room-media-img'+(isFallback?' is-hotel-fallback':'')+'">'
+      ? '<div class="tyh-room-media-img">'
           +'<img src="'+attr(src)+'" alt="'+attr(o.roomSummary||o.roomType||'Room')+'" loading="lazy">'
           +photoBtn
         +'</div>'
-        +(isFallback?'<p class="tyh-room-fallback-note">Hotel photo shown — room-specific photos not available</p>':'')
       : '<div class="tyh-room-media-img tyh-room-hero-empty"><span>Room photo not available</span></div>')
     +(badges?'<div class="tyh-room-badges">'+badges+'</div>':'')
     +(showAmens.length
@@ -1770,13 +1837,28 @@ function openHotelSheet(title, bodyHtml){
   S.ui.sheet={title:title, body:bodyHtml||''};
   S.ui.galleryOpen=false;
   S.ui.roomGallery={open:false,optionId:'',index:0};
-  document.body.classList.add('tyh-modal-lock');
-  refreshCurrentHotelStep();
+  mountHotelSheetPortal();
 }
 function closeHotelSheet(){
   S.ui.sheet=null;
+  unmountHotelSheetPortal();
   document.body.classList.remove('tyh-modal-lock');
-  refreshCurrentHotelStep();
+}
+function unmountHotelSheetPortal(){
+  const el=document.getElementById('tyhSheetPortal');
+  if(el&&el.parentNode) el.parentNode.removeChild(el);
+}
+function mountHotelSheetPortal(){
+  unmountHotelSheetPortal();
+  if(!S.ui.sheet) return;
+  const wrap=document.createElement('div');
+  wrap.id='tyhSheetPortal';
+  wrap.innerHTML=hotelDetailSheetHtml();
+  document.body.appendChild(wrap);
+  document.body.classList.add('tyh-modal-lock');
+  qa('[data-sheet-close]',wrap).forEach(function(b){
+    b.onclick=function(e){ e.preventDefault(); e.stopPropagation(); closeHotelSheet(); };
+  });
 }
 function renderHotelDetailsPlumbing(){
   const h=S.detailHotel;
@@ -1881,8 +1963,7 @@ function renderHotelDetailsPlumbing(){
       +'</article>'
     +'</main>'
     +galleryHtml(h)
-    +roomGalleryHtml(h)
-    +hotelDetailSheetHtml();
+    +roomGalleryHtml(h);
 
   shell(content,{title:h.name||'Hotel details', sub:'Hotel details'});
   bindResults();
@@ -2434,9 +2515,10 @@ function buildHotelReviewOutcome(reviewPack, selectedBefore, hotelCtx, currentAu
   const reviewedHotel=reviewData.hotel ? normHotel(Object.assign({},reviewData.hotel,{searchContext:res.searchContext||context,reviewHash:realReviewHash(hotelCtx)}),0) : hotelCtx;
   const reviewedOption=reviewData.option ? normOption(reviewData.option, reviewedHotel, 0) : selectedBefore;
   const reviewBookingId=reviewData.bookingId||raw.bookingId||res.bookingId||'';
-  const newSellRaw=priceOf(reviewedOption, reviewedHotel);
-  const newSell=hotelMoneyRound(newSellRaw);
   const currentAuth=hotelMoneyRound(Math.max(0, Number(currentAuthAmount||0)||priceOf(selectedBefore, hotelCtx)));
+  // Resolve customer sell on the same scale as Results/Detail (markup-inclusive display).
+  // Never treat review-only totalPrice (supplier) as a genuine drop vs resultDisplayAmount.
+  const newSell=resolveReviewedCustomerSell(reviewData.option||reviewedOption, selectedBefore, hotelCtx, currentAuth);
   // Popup only when the rounded customer sell amount genuinely differs.
   // Backend isPriceChanged alone must NOT force a modal when amounts match after round.
   const priceChanged=currentAuth>0 && newSell>0 && Math.abs(newSell-currentAuth)>=1;
@@ -2719,7 +2801,6 @@ function renderGuestStep(){
   if((!d.contact||!d.contact.email||!d.contact.phone) && (contact.email||contact.phone)){
     setDraft({contact:Object.assign({}, d.contact||{}, {email:contact.email||(d.contact&&d.contact.email)||'', phone:contact.phone||(d.contact&&d.contact.phone)||'', countryCode:contact.countryCode})});
   }
-  const gst=d.gst||{};
   const needPass=optionRequiresPassport();
   const needPan=optionRequiresPan();
   const panOptional=optionPanOptional();
@@ -2836,16 +2917,11 @@ function renderGuestStep(){
       +'<div class="tyh-section-head"><h2>Important information</h2></div>'
       +hotelBookingNotesHtml(h,o,reviewRaw())
       +generalTermsPreviewHtml(!!S.ui.termsExpanded)
-      +'<div class="tyh-policy-actions"><button type="button" class="tyh-hotel-rules-btn" data-policy="hotel">Hotel rules</button></div>'
+      +'<div class="tyh-policy-actions"><button type="button" class="tyh-hotel-rules-link" data-policy="hotel">Hotel rules</button></div>'
     +'</section>'
     +'<section class="tyh-panel tyh-special-panel">'
       +'<div class="tyh-section-head"><h2>Special request <small>optional</small></h2></div>'
       +'<label><textarea data-special-request rows="3" placeholder="Enter your special requests here">'+esc(d.specialRequest||'')+'</textarea></label>'
-    +'</section>'
-    +'<section class="tyh-panel">'
-      +'<div class="tyh-section-head"><h2>GST details <small>optional</small></h2></div>'
-      +'<label class="tyh-check"><input type="checkbox" data-gst-enabled '+(gst.enabled?'checked':'')+'> Add GST details</label>'
-      +(gst.enabled?'<div class="tyh-form-grid"><label>GST number<input data-gst="number" value="'+attr(gst.number||'')+'"></label><label>Company name<input data-gst="company" value="'+attr(gst.company||'')+'"></label></div>':'')
     +'</section>'
   +'</div>';
 
@@ -2857,7 +2933,6 @@ function renderGuestStep(){
     +((!desktop && S.ui.fareSheetOpen)
       ? '<div class="tyh-modal-bg" data-fare-sheet-close></div><section class="tyh-fare-sheet" role="dialog" aria-label="Fare details"><header><h2>Fare details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header><div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:parts.roomBase,taxesFees:parts.taxesFees,serviceFee:parts.serviceFee,discount:parts.discount,total:finalPay,occupancy:occupancySummaryText(Object.assign({},d,{guests:guests}))})+offersHtml+'</div></section>'
       : '')
-    +hotelDetailSheetHtml()
   +'</main>';
 
   shell(content,{title:'Review Your Booking', hideLogo:true, sub:''});
@@ -3015,9 +3090,6 @@ function bindGuest(){
       setDraft({contact:c});
     };
   }
-  const ge=q('[data-gst-enabled]',root);
-  if(ge) ge.onchange=function(e){ const d=draft(), g=Object.assign({},d.gst||{}); g.enabled=e.target.checked; setDraft({gst:g}); renderGuestStep(); };
-  qa('[data-gst]',root).forEach(function(i){ i.oninput=function(){ const d=draft(), g=Object.assign({},d.gst||{}); g[i.dataset.gst]=i.value; setDraft({gst:g}); }; });
   const plusGuest=q('[data-plus-guest]',root);
   if(plusGuest) plusGuest.onclick=function(){
     saveGuest(S.guestIndex);
@@ -3500,78 +3572,171 @@ async function tyhFirebaseSocialLogin(providerName, payload){
 function tyhContactEmail(d){ return d?.contact?.email || d?.contactEmail || d?.email || ""; }
 function tyhContactPhone(d){ const c=d?.contact||{}; const phone=String(c.phone||d?.contactPhone||d?.phone||"").replace(/\D/g,""); const code=String(c.countryCode||d?.countryCode||"+91").replace(/[^+\d]/g,""); return phone ? code+phone : ""; }
 function tyhContactName(d){ const c=d?.contact||{}; const g=arr(d?.guests)[0]||{}; return c.name || [g.title,g.firstName,g.lastName].filter(Boolean).join(" "); }
-function tyhGuestOtpModal(){ let el=document.getElementById("tyHotelGuestOtpModal"); if(el)return el; el=document.createElement("div"); el.id="tyHotelGuestOtpModal"; el.innerHTML='<div class="tygo-backdrop"></div><div class="tygo-card"><button class="tygo-x" type="button">×</button><h2>Verify booking contact</h2><p class="tygo-sub">Enter OTP sent to your email/mobile to continue payment.</p><div class="tygo-sent"></div><input class="tygo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digit OTP"><button class="tygo-primary" type="button">Verify & Continue</button><button class="tygo-link" type="button">Resend OTP</button><p class="tygo-msg"></p></div>'; if(!document.getElementById("tyGuestOtpStyle")){ const css=document.createElement("style"); css.id="tyGuestOtpStyle"; css.textContent='.tygo-backdrop{position:fixed;inset:0;background:rgba(7,29,73,.48);z-index:999998}.tygo-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:999999;width:min(430px,calc(100% - 28px));background:#fff;border-radius:24px;padding:24px;box-shadow:0 30px 90px rgba(7,29,73,.28);font-family:Inter,system-ui,sans-serif;color:#071d49}.tygo-x{position:absolute;right:14px;top:12px;width:34px;height:34px;border-radius:12px;border:1px solid #e5edf7;background:#fff;font-size:22px}.tygo-card h2{margin:0 34px 8px 0;font-size:23px}.tygo-sub{margin:0 0 12px;color:#667085;font-weight:750;line-height:1.45}.tygo-sent{font-size:12px;color:#0062e3;font-weight:900;margin-bottom:10px}.tygo-otp{width:100%;height:52px;border:1px solid #dbe7f5;border-radius:14px;padding:0 16px;font-size:22px;font-weight:900;letter-spacing:8px;text-align:center;outline:none}.tygo-primary{width:100%;height:50px;border:0;border-radius:999px;background:#0062e3;color:#fff;font-weight:950;font-size:15px;margin-top:13px}.tygo-link{width:100%;border:0;background:#fff;color:#0062e3;font-weight:900;margin-top:12px}.tygo-msg{min-height:18px;color:#b42318;font-weight:800;font-size:13px;margin:10px 0 0}'; document.head.appendChild(css); } document.body.appendChild(el); return el; }
-function tyhCloseGuestOtpModal(){ const el=document.getElementById("tyHotelGuestOtpModal"); if(el)el.remove(); }
-async function tyhGuestPost(path,body,token){ const headers=Object.assign({"Content-Type":"application/json","Accept":"application/json"}, token?{Authorization:"Bearer "+token}:{}); const res=await fetch(API+path,{method:"POST",headers,body:JSON.stringify(body),cache:"no-store"}); const data=await res.json().catch(()=>({})); if(!res.ok||data.success===false) throw new Error(data.message||data.error||("HTTP "+res.status)); return data; }
-async function tyhStartGuestOtp(payload){ const d=payload.details||{}; const body=Object.assign({},payload,{service:"hotel",email:tyhContactEmail(d),phone:tyhContactPhone(d),name:tyhContactName(d),payload}); if(!body.email&&!body.phone) throw new Error("Please enter email or mobile number before payment."); const data=await tyhGuestPost("/api/bookings/guest-auth/start-otp",body); sessionStorage.setItem("ty_last_guest_otp",JSON.stringify({otpSessionId:data.otpSessionId,guestSessionId:data.guestSessionId,payload})); return data; }
-async function tyhVerifyGuestOtp(otp){ const saved=JSON.parse(sessionStorage.getItem("ty_last_guest_otp")||"{}"); const data=await tyhGuestPost("/api/bookings/guest-auth/verify-otp",{otpSessionId:saved.otpSessionId,guestSessionId:saved.guestSessionId,otp}); if(data.authToken)localStorage.setItem("ty_user_auth_token",data.authToken); if(data.user)localStorage.setItem("ty_user_profile",JSON.stringify(data.user)); return data; }
-async function tyhRequireGuestOtpBeforePayment(payload){
-  const existing=await tyhEnsureBackendAuthBeforePayment(payload).catch(function(){ return null; });
-  if(existing&&existing.authToken){
-    return existing;
-  }
-  const authed=await tyhRequireTravelYaraaLogin(payload);
-  if(authed&&(authed.authToken||tyhGuestAuthToken())){
-    const synced=await tyhEnsureBackendAuthBeforePayment(payload).catch(function(){ return null; });
-    if(synced&&synced.authToken) return synced;
-    return {authToken:authed.authToken||tyhGuestAuthToken(), user:authed.user||JSON.parse(localStorage.getItem('ty_user_profile')||'{}'), reused:!!authed.reused};
-  }
-  const sent=await tyhStartGuestOtp(payload);
-  const el=tyhGuestOtpModal();
-  el.querySelector(".tygo-sent").textContent="Sent to: "+(sent.sent||[]).map(x=>x.to).join(", ");
-  const input=el.querySelector(".tygo-otp");
-  const msg=el.querySelector(".tygo-msg");
-  input.value="";
-  setTimeout(()=>input.focus(),50);
-  return await new Promise(function(resolve,reject){
-    let active=true;
-    function finish(v){if(!active)return;active=false;tyhCloseGuestOtpModal();resolve(v)}
-    function fail(e){if(!active)return;active=false;tyhCloseGuestOtpModal();reject(e)}
-    el.querySelector(".tygo-x").onclick=function(){fail(new Error("OTP verification cancelled."))};
-    el.querySelector(".tygo-primary").onclick=async function(){try{msg.textContent="Verifying OTP...";finish(await tyhVerifyGuestOtp(input.value));}catch(e){msg.textContent=e.message||"Invalid OTP."}};
-    el.querySelector(".tygo-link").onclick=async function(){try{msg.textContent="Sending new OTP..."; const again=await tyhStartGuestOtp(payload); el.querySelector(".tygo-sent").textContent="Sent to: "+(again.sent||[]).map(x=>x.to).join(", "); msg.textContent="New OTP sent.";}catch(e){msg.textContent=e.message||"Could not resend OTP.";}};
-  });
-}
-function tyhLoginModal(){
-  let el=document.getElementById("tyHotelLoginModal");
+function tyhGuestOtpModal(){
+  let el=document.getElementById('tyHotelGuestOtpModal');
   if(el) return el;
-  el=document.createElement("div");
-  el.id="tyHotelLoginModal";
-  el.innerHTML='<div class="tyhl-backdrop"></div><div class="tyhl-card"><button class="tyhl-x" type="button" aria-label="Close">×</button><h2>Sign in to continue</h2><p class="tyhl-sub">Use your TravelYaraa account before payment. Booking details stay saved.</p><button class="tyhl-google" type="button">Continue with Google</button><button class="tyhl-account" type="button">Email / Password login</button><p class="tyhl-msg"></p></div>';
-  if(!document.getElementById("tyHotelLoginStyle")){
-    const css=document.createElement("style");
-    css.id="tyHotelLoginStyle";
-    css.textContent='.tyhl-backdrop{position:fixed;inset:0;background:rgba(7,29,73,.48);z-index:999998}.tyhl-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:999999;width:min(430px,calc(100% - 28px));background:#fff;border-radius:24px;padding:24px;box-shadow:0 30px 90px rgba(7,29,73,.28);font-family:Inter,system-ui,sans-serif;color:#071d49}.tyhl-x{position:absolute;right:14px;top:12px;width:34px;height:34px;border-radius:12px;border:1px solid #e5edf7;background:#fff;font-size:22px}.tyhl-card h2{margin:0 34px 8px 0;font-size:22px}.tyhl-sub{margin:0 0 14px;color:#667085;font-weight:750;line-height:1.45}.tyhl-google,.tyhl-account{width:100%;height:48px;border-radius:999px;font-weight:950;font-size:14px;margin-top:10px}.tyhl-google{border:0;background:#0062e3;color:#fff}.tyhl-account{border:1px solid #dbe7f5;background:#fff;color:#071d49}.tyhl-msg{min-height:18px;color:#b42318;font-weight:800;font-size:13px;margin:10px 0 0}';
+  el=document.createElement('div');
+  el.id='tyHotelGuestOtpModal';
+  // Match Flight booking login/signup sheet (same layout + Google/OTP flow).
+  el.innerHTML='<div class="tygo-backdrop"></div><div class="tygo-sheet" role="dialog" aria-modal="true" aria-label="Login or Create account"><button class="tygo-close" type="button" aria-label="Close">×</button><h2>Login or Create an account</h2><p class="tygo-sub">Continue with your email id or mobile number. If your account does not exist, TravelYaraa will create it automatically after OTP verification.</p><label class="tygo-label">Enter Email Id / Mobile Number</label><div class="tygo-input-wrap"><span class="tygo-input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/><path d="M7 20h10"/></svg></span><input class="tygo-login-input" type="text" autocomplete="email tel" inputmode="email" placeholder="Enter your Email Id / Mobile no."></div><button class="tygo-primary" type="button">LOGIN</button><div class="tygo-otp-area" hidden><label class="tygo-label">Enter OTP</label><input class="tygo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digit OTP"><button class="tygo-link" type="button">Resend OTP</button></div><div class="tygo-or"><span></span><b>Or Login Via</b><span></span></div><div class="tygo-social-row"><button class="tygo-social tygo-google" type="button" aria-label="Continue with Google"><span class="tygo-g">G</span><em>Google</em></button></div><p class="tygo-sent"></p><p class="tygo-msg"></p></div>';
+  if(!document.getElementById('tyGuestOtpStyle')){
+    const css=document.createElement('style');
+    css.id='tyGuestOtpStyle';
+    css.textContent='.tygo-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:999998}.tygo-sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:999999;width:min(520px,100%);background:#fff;border-radius:24px 24px 0 0;padding:26px 24px calc(24px + env(safe-area-inset-bottom));box-shadow:0 -18px 70px rgba(7,29,73,.25);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#071d49;box-sizing:border-box}.tygo-sheet *{box-sizing:border-box}.tygo-close{position:absolute;right:16px;top:14px;width:38px;height:38px;border-radius:50%;border:0;background:#071d49;color:#fff;font-size:28px;line-height:36px;font-weight:400}.tygo-sheet h2{margin:0 46px 22px 0;font-size:25px;line-height:1.12;font-weight:950;color:#111}.tygo-sub{display:none}.tygo-label{display:block;margin:0 0 10px;color:#222;font-weight:750;font-size:16px}.tygo-input-wrap{height:58px;border:1px solid #d8dce4;border-radius:14px;background:#fff;display:flex;align-items:center;gap:12px;padding:0 16px}.tygo-input-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#111;flex:0 0 28px}.tygo-input-icon svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.tygo-login-input{border:0;outline:0;width:100%;height:100%;font-size:17px;font-weight:650;color:#111;min-width:0}.tygo-login-input::placeholder{color:#a8a8a8}.tygo-primary{width:100%;height:60px;border:0;border-radius:999px;background:linear-gradient(90deg,#2678ff,#4fd2ef);color:#fff;font-weight:900;font-size:18px;letter-spacing:.05em;margin-top:20px;box-shadow:0 14px 28px rgba(38,120,255,.20)}.tygo-primary:disabled{opacity:.65}.tygo-otp-area{margin-top:18px}.tygo-otp{width:100%;height:52px;border:1px solid #d8dce4;border-radius:14px;padding:0 14px;font-size:22px;font-weight:900;letter-spacing:8px;text-align:center;outline:0}.tygo-link{display:block;width:100%;border:0;background:#fff;color:#0062e3;font-size:15px;font-weight:900;margin-top:12px}.tygo-or{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin:22px 0 12px;color:#777;font-weight:650}.tygo-or span{height:1px;background:#ddd}.tygo-or b{font-size:14px;font-weight:650;white-space:nowrap}.tygo-social-row{display:flex;justify-content:center;gap:18px}.tygo-social{border:0;background:#fff;min-width:78px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#333;font-weight:700}.tygo-social span{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;box-shadow:0 2px 12px rgba(7,29,73,.13);font-weight:950;font-size:28px}.tygo-g{color:#ea4335}.tygo-social em{font-style:normal;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:1px 10px;font-size:13px;color:#555}.tygo-sent{min-height:18px;margin:12px 0 0;color:#0062e3;font-size:13px;font-weight:850}.tygo-msg{min-height:18px;margin:8px 0 0;color:#b42318;font-size:13px;font-weight:850;line-height:1.3}@media(min-width:760px){.tygo-sheet{top:50%;bottom:auto;transform:translate(-50%,-50%);border-radius:24px;padding:28px}}';
     document.head.appendChild(css);
   }
   document.body.appendChild(el);
   return el;
 }
-function tyhCloseLoginModal(){ const el=document.getElementById("tyHotelLoginModal"); if(el) el.remove(); }
-async function tyhRequireTravelYaraaLogin(payload){
+function tyhCloseGuestOtpModal(){ const el=document.getElementById('tyHotelGuestOtpModal'); if(el) el.remove(); }
+async function tyhGuestPost(path,body,token){
+  const headers=Object.assign({'Content-Type':'application/json','Accept':'application/json'}, token?{Authorization:'Bearer '+token}:{});
+  const cleanPath=String(path||'');
+  const candidates=[cleanPath];
+  if(cleanPath==='/api/bookings/guest-auth/start-otp'){
+    candidates.push('/api/bookings/guest-auth/send-otp','/api/guest-auth/start-otp','/api/auth/guest/start-otp');
+  }
+  if(cleanPath==='/api/bookings/guest-auth/verify-otp'){
+    candidates.push('/api/guest-auth/verify-otp','/api/auth/guest/verify-otp');
+  }
+  let lastMessage='';
+  for(let i=0;i<candidates.length;i++){
+    const route=candidates[i];
+    const res=await fetch(API+route,{method:'POST',headers,body:JSON.stringify(body),cache:'no-store'});
+    const data=await res.json().catch(function(){ return {}; });
+    if(res.ok && data.success!==false) return data;
+    lastMessage=data.message||data.error||('HTTP '+res.status);
+    if(res.status!==404){
+      const error=new Error(lastMessage);
+      error.code=data.code||'';
+      throw error;
+    }
+  }
+  throw new Error(lastMessage||'API route not found');
+}
+async function tyhStartGuestOtp(payload){
+  const d=payload.details||{};
+  const body=Object.assign({},payload,{service:'hotel',email:tyhContactEmail(d),phone:tyhContactPhone(d),name:tyhContactName(d),payload});
+  if(!body.email&&!body.phone) throw new Error('Please enter email or mobile number before payment.');
+  const data=await tyhGuestPost('/api/bookings/guest-auth/start-otp',body);
+  sessionStorage.setItem('ty_last_guest_otp',JSON.stringify({otpSessionId:data.otpSessionId,guestSessionId:data.guestSessionId,payload}));
+  return data;
+}
+async function tyhVerifyGuestOtp(otp){
+  const saved=JSON.parse(sessionStorage.getItem('ty_last_guest_otp')||'{}');
+  const data=await tyhGuestPost('/api/bookings/guest-auth/verify-otp',{otpSessionId:saved.otpSessionId,guestSessionId:saved.guestSessionId,otp});
+  if(data.authToken){
+    localStorage.setItem('ty_user_auth_token',data.authToken);
+    localStorage.setItem('ty_guest_otp_verified_at',String(Date.now()));
+  }
+  if(data.user){
+    localStorage.setItem('ty_user_profile',JSON.stringify(data.user));
+    localStorage.setItem('travelYaraaUser',JSON.stringify(data.user));
+    localStorage.setItem('tyUserLoggedIn','true');
+  }
+  return data;
+}
+async function tyhRequireGuestOtpBeforePayment(payload){
+  // Always clear payment loader before any login UI so the sheet is not covered.
+  hideLoader();
   const existing=await tyhEnsureBackendAuthBeforePayment(payload).catch(function(){ return null; });
   if(existing&&existing.authToken) return existing;
+  if(tyhGuestAuthToken()){
+    const user=tyhRecognizedLoggedInUser();
+    if(user){
+      tyhSyncLoggedInUserForBooking(payload, user);
+      return {authToken:tyhGuestAuthToken(), user:user, reused:true};
+    }
+  }
   try{ sessionStorage.setItem('ty_hotel_pending_payment', JSON.stringify({at:Date.now(), step:currentStep(), draft:draft(), payload:payload||null})); }catch(e){}
-  const el=tyhLoginModal();
-  const msg=el.querySelector('.tyhl-msg');
+  const el=tyhGuestOtpModal();
+  const loginInput=el.querySelector('.tygo-login-input');
+  const otpArea=el.querySelector('.tygo-otp-area');
+  const otpInput=el.querySelector('.tygo-otp');
+  const sentBox=el.querySelector('.tygo-sent');
+  const message=el.querySelector('.tygo-msg');
+  const primary=el.querySelector('.tygo-primary');
+  const resend=el.querySelector('.tygo-link');
+  const googleBtn=el.querySelector('.tygo-google');
+  const existingEmail=tyhContactEmail(payload.details||payload)||'';
+  const existingPhone=tyhContactPhone(payload.details||payload)||'';
+  loginInput.value=existingEmail||existingPhone||'';
   return await new Promise(function(resolve,reject){
     let active=true;
-    function finish(v){ if(!active) return; active=false; tyhCloseLoginModal(); resolve(v); }
-    function fail(e){ if(!active) return; active=false; tyhCloseLoginModal(); reject(e); }
-    el.querySelector('.tyhl-x').onclick=function(){ fail(new Error('Login cancelled.')); };
-    el.querySelector('.tyhl-google').onclick=async function(){
+    let otpSent=false;
+    function finish(v){ if(!active) return; active=false; tyhCloseGuestOtpModal(); resolve(v); }
+    function fail(e){ if(!active) return; active=false; tyhCloseGuestOtpModal(); reject(e); }
+    function syncContactFromInput(){
+      const value=String(loginInput.value||'').trim();
+      const details=Object.assign({}, payload.details||draft());
+      const contact=Object.assign({}, details.contact||{});
+      if(value.includes('@')){
+        contact.email=value;
+      } else {
+        contact.phone=value.replace(/\D/g,'');
+      }
+      details.contact=contact;
+      payload.details=details;
+      setDraft({contact:contact});
+      return value;
+    }
+    async function socialNow(){
       try{
-        msg.textContent='Opening Google sign-in...';
-        const data=await tyhFirebaseSocialLogin('google', payload);
-        finish(data);
-      }catch(e){ msg.textContent=e.message||'Google sign-in failed.'; }
-    };
-    el.querySelector('.tyhl-account').onclick=function(){
+        message.textContent='Opening Google login...';
+        googleBtn.disabled=true;
+        const ok=await tyhFirebaseSocialLogin('google', payload);
+        message.textContent='Login successful. Continuing payment...';
+        finish(ok);
+      }catch(e){
+        message.textContent=e.message||'Google sign-in failed.';
+      }finally{
+        googleBtn.disabled=false;
+      }
+    }
+    async function sendOtpNow(){
+      const value=syncContactFromInput();
+      if(!value){
+        message.textContent='Enter mobile number or use Google login.';
+        return;
+      }
+      if(value.includes('@')){
+        await socialNow();
+        return;
+      }
       try{
-        sessionStorage.setItem('ty_login_redirect', location.pathname+location.search);
-      }catch(e){}
-      location.href='/index.html?openLogin=1&redirect='+encodeURIComponent(location.pathname+location.search);
-    };
+        primary.disabled=true;
+        message.textContent='Sending OTP...';
+        const sent=await tyhStartGuestOtp(payload);
+        otpSent=true;
+        otpArea.hidden=false;
+        primary.textContent='VERIFY & CONTINUE';
+        sentBox.textContent='OTP sent'+((sent.sent||[]).length?' to '+(sent.sent||[]).map(function(x){ return x.to; }).join(', '):'.');
+        message.textContent='';
+        otpInput.value='';
+        setTimeout(function(){ otpInput.focus(); }, 60);
+      }catch(e){
+        message.textContent=e.message||'OTP could not be sent.';
+      }finally{
+        primary.disabled=false;
+      }
+    }
+    async function verifyOtpNow(){
+      try{
+        primary.disabled=true;
+        message.textContent='Verifying OTP...';
+        finish(await tyhVerifyGuestOtp(otpInput.value));
+      }catch(e){
+        message.textContent=e.message||'Invalid OTP.';
+      }finally{
+        primary.disabled=false;
+      }
+    }
+    el.querySelector('.tygo-close').onclick=function(){ fail(new Error('Login verification cancelled.')); };
+    primary.onclick=async function(){ otpSent ? await verifyOtpNow() : await sendOtpNow(); };
+    if(resend) resend.onclick=async function(){ otpSent=false; await sendOtpNow(); };
+    if(googleBtn) googleBtn.onclick=function(){ socialNow(); };
+    loginInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); primary.click(); } });
+    otpInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); primary.click(); } });
   });
 }
 
@@ -3613,10 +3778,13 @@ async function proceedToPayment(){
       countryOfResidence:d.countryOfResidence||(d.searchPayload&&d.searchPayload.countryOfResidence)||searchResidenceCountry()
     });
     const payload={ service:'hotel', clientRequestId, search:searchPay, selectedResult:Object.assign({},hotel(),{service:'hotel',hotelId:hotel().hotelId||hotel().id,optionId:d.optionId||option().optionId||option().id,rawOption:option().raw||option()}), details:Object.assign({},d,{clientRequestId,searchPayload:searchPay,nationality:searchPay.nationality,countryOfResidence:searchPay.countryOfResidence,offerCode:d.offerCode||(d.appliedOffer&&(d.appliedOffer.offerCode||d.appliedOffer.code))||null,appliedOffer:d.appliedOffer||null,discountAmount:d.discountAmount||0,baseBookingAmount:parts.sell,travelYaraaServiceFee:parts.serviceFee,serviceFee:parts.serviceFee,convenienceFee:parts.serviceFee,finalPayableAmount:parts.total}), supplier:'tripjack', tripjackReviewRaw:reviewRaw() };
+    // Hide loader BEFORE login UI so auth sheet is never covered by payment loader.
+    hideLoader();
     await tyhRequireGuestOtpBeforePayment(payload);
     if(!tyhGuestAuthToken()){
       throw new Error('Please log in to your TravelYaraa account.');
     }
+    showLoader('Opening secure payment...');
     let order;
     try{
       order=await api('/api/bookings/create-payment-order',payload);
@@ -4385,7 +4553,7 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-mini-body{min-width:0}
 .tyh-mini-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .tyh-mini-head-row h2{margin:0;flex:1;min-width:0}
-.tyh-back-details{border:0;background:transparent;color:var(--ty-orange);font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap;padding:0}
+.tyh-back-details{border:0;background:transparent;color:var(--ty-orange);font-size:12px;font-weight:900;cursor:pointer;white-space:normal;padding:0;text-align:left;align-self:flex-start;max-width:100%;line-height:1.35}
 .tyh-stay-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:center;margin-top:14px;padding:12px 14px;border-radius:12px;background:#f5f7fa;border:1px solid #e4e9f2}
 .tyh-stay-cell small{display:block;color:#5b6b86;font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;margin-bottom:4px}
 .tyh-stay-cell b{display:block;color:var(--ty-navy);font-size:14px;font-weight:900;line-height:1.25}
@@ -4475,10 +4643,22 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-search-compact{margin:10px 10px 0;padding:12px}
 .tyh-offers-card,.tyh-fare-summary{width:100%;max-width:100%}
 .tyh-offer-item{flex-wrap:wrap}
-.tyh-stay-strip{grid-template-columns:1fr 1fr;gap:10px}
+.tyh-stay-strip{grid-template-columns:1fr 1fr;gap:8px;padding:10px}
 .tyh-stay-nights{grid-column:1 / -1}
+.tyh-stay-cell b{font-size:13px}
 .tyh-selected-room-grid,.tyh-selected-room-plan{grid-template-columns:1fr;text-align:left}
-.tyh-mini-head-row{flex-direction:column;align-items:flex-start}
+.tyh-mini-head-row{flex-direction:column;align-items:flex-start;gap:6px}
+.tyh-mini-head-row .tyh-back-details{align-self:flex-start;margin:0;text-align:left;width:auto;max-width:100%}
+.tyh-mini-body h2{font-size:17px;line-height:1.25}
+.tyh-panel{padding:12px;border-radius:14px}
+.tyh-section-head h2{font-size:15px}
+.tyh-book-flow .tyh-cta,.tyh-book-flow .tyh-side-cta{width:100%;max-width:100%}
+.tyh-room-type-card{display:grid;grid-template-columns:1fr;gap:12px;padding:12px}
+.tyh-room-media-img img{width:100%;height:180px;object-fit:cover;border-radius:12px}
+.tyh-room-hero-empty{min-height:140px;font-size:12px}
+.tyh-rate-text{padding:10px 0}
+.tyh-rate-side strong{font-size:18px}
+.tyh-hotel-rules-link{font-size:12px}
 .tyh-book,.tyh-status{overflow-x:clip}
 }
 .tyh-coupon-box{margin:10px 0;padding-top:10px;border-top:1px dashed var(--ty-line);display:grid;gap:8px}
@@ -4488,7 +4668,10 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-policy-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}
 .tyh-policy-actions button,.tyh-hotel-rules-btn{border:1px solid #c9daf5;background:#f4f8ff;border-radius:12px;padding:10px 14px;font-weight:900;color:var(--ty-blue);cursor:pointer;font-size:13px}
 .tyh-policy-actions button:hover,.tyh-hotel-rules-btn:hover{background:#eaf2ff}
+.tyh-hotel-rules-link{border:0!important;background:transparent!important;border-radius:0!important;padding:0!important;margin:0;font-weight:800;font-size:13px;color:var(--ty-blue);cursor:pointer;text-decoration:underline;text-underline-offset:3px;line-height:1.4}
+.tyh-hotel-rules-link:hover{color:var(--ty-navy);background:transparent!important}
 .tyh-policy-actions button.active{background:#0062e3}
+.tyh-room-hero-empty{min-height:180px;display:grid;place-items:center;background:linear-gradient(180deg,#f4f8ff,#eef4ff);border:1px dashed #c9daf5;border-radius:14px;color:var(--ty-muted);font-size:13px;font-weight:800;padding:16px;text-align:center}
 .tyh-mini{display:grid;gap:12px;grid-template-columns:1fr}
 .tyh-mini-top{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:start}
 .tyh-stay-strip,.tyh-stay-times{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:12px;border-radius:14px;background:linear-gradient(180deg,#f4f8ff 0%,#eef4ff 100%);border:1px solid #d9e6fb}
@@ -4542,10 +4725,19 @@ body.tyh-modal-lock{overflow:hidden}
 .tyh-sheet-modal,.tyh-fare-sheet{top:auto;bottom:0;left:0;right:0;transform:none;width:100%;border-radius:22px 22px 0 0;max-height:86vh}
 }
 @media(max-width:420px){
-.tyh-guest-names-grid{grid-template-columns:80px minmax(0,1fr) minmax(0,1fr)}
-.tyh-guest-title{max-width:80px}
+.tyh-guest-names-grid{grid-template-columns:72px minmax(0,1fr);gap:8px}
+.tyh-guest-names-grid .tyh-guest-title{grid-column:1;max-width:72px}
+.tyh-guest-names-grid label:nth-child(2),
+.tyh-guest-names-grid label:nth-child(3){grid-column:2}
+.tyh-guest-title{max-width:72px}
 .tyh-contact-grid{grid-template-columns:1fr}
 .tyh-ccode{max-width:none}
+.tyh-phone-row{grid-template-columns:84px minmax(0,1fr);gap:8px}
+.tyh-bottom{padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));gap:8px}
+.tyh-bottom .tyh-fare-tap{flex:1;min-width:0;padding:8px 10px}
+.tyh-bottom button[data-pay]{flex:0 0 auto;padding:0 12px;font-size:13px;height:44px;white-space:nowrap}
+.tyh-stay-cell small{font-size:10px}
+.tyh-stay-cell b{font-size:12px}
 }
 .tyh-notify-root{position:fixed;inset:0;z-index:230;display:flex;align-items:center;justify-content:center;padding:20px}
 .tyh-notify-root.tyh-notify-mobile{align-items:flex-end;padding:0}
