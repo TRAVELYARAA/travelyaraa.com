@@ -833,6 +833,11 @@ function hotelBaseFareAmount(o,h){
   )));
 }
 function hotelMoneyRound(n){ return Math.round(Number(n||0)); }
+function hotelPaymentRoomCount(d){
+  d=d||draft();
+  const s=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}, (d&&d.searchPayload)||{}));
+  return Math.max(1, Number(s.roomCount||arr(s.rooms).length||1));
+}
 function hotelFareParts(d){
   d=d||draft();
   const o=d.option||option();
@@ -858,9 +863,12 @@ function hotelFareParts(d){
   let taxesFees=feeWaived?0:hotelMoneyRound(Math.max(0, serviceFee));
   const canonicalPayable=hotelCustomerPayableAmount(o,h);
   let total;
+  // One whole-rupee payable: prefer backend-approved offer total, else room+fee-discount, else locked draft (no stale discounted draft after remove).
   if(applied && Number(applied.finalPayableAmount)>0) total=hotelMoneyRound(applied.finalPayableAmount);
-  else if(Number(d.finalPayableAmount)>0 && discount<=0) total=hotelMoneyRound(d.finalPayableAmount);
-  else if(discount>0 && canonicalPayable>0) total=canonicalPayable;
+  else if(discount>0){
+    const before=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0)));
+    total=hotelMoneyRound(Math.max(0, before-discount));
+  } else if(Number(d.finalPayableAmount)>0) total=hotelMoneyRound(d.finalPayableAmount);
   else total=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0)));
   // Keep authoritative fee visible; reconcile only ±1 rounding drift into Taxes & Fees.
   if(!feeWaived){
@@ -881,6 +889,7 @@ function hotelFareParts(d){
     sell:hotelMoneyRound(sell),
     discount:discount,
     total:total,
+    roomCount:hotelPaymentRoomCount(d),
     occupancy:occupancySummaryText(d)
   };
   tyhAssertPriceChain('hotelFareParts', parts);
@@ -902,10 +911,11 @@ function fareSummaryBlockHtml(opts){
   const taxesFees=Number(opts.taxesFees!=null?opts.taxesFees:(Number(opts.taxes||0)+Number(opts.fees||0)+Number(opts.serviceFee||0)));
   const discount=Math.max(0, Number(opts.discount||0));
   const total=Number(opts.total||0);
+  const roomCount=Math.max(1, Number(opts.roomCount||hotelPaymentRoomCount()||1));
   const stickyClass=opts.stickyClass?(' '+String(opts.stickyClass)):'';
   return '<aside class="tyh-fare-summary'+stickyClass+'">'+
     '<div class="tyh-fare-head"><h2>Payment summary</h2></div>'+
-    '<div class="tyh-kv"><span>Room Price</span><b>'+fareMoney(base)+'</b></div>'+
+    '<div class="tyh-kv"><span>Room Price × '+esc(String(roomCount))+'</span><b>'+fareMoney(base)+'</b></div>'+
     '<div class="tyh-kv"><span>Taxes &amp; Fees</span><b>'+fareMoney(taxesFees)+'</b></div>'+
     (discount>0?'<div class="tyh-kv tyh-discount-row"><span>Discount</span><b>-'+fareMoney(discount)+'</b></div>':'')+
     '<div class="tyh-kv total"><span>Total Payment</span><b>'+fareMoney(total)+'</b></div>'+
@@ -2258,7 +2268,7 @@ function guestFareSheetPortalHtml(parts){
   return '<div class="tyh-modal-bg" data-fare-sheet-close></div>'
     +'<section class="tyh-fare-sheet" role="dialog" aria-label="Payment details">'
       +'<header><h2>Payment details</h2><button type="button" data-fare-sheet-close aria-label="Close">×</button></header>'
-      +'<div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:parts.roomBase,taxesFees:parts.taxesFees,serviceFee:parts.serviceFee,discount:parts.discount,total:parts.total})+'</div>'
+      +'<div class="tyh-sheet-body">'+fareSummaryBlockHtml({base:parts.roomBase,taxesFees:parts.taxesFees,serviceFee:parts.serviceFee,discount:parts.discount,total:parts.total,roomCount:parts.roomCount})+'</div>'
     +'</section>';
 }
 function mountGuestFareSheetPortal(){
@@ -3594,6 +3604,7 @@ function renderGuestStep(){
   const mobileOfferLine=!desktop?hotelMobileOfferLineHtml(applied):'';
   const fareBlock=hotelSideRailHtml({
     base:parts.roomBase, taxesFees:parts.taxesFees, serviceFee:parts.serviceFee, discount:parts.discount, total:finalPay,
+    roomCount:parts.roomCount,
     occupancy:occupancySummaryText(Object.assign({},d,{guests:guests})),
     offersHtml:offersHtml,
     ctaAttr:desktop?'data-pay':'',
@@ -3822,7 +3833,8 @@ async function applyHotelOffer(code){
 }
 async function removeHotelOffer(){
   try{ await api('/api/offers/remove',{service:'hotel'}); }catch(e){}
-  setDraft({appliedOffer:null,offerCode:null,discountAmount:0});
+  // Clear discounted payable so sync recomputes the full canonical total (no stale offer total).
+  setDraft({appliedOffer:null,offerCode:null,discountAmount:0,finalPayableAmount:0});
   syncHotelPayableDraft();
   if(currentStep()==='guest' || currentStep()==='review') renderGuestStep();
 }
@@ -5637,6 +5649,8 @@ body.tyh-filter-open .tyh-filter{display:flex!important;flex-direction:column;po
 .tyh-fare-head{padding:12px 16px;background:linear-gradient(180deg,#eef4ff 0%,#f7faff 100%);border-bottom:1px solid var(--ty-line)}
 .tyh-fare-head h2,.tyh-fare-summary h2{margin:0;color:var(--ty-navy);font-size:16px;font-weight:900;letter-spacing:.02em;text-transform:uppercase}
 .tyh-fare-summary .tyh-kv{padding:10px 16px;margin:0;border-bottom:1px solid #f1f5f9}
+.tyh-fare-summary .tyh-kv.tyh-discount-row,.tyh-fare-summary .tyh-kv.tyh-discount-row span,.tyh-fare-summary .tyh-kv.tyh-discount-row b{color:var(--ty-green)!important}
+.tyh-fare-summary .tyh-kv.tyh-discount-row b{font-weight:950}
 .tyh-fare-summary .tyh-kv.total{background:#f8fbff;border-bottom:0}
 .tyh-fare-summary .tyh-cta{width:calc(100% - 32px);margin:12px 16px 16px}
 .tyh-fare-summary .tyh-cta:disabled,.tyh-fare-summary .tyh-cta.tyh-cta-soft-disabled,.tyh-bottom button.tyh-cta-soft-disabled,[data-continue].tyh-cta-soft-disabled{opacity:.55;cursor:not-allowed}
