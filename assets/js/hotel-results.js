@@ -109,7 +109,8 @@ function isHotelExpiredSearchErr(err){
 function requestHeaders(path, json){
   const headers={Accept:'application/json'};
   if(json) headers['Content-Type']='application/json';
-  if(/^\/api\/(bookings|travellers)(?:\/|$)/.test(String(path||''))){
+  // Offers require the same TravelYaraa JWT as bookings/travellers when the customer is signed in.
+  if(/^\/api\/(bookings|travellers|offers)(?:\/|$)/.test(String(path||''))){
     const auth=tyhGuestAuthToken();
     if(auth) headers.Authorization='Bearer '+auth;
   }
@@ -141,11 +142,85 @@ function searchPayload(){
   const p = read(KEY.payload,{}) || {};
   const s = read(KEY.search,{}) || {};
   const live = s.livePayload || p.livePayload || p || {};
-  const out = Object.assign({}, live, { service:'hotel', type:'hotel' });
+  const out = normalizeHotelSearchOccupancy(Object.assign({}, live, { service:'hotel', type:'hotel' }));
   out.nationality=String(out.nationality||'IN').toUpperCase()||'IN';
   out.countryOfResidence=String(out.countryOfResidence||out.residenceCountry||'IN').toUpperCase()||'IN';
   out.residenceCountry=out.countryOfResidence;
   return out;
+}
+function hotelOccupancyTotalsFromRooms(rooms){
+  let adults=0, children=0;
+  arr(rooms).forEach(function(r){
+    adults+=Math.max(0, Number(r&&r.adults||0));
+    children+=Math.max(0, Number(r&&r.children||0));
+  });
+  return {adults:adults, children:children};
+}
+function distributeHotelOccupancyRooms(roomCount, adults, children, childAges){
+  const n=Math.max(1, Math.min(6, Number(roomCount||1)));
+  let aLeft=Math.max(1, Number(adults||1));
+  let cLeft=Math.max(0, Number(children||0));
+  const ages=arr(childAges).map(function(x){ return x; });
+  const rooms=[];
+  for(let i=0;i<n;i++){
+    const left=n-i;
+    const aShare=Math.floor(aLeft/left);
+    const cShare=Math.floor(cLeft/left);
+    const aRem=aLeft-aShare*left;
+    const cRem=cLeft-cShare*left;
+    const a=aShare+(aRem>0?1:0);
+    const c=cShare+(cRem>0?1:0);
+    const roomAges=ages.splice(0, c);
+    while(roomAges.length<c) roomAges.push('');
+    rooms.push({adults:Math.max(0,a), children:Math.max(0,c), childAge:roomAges.slice(0,c)});
+    aLeft-=a;
+    cLeft-=c;
+  }
+  if(rooms.length && Number(rooms[0].adults||0)<1 && aLeft<=0){
+    // Keep at least one adult in the first room when totals allow it.
+    const donor=rooms.find(function(r,idx){ return idx>0 && Number(r.adults||0)>0; });
+    if(Number(rooms[0].adults||0)<1){
+      if(donor){ donor.adults=Number(donor.adults||0)-1; rooms[0].adults=1; }
+      else rooms[0].adults=1;
+    }
+  }
+  return rooms;
+}
+function normalizeHotelSearchOccupancy(live){
+  live=Object.assign({}, live||{});
+  const existing=arr(live.rooms).map(function(r){
+    return {
+      adults:Math.max(0, Number(r&&r.adults||0)),
+      children:Math.max(0, Number(r&&r.children||0)),
+      childAge:arr(r&&(r.childAge||r.childAges)).slice()
+    };
+  }).filter(function(r){ return r; });
+  let roomCount=Math.max(1, Math.min(6, Number(live.roomCount||existing.length||1)));
+  const fromRooms=hotelOccupancyTotalsFromRooms(existing);
+  let adults=Math.max(1, Number(live.adults!=null?live.adults:fromRooms.adults||1));
+  let children=Math.max(0, Number(live.children!=null?live.children:fromRooms.children||0));
+  const sumA=fromRooms.adults;
+  const sumC=fromRooms.children;
+  const roomsMatchCount=existing.length===roomCount && existing.length>0;
+  let rooms;
+  if(roomsMatchCount && sumA===adults && sumC===children){
+    rooms=existing;
+  } else if(roomsMatchCount && (sumA>0 || sumC>0)){
+    // Prefer room-wise occupancy when rooms[] already matches roomCount (fixes stale adults totals).
+    rooms=existing;
+  } else {
+    // Homepage historically packed all adults into rooms[0] while roomCount>1 — rebuild from totals.
+    const ages=[];
+    existing.forEach(function(r){ arr(r.childAge).forEach(function(a){ ages.push(a); }); });
+    if(!ages.length) arr(live.childAge||live.childAges).forEach(function(a){ ages.push(a); });
+    rooms=distributeHotelOccupancyRooms(roomCount, adults, children, ages);
+  }
+  const totals=hotelOccupancyTotalsFromRooms(rooms);
+  live.rooms=rooms;
+  live.roomCount=rooms.length;
+  live.adults=Math.max(1, totals.adults||adults);
+  live.children=Math.max(0, totals.children||children);
+  return live;
 }
 
 
@@ -847,10 +922,15 @@ function hotelSideRailHtml(opts){
 }
 function occupancySummaryText(d){
   d=d||draft();
-  const s=d.searchPayload||S.search||{};
+  const s=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}, (d&&d.searchPayload)||{}));
   const rooms=Math.max(1, Number(s.roomCount||arr(s.rooms).length||1));
-  const guests=arr(d.guests).length||Number(s.adults||0)+Number(s.children||0)||1;
-  return rooms+' room'+(rooms===1?'':'s')+' · '+guests+' guest'+(guests===1?'':'s');
+  const adults=Math.max(0, Number(s.adults||0));
+  const children=Math.max(0, Number(s.children||0));
+  const guests=Math.max(1, adults+children);
+  const adultBit=adults? (adults+' adult'+(adults===1?'':'s')) : '';
+  const childBit=children? (children+' child'+(children===1?'':'ren')) : '';
+  const who=[adultBit, childBit].filter(Boolean).join(', ') || (guests+' guest'+(guests===1?'':'s'));
+  return rooms+' room'+(rooms===1?'':'s')+' · '+who;
 }
 function hotelBookingNotesHtml(h,o,raw){
   h=h||{}; o=o||{}; raw=raw||{};
@@ -1198,6 +1278,7 @@ function roomRateArticle(o, allowContinue, hotel){
     : '';
   const livePrice=Number(o.displayTotal||o.resultDisplayAmount||o.totalPrice||0);
   const priceAmt=fareMoney(hotelBaseFareAmount(o, hotel)||livePrice);
+  const roomQty=Math.max(1, Number((S.search&&S.search.roomCount)||arr(S.search&&S.search.rooms).length||1));
   const midCol='<div class="tyh-rate-main">'
     +(cap>0?'<p class="tyh-rate-cap">Fits max. '+esc(String(cap))+' guests</p>':'')
     +(o.roomSummary||o.roomType?'<b class="tyh-rate-title">'+esc(o.roomSummary||o.roomType)+'</b>':'')
@@ -1209,7 +1290,7 @@ function roomRateArticle(o, allowContinue, hotel){
   +'</div>';
   const rightCol='<div class="tyh-rate-side">'
     +'<strong class="tyh-rate-price">'+esc(priceAmt)+'</strong>'
-    +'<em class="tyh-rate-total-note">Total price for 1 room</em>'
+    +'<em class="tyh-rate-total-note">Total price for '+esc(String(roomQty))+' room'+(roomQty===1?'':'s')+'</em>'
     +action
   +'</div>';
   return '<article class="tyh-rate tyh-rate-text" data-option-id="'+attr(id)+'" data-option-hotel="'+attr(realHotelId(hotel)||'')+'">'+midCol+rightCol+'</article>';
@@ -1455,6 +1536,11 @@ function cacheMatchesCurrentSearch(stored, search){
 let hotelSearchLock=null;
 async function loadResults(){
   S.search=searchPayload();
+  try{
+    save(KEY.payload, S.search);
+    const wrap=read(KEY.search,{})||{};
+    save(KEY.search, Object.assign({}, wrap, {service:'hotel', livePayload:S.search, createdAt:wrap.createdAt||new Date().toISOString()}));
+  }catch(e){}
   const pendingTitle=S.search.cityName||S.search.city||S.search.destination||'Hotels';
   // Never wipe an open Hotel Detail view with the Results pending shell.
   // Detail refresh/back-forward restore depends on search hydration via setResults → maybeShowHotelDetailsFromUrl.
@@ -1610,12 +1696,11 @@ function searchDates(){
   return {checkIn:isoFromDate(ci), checkOut:isoFromDate(co), nights:nights(isoFromDate(ci),isoFromDate(co))};
 }
 function guestState(){
-  const s=S.search||{};
-  const room=arr(s.rooms)[0]||{};
+  const s=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}));
   return {
-    rooms:Math.max(1, Math.min(6, Number(arr(s.rooms).length||s.roomCount||1))),
-    adults:Math.max(1, Math.min(12, Number(room.adults||s.adults||1))),
-    children:Math.max(0, Math.min(12, Number(room.children||s.children||0)))
+    rooms:Math.max(1, Math.min(6, Number(s.roomCount||arr(s.rooms).length||1))),
+    adults:Math.max(1, Math.min(12, Number(s.adults||1))),
+    children:Math.max(0, Math.min(12, Number(s.children||0)))
   };
 }
 function guestSummary(){
@@ -1836,7 +1921,7 @@ function closeFilter(){ document.body.classList.remove('tyh-filter-open'); }
 function closeSort(){ document.body.classList.remove('tyh-sort-open'); if(currentStep()!=='hotel-details') renderResults(); }
 function isMobileHotelUi(){ return window.matchMedia('(max-width:860px)').matches; }
 function persistHotelSearch(patch){
-  const live=Object.assign({}, searchPayload(), S.search, patch||{});
+  const live=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload(), S.search, patch||{}));
   const regionId=String(live.regionId||live.cityId||'');
   if(/^\d+$/.test(regionId)){ live.regionId=regionId; live.cityId=regionId; }
   const dates=searchDates();
@@ -1844,11 +1929,15 @@ function persistHotelSearch(patch){
   live.checkOut=searchIso(live.checkOut||live.checkoutDate)||dates.checkOut;
   live.checkinDate=live.checkIn;
   live.checkoutDate=live.checkOut;
+  // Totals are authoritative from the Rooms & Guests UI; rebuild room-wise occupancy from them.
   const roomCount=Math.max(1, Math.min(6, Number(live.roomCount||arr(live.rooms).length||1)));
   const adults=Math.max(1, Number(live.adults||1));
   const children=Math.max(0, Number(live.children||0));
-  live.rooms=Array.from({length:roomCount}, function(){ return {adults:adults, children:children, childAge:[]}; });
-  live.roomCount=roomCount;
+  const ages=[];
+  arr(live.rooms).forEach(function(r){ arr(r&&r.childAge).forEach(function(a){ ages.push(a); }); });
+  if(!ages.length) arr(live.childAge||live.childAges).forEach(function(a){ ages.push(a); });
+  live.rooms=distributeHotelOccupancyRooms(roomCount, adults, children, ages);
+  live.roomCount=live.rooms.length;
   live.adults=adults;
   live.children=children;
   live.service='hotel';
@@ -1863,6 +1952,32 @@ function persistHotelSearch(patch){
   save(KEY.search, Object.assign({}, wrap, {service:'hotel', livePayload:live, createdAt:new Date().toISOString()}));
   try{ sessionStorage.removeItem(KEY.results); }catch(e){}
 }
+function clearStaleStateForNewHotelSearch(){
+  // New Results search fully replaces prior hotel/rate/guest/offer state tied to old occupancy.
+  S.selectedHotel=null;
+  S.selectedOption=null;
+  S.review=null;
+  S.roomHotel=null;
+  S.detailHotel=null;
+  S.detailStatus='idle';
+  S.detailError='';
+  S.detailRequestHid='';
+  S.ui.hotelOffers=[];
+  S.ui.hotelOfferIneligible=false;
+  S.ui.visibleGuestCount=1;
+  S.guestIndex=0;
+  S.ui.fareSheetOpen=false;
+  unmountGuestFareSheetPortal();
+  try{ sessionStorage.removeItem(KEY.selected); }catch(e){}
+  try{ sessionStorage.removeItem(KEY.selectedListing); }catch(e){}
+  try{
+    const prev=draft()||{};
+    if(prev.appliedOffer || Number(prev.discountAmount||0)>0){
+      api('/api/offers/remove',{service:'hotel'}).catch(function(){});
+    }
+  }catch(e){}
+  try{ sessionStorage.removeItem(KEY.draft); }catch(e){}
+}
 function hotelByRealId(id){
   const want=String(id||'');
   if(!want) return null;
@@ -1871,7 +1986,7 @@ function hotelByRealId(id){
   if(S.detailHotel && String(S.detailHotel.hotelId||S.detailHotel.id||'')===want) return S.detailHotel;
   const stored=read(KEY.selectedListing,null);
   if(stored && stored.hotel && String(stored.hotel.hotelId||stored.hotel.id||'')===want){
-    if(stored.search && typeof stored.search==='object') S.search=Object.assign({}, S.search, stored.search);
+    // Keep listing hotel media/name, but never let a stale listing search overwrite active occupancy.
     return stored.hotel;
   }
   try{
@@ -2267,7 +2382,7 @@ function renderHotelDetailsPlumbing(){
         +(occ?'<p>'+esc(occ)+'</p>':'')
         +(rec.mealBasis?'<p class="tyh-muted">• '+esc(rec.mealBasis)+'</p>':'')
       +'</div>'
-      +'<div class="tyh-book-box-price"><strong>'+esc(fareMoney(hotelBaseFareAmount(rec, h)||rec.displayTotal||rec.resultDisplayAmount||rec.totalPrice))+'</strong><em>Total price for 1 room</em></div>'
+      +'<div class="tyh-book-box-price"><strong>'+esc(fareMoney(hotelBaseFareAmount(rec, h)||rec.displayTotal||rec.resultDisplayAmount||rec.totalPrice))+'</strong><em>Total price for '+esc(String(Math.max(1, Number((S.search&&S.search.roomCount)||arr(S.search&&S.search.rooms).length||1))))+' room'+(Math.max(1, Number((S.search&&S.search.roomCount)||arr(S.search&&S.search.rooms).length||1))===1?'':'s')+'</em></div>'
       +(rid?'<button type="button" class="tyh-cta" data-review-room="'+attr(rid)+'">Book Now</button>':'')
       +'<div class="tyh-book-more"><span>More options available</span><button type="button" class="tyh-view-more-link" data-scroll-rooms>View rooms</button></div>'
       +ratingBlock
@@ -2718,6 +2833,7 @@ function bindResults(){
       nationality:(natEl&&natEl.value)||searchNationality(),
       countryOfResidence:(resEl&&resEl.value)||searchResidenceCountry()
     });
+    clearStaleStateForNewHotelSearch();
     S.ui.calOpen=false; S.ui.cityOpen=false; S.ui.guestOpen=false; S.ui.editSearchOpen=false;
     S.resultsScrollY=keepY;
     setPage('results');
@@ -3259,7 +3375,7 @@ function commitHotelReviewToDraft(outcome, opts){
     serviceFee:svcFee,
     convenienceFee:svcFee,
     finalPayableAmount:finalPayable,
-    searchPayload:Object.assign({}, prev.searchPayload||S.search||{}, {searchContext:outcome.context, nationality:natIso, countryOfResidence:resIso, residenceCountry:resIso}),
+    searchPayload:normalizeHotelSearchOccupancy(Object.assign({}, S.search||{}, prev.searchPayload||{}, {searchContext:outcome.context, nationality:natIso, countryOfResidence:resIso, residenceCountry:resIso})),
     nationality:natIso,
     countryOfResidence:resIso,
     residenceCountry:resIso,
@@ -3279,7 +3395,7 @@ function commitHotelReviewToDraft(outcome, opts){
     patch.guests=defaultGuests();
     patch.gst={enabled:false};
     patch.roomConfirmed=false;
-    S.ui.visibleGuestCount=1;
+    S.ui.visibleGuestCount=Math.max(1, arr(patch.guests).length);
     S.ui.savedGuestQuery='';
   }
   if(!patch.createdAt) patch.createdAt=prev.createdAt||new Date().toISOString();
@@ -3369,12 +3485,12 @@ function hotel(){ const d=draft(); return d.hotel||d.selected||S.selectedHotel||
 function option(){ const d=draft(); return d.option||S.selectedOption||{}; }
 function reviewRaw(){ const d=draft(); return d.tripjackReviewRaw||{}; }
 function defaultGuests(){
-  const draftSearch=(read(KEY.draft,null)||{}).searchPayload||{};
-  const s=Object.assign({}, searchPayload()||{}, draftSearch, S.search||{});
-  const rooms=arr(s.rooms).length?s.rooms:[{adults:Number(s.adults||1),children:Number(s.children||0),childAge:s.childAge||[]}];
+  // Guest slots come ONLY from the canonical active search occupancy (S.search / searchPayload).
+  const s=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}));
+  const rooms=arr(s.rooms).length?s.rooms:distributeHotelOccupancyRooms(s.roomCount||1, s.adults||1, s.children||0, s.childAge||[]);
   const gs=[];
   rooms.forEach(function(r,ri){
-    const a=Number(r.adults||1), c=Number(r.children||0);
+    const a=Number(r.adults||0), c=Number(r.children||0);
     for(let i=0;i<a;i++) gs.push({room:ri+1,type:'Adult',title:'Mr',firstName:'',lastName:''});
     for(let i=0;i<c;i++) gs.push({room:ri+1,type:'Child',title:'Master',firstName:'',lastName:'',age:arr(r.childAge)[i]||''});
   });
@@ -3431,10 +3547,20 @@ function completedGuestsSummaryHtml(guests, visibleCount){
   return '<div class="tyh-completed-guests" aria-label="Guests"><div class="tyh-completed-guests-head">Guests</div><ul>'+rows.join('')+'</ul></div>';
 }
 function renderGuestStep(){
+  // Keep draft searchPayload aligned to the active canonical search occupancy.
+  S.search=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}));
+  const d0=draft();
+  if(!d0.searchPayload || Number(d0.searchPayload.roomCount||0)!==Number(S.search.roomCount||0) || Number(d0.searchPayload.adults||0)!==Number(S.search.adults||0) || Number(d0.searchPayload.children||0)!==Number(S.search.children||0)){
+    setDraft({searchPayload:Object.assign({}, d0.searchPayload||{}, S.search)});
+  }
   const d=draft();
   let guests=ensureGuestSlots(d);
   const maxGuests=guests.length;
-  S.ui.visibleGuestCount=Math.max(1, Math.min(Number(S.ui.visibleGuestCount||1), maxGuests));
+  S.ui.visibleGuestCount=Math.max(1, Math.min(Number(S.ui.visibleGuestCount||maxGuests), maxGuests));
+  if(S.ui.visibleGuestCount<maxGuests && !arr(d.guests).some(function(g){ return !!(g&&g.firstName); })){
+    // Fresh occupancy: show all required guest slots.
+    S.ui.visibleGuestCount=maxGuests;
+  }
   if(S.guestIndex>=S.ui.visibleGuestCount) S.guestIndex=S.ui.visibleGuestCount-1;
   const i=Math.max(0,Math.min(S.guestIndex, S.ui.visibleGuestCount-1));
   S.guestIndex=i;
@@ -3456,7 +3582,6 @@ function renderGuestStep(){
   const showPan=needPan||panOptional;
   const o=option();
   const h=hotel();
-  const occLabel=guestRoomOccupancyLabel(guests);
   const visibleGuests=guests.slice(0, S.ui.visibleGuestCount);
   const guestsTabs=visibleGuests.map(function(x,idx){ return '<button type="button" class="'+(idx===i?'active':'')+'" data-guest-tab="'+idx+'">'+esc(x.type||'Guest')+' '+(idx+1)+'</button>'; }).join('');
   const desktop=!isMobileHotelUi();
@@ -3502,7 +3627,7 @@ function renderGuestStep(){
   const cancel=cancelSummaryText(o);
   const roomConfirmChecked=!!d.roomConfirmed;
   const cancelOpen=!!S.ui.cancelPolicyOpen;
-  const roomBanner='<div class="tyh-room-banner"><span>Room '+(g.room||1)+' : '+esc(o.roomSummary||o.roomType||'Selected room')+'</span>'+(o.mealBasis?'<em>'+esc(o.mealBasis)+'</em>':'')+'</div>';
+  const occBrief=guestRoomOccupancyLabel(guests)||occupancySummaryText(Object.assign({},d,{guests:guests}));
 
   const leftMain='<div class="tyh-guest-main">'
     +'<section class="tyh-summary-card">'+hotelMiniCard(h,o)+'</section>'
@@ -3520,8 +3645,7 @@ function renderGuestStep(){
     +'<section class="tyh-panel tyh-guest-panel">'
       +'<div class="tyh-section-head"><h2>Guest details</h2></div>'
       +'<p class="tyh-guest-help">Please enter details for all guests</p>'
-      +roomBanner
-      +'<p class="tyh-guest-slot">'+esc(occLabel||('Room '+(g.room||1)))+'</p>'
+      +(occBrief?'<p class="tyh-guest-slot">'+esc(occBrief)+'</p>':'')
       +'<div class="tyh-validate-msg" data-guest-validate hidden></div>'
       +completedGuestsSummaryHtml(guests, S.ui.visibleGuestCount)
       +savedHtml
@@ -3719,8 +3843,13 @@ function bindMobileOfferSheetActions(){
 }
 function hotelOfferErrorIsLogin(err){
   const code=String((err&&err.code)||(err&&err.data&&err.data.code)||'').toUpperCase();
+  const status=Number(err&&err.status||0);
   const msg=String((err&&err.message)||'');
-  return code==='AUTH_REQUIRED' || code==='LOGIN_REQUIRED' || /log\s*in|sign\s*in|authenticate/i.test(msg);
+  // If TravelYaraa JWT is present, do not map ordinary offer failures to "login required".
+  if(tyhGuestAuthToken() && status!==401 && code!=='AUTH_REQUIRED' && code!=='LOGIN_REQUIRED'){
+    return false;
+  }
+  return status===401 || code==='AUTH_REQUIRED' || code==='LOGIN_REQUIRED' || /log\s*in|sign\s*in|authenticate/i.test(msg);
 }
 function hotelOfferErrorMessage(err){
   const msg=customerSafeNote(String((err&&err.message)||'').trim());
@@ -4242,7 +4371,7 @@ function markGuestFieldError(scope, field){
 function hotelMiniCard(h,o){
   h=h||{}; o=o||{};
   const d=draft();
-  const s=d.searchPayload||S.search||{};
+  const s=normalizeHotelSearchOccupancy(Object.assign({}, searchPayload()||{}, S.search||{}, (d&&d.searchPayload)||{}));
   const ci=s.checkIn||s.checkinDate;
   const co=s.checkOut||s.checkoutDate;
   const times=hotelCheckTimes(h);
@@ -4252,7 +4381,7 @@ function hotelMiniCard(h,o){
   const starN=Math.max(0,Math.min(5,Math.round(h.star||0)));
   const stars=starN?'<div class="tyh-stars" aria-label="'+esc(starN)+' star">'+"★".repeat(starN)+'</div>':'';
   const rooms=Math.max(1, Number(s.roomCount||arr(s.rooms).length||1));
-  const guestsN=arr(d.guests).length||Number(s.adults||0)+Number(s.children||0)||1;
+  const guestsN=Math.max(1, Number(s.adults||0)+Number(s.children||0)||arr(d.guests).length||1);
   const nightN=nights(ci,co);
   const hid=realHotelId(h);
   const desk=!isMobileHotelUi();
