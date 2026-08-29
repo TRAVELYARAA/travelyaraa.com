@@ -756,11 +756,13 @@ function hotelTicketSellAmount(o,h){
 function hotelSellAmount(o,h){ return hotelTicketSellAmount(o,h); }
 function hotelRawTicketAmount(o,h){
   // Unrounded ticket for canonical payable = round(ticket + fee) once.
-  // Draft locks apply ONLY when draft hotel HID matches the hotel being priced (prevents Hotel A price under Hotel B).
+  // Draft locks apply ONLY when draft hotel+rate match the hotel/option being priced.
   const d=draft()||{};
   o=o||option(); h=h||hotel();
   const sameHotel=draftBelongsToHotel(h);
-  if(sameHotel){
+  const oid=realOptionId(o);
+  const sameRate=!oid || hotelOptionSelectionMatches(oid, d) || !String(d.optionId||d.selectionOptionId||'').trim();
+  if(sameHotel && sameRate){
     const locked=Math.max(0, Number(d.authoritativeSellAmount||0));
     if(locked>0) return locked;
   }
@@ -770,7 +772,7 @@ function hotelRawTicketAmount(o,h){
     || firstPositiveAmount(pb.ticketAmount, pb.resultDisplayAmount, pb.displayPrice, o.resultDisplayAmount, o.displayPrice, h&&h.resultDisplayAmount, h&&h.displayPrice, h&&h.price)
     || 0
   ));
-  if(sameHotel){
+  if(sameHotel && sameRate){
     const resultsFloor=Math.max(0, Number(d.resultsSellAmount||0));
     return Math.max(resultsFloor, live);
   }
@@ -788,6 +790,8 @@ function hotelRawFeeAmount(o,h){
   );
   if(fromOpt>0) return Number(fromOpt);
   if(!draftBelongsToHotel(h)) return 0;
+  const oid=realOptionId(o);
+  if(oid && String((draft()||{}).optionId||'').trim() && !hotelOptionSelectionMatches(oid, draft()||{})) return 0;
   const d=draft()||{};
   return Number(firstPositiveAmount(d.travelYaraaServiceFee, d.serviceFee, d.convenienceFee)||0);
 }
@@ -815,7 +819,9 @@ function hotelCustomerPayableAmount(o,h){
   const hPb=(h&&(h.pricingBreakup||h.priceBreakup))||{};
   const apiPayable=firstPositiveAmount(pb.customerPayable, rawPb.customerPayable, hPb.customerPayable);
   if(apiPayable>0) return hotelMoneyRound(apiPayable);
-  if(draftBelongsToHotel(h)){
+  const oid=realOptionId(o);
+  const sameRate=!oid || hotelOptionSelectionMatches(oid, d) || !String(d.optionId||d.selectionOptionId||'').trim();
+  if(draftBelongsToHotel(h) && sameRate){
     const lockedPay=hotelMoneyRound(Number(d.resultsPayableAmount||0));
     if(lockedPay>0) return lockedPay;
   }
@@ -863,11 +869,22 @@ function hotelFareParts(d){
   let taxesFees=feeWaived?0:hotelMoneyRound(Math.max(0, serviceFee));
   const canonicalPayable=hotelCustomerPayableAmount(o,h);
   let total;
-  // One whole-rupee payable: prefer backend-approved offer total, else room+fee-discount, else locked draft (no stale discounted draft after remove).
-  if(applied && Number(applied.finalPayableAmount)>0) total=hotelMoneyRound(applied.finalPayableAmount);
-  else if(discount>0){
-    const before=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0)));
-    total=hotelMoneyRound(Math.max(0, before-discount));
+  // One whole-rupee payable: prefer backend-approved offer total only when it reconciles with this room's rows.
+  const recomputedFromRows=function(feeAmt, discAmt){
+    const before=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||feeAmt||0)));
+    return hotelMoneyRound(Math.max(0, before-discAmt));
+  };
+  if(applied && Number(applied.finalPayableAmount)>0){
+    const offerTotal=hotelMoneyRound(applied.finalPayableAmount);
+    const fromRows=recomputedFromRows(taxesFees, discount);
+    // Reject stale offer totals that cannot reconcile with the current Room Price + fee − discount.
+    if(roomBase>0 && Math.abs((roomBase+taxesFees-discount)-offerTotal)>=1 && Math.abs(fromRows-offerTotal)>=1){
+      total=fromRows;
+    }else{
+      total=offerTotal;
+    }
+  }else if(discount>0){
+    total=recomputedFromRows(taxesFees, discount);
   } else if(Number(d.finalPayableAmount)>0) total=hotelMoneyRound(d.finalPayableAmount);
   else total=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0)));
   // Keep authoritative fee visible; reconcile only ±1 rounding drift into Taxes & Fees.
@@ -2708,12 +2725,59 @@ function clearStaleHotelBookingState(nextHid){
       api('/api/offers/remove',{service:'hotel'}).catch(function(){});
     }
     setDraft({
-      hotel:null, selected:null, option:null, optionId:null, review:null,
+      hotel:null, selected:null, option:null, optionId:null, selectionOptionId:null, reviewedOptionId:null, review:null,
+      tripjackReviewRaw:null, tripjackReviewBookingId:null, reviewHash:null,
       authoritativeSellAmount:0, resultsSellAmount:0, resultsPayableAmount:0,
       travelYaraaServiceFee:0, serviceFee:0, convenienceFee:0, finalPayableAmount:0,
       appliedOffer:null, offerCode:null, discountAmount:0, roomConfirmed:false
     });
   }catch(e){}
+}
+function clearStaleSelectedRateState(nextOptionId){
+  // Same hotel, different rate: drop Room A quote/review/offer locks before Room B is committed.
+  const nextOid=String(nextOptionId||'').trim();
+  if(!nextOid) return;
+  try{
+    const d=draft()||{};
+    const prevListed=String(d.optionId||d.selectionOptionId||'').trim();
+    const prevRemapped=String(d.reviewedOptionId||'').trim()||realOptionId(d.option||{});
+    if(prevListed && (prevListed===nextOid || prevRemapped===nextOid)) return;
+    if(!prevListed && !prevRemapped && !(Number(d.authoritativeSellAmount||0)>0 || Number(d.resultsSellAmount||0)>0 || d.appliedOffer)) return;
+    if(d.appliedOffer || Number(d.discountAmount||0)>0){
+      api('/api/offers/remove',{service:'hotel'}).catch(function(){});
+    }
+    S.selectedOption=null;
+    S.review=null;
+    setDraft({
+      option:null, optionId:null, selectionOptionId:null, reviewedOptionId:null, review:null,
+      tripjackReviewRaw:null, tripjackReviewBookingId:null,
+      authoritativeSellAmount:0, resultsSellAmount:0, resultsPayableAmount:0,
+      travelYaraaServiceFee:0, serviceFee:0, convenienceFee:0, finalPayableAmount:0,
+      appliedOffer:null, offerCode:null, discountAmount:0, roomConfirmed:false
+    });
+  }catch(e){}
+}
+function hotelDraftOptionIds(draftState){
+  draftState=draftState||{};
+  const listed=String(draftState.optionId||draftState.selectionOptionId||'').trim();
+  const remapped=String(draftState.reviewedOptionId||'').trim()||realOptionId(draftState.option||{});
+  return {listed:listed, remapped:remapped};
+}
+function hotelOptionSelectionMatches(optionId, draftState){
+  const oid=String(optionId||'').trim();
+  if(!oid) return false;
+  const ids=hotelDraftOptionIds(draftState);
+  if(!ids.listed && !ids.remapped) return true;
+  // TripJack review remaps listing optionId → bookable optionId; both identify the same selection.
+  return oid===ids.listed || oid===ids.remapped;
+}
+function hotelPaymentSummaryReconciles(parts){
+  parts=parts||{};
+  const room=hotelMoneyRound(parts.roomBase);
+  const fee=hotelMoneyRound(parts.taxesFees);
+  const disc=hotelMoneyRound(parts.discount);
+  const total=hotelMoneyRound(parts.total);
+  return Math.abs((room+fee-disc)-total)<1;
 }
 function beginHotelDetailSwitch(hid){
   const nextHid=String(hid||'');
@@ -3136,7 +3200,6 @@ function assertCanonicalHotelReviewState(hotelCtx, optionId, checkPoint){
   const context=Object.assign({}, S.search.searchContext||{}, hotelCtx.searchContext||{});
   const draftState=draft()||{};
   const draftHid=realHotelId(draftState.hotel||draftState.selected||{});
-  const draftOid=realOptionId(draftState.option||{})||String(draftState.optionId||'').trim();
   const optOnHotel=optionList(hotelCtx).find(function(o){ return realOptionId(o)===oid; });
 
   function mismatch(message){
@@ -3160,7 +3223,8 @@ function assertCanonicalHotelReviewState(hotelCtx, optionId, checkPoint){
     mismatch('Your selected room does not match this hotel. Please choose the room again.');
   }
   if(checkPoint==='payment'){
-    if(draftOid && oid && draftOid!==oid){
+    // Prefer draft.optionId (listing id). TripJack remaps option.optionId after review — that is NOT a room change.
+    if(!hotelOptionSelectionMatches(oid, draftState)){
       mismatch('Your selected room changed. Please choose the room again.');
     }
     const draftCtx=draftState.searchContext||(draftState.searchPayload&&draftState.searchPayload.searchContext)||{};
@@ -3179,7 +3243,11 @@ function assertCanonicalHotelReviewState(hotelCtx, optionId, checkPoint){
     }
   }
   if(optionList(hotelCtx).length && !optOnHotel){
-    mismatch('That room is not part of the current hotel rates. Please choose another room.');
+    // Payment re-review: listing option may no longer be in detail options after TripJack remapped the option id.
+    // Allow when the requested oid is the stored listing/remapped id for this same hotel draft.
+    if(!(checkPoint==='payment' && hotelOptionSelectionMatches(oid, draftState) && draftHid && draftHid===hid)){
+      mismatch('That room is not part of the current hotel rates. Please choose another room.');
+    }
   }
   return {hid:hid, oid:oid, hash:hash, context:context};
 }
@@ -3368,12 +3436,38 @@ async function handleHotelApiFailureModal(err, checkPoint){
     await handleHotelUnavailableModal(checkPoint);
     return 'unavailable';
   }
-  if(isHotelReviewContextErr(err)){
+  const code=String((err&&err.data&&err.data.code)||(err&&err.code)||'').toUpperCase();
+  const status=Number(err&&err.status||0);
+  if(code==='HOTEL_REVIEW_IDENTITY_MISMATCH' || code==='HOTEL_REVIEW_STATE_ERROR' || code==='HOTEL_BOOKING_ID_REQUIRED'){
+    await showHotelNotifyModal({
+      type:'notice',
+      checkPoint:checkPoint,
+      title:'Unable to verify room',
+      message:friendlyError(err)||'Your selected room changed. Please choose the room again.',
+      primary:'OK',
+      secondary:'Back to results',
+      hotelName:(hotel()&&hotel().name)||''
+    });
+    return 'back';
+  }
+  if(code==='HOTEL_REVIEW_CONTEXT_REQUIRED'){
     await showHotelNotifyModal({
       type:'notice',
       checkPoint:checkPoint,
       title:'Unable to verify room',
       message:friendlyError(err)||'Please choose the room again and continue.',
+      primary:'OK',
+      secondary:'Back to results',
+      hotelName:(hotel()&&hotel().name)||''
+    });
+    return 'back';
+  }
+  if(status>=500 || code==='NETWORK_FETCH_ERROR' || code==='TRIPJACK_NETWORK_ERROR' || code==='TRIPJACK_TIMEOUT' || /network|timeout|temporar/i.test(String(err&&err.message||''))){
+    await showHotelNotifyModal({
+      type:'notice',
+      checkPoint:checkPoint,
+      title:'Unable to verify room right now',
+      message:'We couldn’t verify the latest room availability. Please try again.',
       primary:'OK',
       secondary:'Back to results',
       hotelName:(hotel()&&hotel().name)||''
@@ -3394,43 +3488,64 @@ async function handleHotelApiFailureModal(err, checkPoint){
 function commitHotelReviewToDraft(outcome, opts){
   opts=opts||{};
   const prev=draft();
+  const prevListed=String(prev.optionId||prev.selectionOptionId||'').trim();
+  const sameRate=!!(prevListed && outcome.oid && prevListed===String(outcome.oid));
   const priceChanged=!!outcome.priceChanged;
   const confirmed=!!opts.confirmed;
+  const reviewedRemappedId=realOptionId(outcome.reviewedOption||{})||'';
   // Lock markup-inclusive TICKET (Base Fare). Payable = ticket + API convenience fee.
-  const feeNow=hotelMoneyRound(Math.max(
+  // Never inherit a previous rate's fee when the customer selected a different room.
+  let feeNow=hotelMoneyRound(Math.max(
     0,
     Number(outcome.feeAfter||0),
     hotelServiceFeeAmount(outcome.reviewedOption, outcome.reviewedHotel),
-    Number(prev.travelYaraaServiceFee||prev.serviceFee||prev.convenienceFee||0),
     Number(outcome.feeBefore||0)
   ));
+  if(sameRate){
+    feeNow=hotelMoneyRound(Math.max(
+      feeNow,
+      Number(prev.travelYaraaServiceFee||prev.serviceFee||prev.convenienceFee||0)
+    ));
+  }
   const authTicketHint=Math.max(0, Number(outcome.newTicket||0)||(Number(outcome.currentAuth||0)-feeNow));
   const reviewedTicket=hotelMoneyRound(Number(outcome.newTicket||0)||resolveReviewedCustomerSell(outcome.reviewedOption, outcome.reviewedOption, outcome.reviewedHotel, authTicketHint));
   let authoritativeSellAmount;
   if(priceChanged && confirmed){
     const fromPayable=feeNow>0 ? hotelMoneyRound(Math.max(0, Number(outcome.newSell||0)-feeNow)) : hotelMoneyRound(outcome.newSell);
     authoritativeSellAmount=hotelMoneyRound(Math.max(fromPayable, reviewedTicket||0));
-  } else {
+  } else if(sameRate){
     const prevTicket=Number(prev.authoritativeSellAmount||prev.resultsSellAmount||0);
     authoritativeSellAmount=hotelMoneyRound(Math.max(Number(reviewedTicket||0), hotelTicketSellAmount(outcome.reviewedOption, outcome.reviewedHotel), prevTicket));
+  } else {
+    // Different room/rate: Room B ticket only — never Math.max with Room A.
+    authoritativeSellAmount=hotelMoneyRound(Math.max(
+      Number(reviewedTicket||0),
+      hotelTicketSellAmount(outcome.reviewedOption, outcome.reviewedHotel)
+    ));
   }
   const hotelCtx=S.detailHotel||hotel()||outcome.reviewedHotel;
   S.selectedHotel=mergeHotelKeepMedia(hotelCtx, Object.assign({}, outcome.reviewedHotel, {searchContext:outcome.context, reviewHash:realReviewHash(hotelCtx), hotelId:outcome.hid, id:outcome.hid, tjHotelId:outcome.hid}));
   // Stamp locked ticket + canonical customer payable (same rounded amount as Results / Room / Guest).
   const feeOnOption=feeNow;
   const prevPb=hotelPricingBreakup(outcome.reviewedOption, outcome.reviewedHotel||hotelCtx);
-  const applied=prev.appliedOffer||null;
-  const discount=applied ? Math.max(0, Number(applied.discountAmount||prev.discountAmount||0)) : Math.max(0, Number(prev.discountAmount||0));
+  const applied=sameRate ? (prev.appliedOffer||null) : null;
+  const discount=applied ? Math.max(0, Number(applied.discountAmount||prev.discountAmount||0)) : 0;
   const feeWaived=!!(applied&&(applied.convenienceFeeWaived||applied.discountType==='convenience_fee_waiver'));
   let payableBeforeDiscount;
   if(priceChanged && confirmed){
     payableBeforeDiscount=hotelMoneyRound(outcome.newSell);
-  }else{
+  }else if(sameRate){
     // Keep the Results/Room canonical payable whenever review did not confirm a real payable change.
     payableBeforeDiscount=hotelMoneyRound(firstPositiveAmount(
       prev.resultsPayableAmount,
       outcome.currentAuth,
       Number(authoritativeSellAmount)+Number(hotelRawFeeAmount(outcome.reviewedOption, outcome.reviewedHotel||hotelCtx)||feeOnOption),
+      hotelCustomerPayableAmount(outcome.reviewedOption, outcome.reviewedHotel||hotelCtx)
+    ));
+  }else{
+    payableBeforeDiscount=hotelMoneyRound(firstPositiveAmount(
+      outcome.currentAuth,
+      Number(authoritativeSellAmount)+Number(feeOnOption||0),
       hotelCustomerPayableAmount(outcome.reviewedOption, outcome.reviewedHotel||hotelCtx)
     ));
   }
@@ -3444,7 +3559,13 @@ function commitHotelReviewToDraft(outcome, opts){
     convenienceFeeBeforeOffer:svcFee,
     customerPayable:payableBeforeDiscount
   });
+  // Keep listing optionId as draft.optionId for re-review; preserve TripJack remapped id on the option + reviewedOptionId.
   S.selectedOption=Object.assign({}, outcome.reviewedOption, {
+    // Listing id stays canonical for Continue Payment re-review; remapped id kept for supplier book path via raw.
+    id:outcome.oid,
+    optionId:outcome.oid,
+    selectionOptionId:outcome.oid,
+    reviewedOptionId:reviewedRemappedId||outcome.oid,
     totalPrice:authoritativeSellAmount,
     resultDisplayAmount:authoritativeSellAmount,
     displayPrice:authoritativeSellAmount,
@@ -3466,13 +3587,15 @@ function commitHotelReviewToDraft(outcome, opts){
     selected:S.selectedHotel,
     option:S.selectedOption,
     optionId:outcome.oid,
+    selectionOptionId:outcome.oid,
+    reviewedOptionId:reviewedRemappedId||outcome.oid,
     reviewHash:realReviewHash(hotelCtx),
     searchContext:outcome.context,
     tripjackReviewRaw:outcome.raw,
     tripjackReviewBookingId:outcome.reviewBookingId,
     cancellationPolicyRaw:outcome.reviewedOption.cancellationPolicy||{},
     authoritativeSellAmount:authoritativeSellAmount,
-    resultsSellAmount:Number(prev.resultsSellAmount||authoritativeSellAmount),
+    resultsSellAmount:sameRate ? Number(prev.resultsSellAmount||authoritativeSellAmount) : authoritativeSellAmount,
     resultsPayableAmount:payableBeforeDiscount,
     baseBookingAmount:authoritativeSellAmount,
     travelYaraaServiceFee:svcFee,
@@ -3491,14 +3614,23 @@ function commitHotelReviewToDraft(outcome, opts){
     patch.gst=prev.gst||{enabled:false};
     patch.specialRequest=prev.specialRequest||'';
     patch.roomConfirmed=prev.roomConfirmed;
-    patch.appliedOffer=prev.appliedOffer||null;
-    patch.discountAmount=prev.discountAmount||0;
-    patch.offerCode=prev.offerCode||'';
+    if(sameRate){
+      patch.appliedOffer=prev.appliedOffer||null;
+      patch.discountAmount=prev.discountAmount||0;
+      patch.offerCode=prev.offerCode||'';
+    }else{
+      patch.appliedOffer=null;
+      patch.discountAmount=0;
+      patch.offerCode='';
+    }
   } else {
     patch.contact={countryCode:'+91'};
     patch.guests=defaultGuests();
     patch.gst={enabled:false};
     patch.roomConfirmed=false;
+    patch.appliedOffer=null;
+    patch.offerCode='';
+    patch.discountAmount=0;
     S.ui.visibleGuestCount=Math.max(1, arr(patch.guests).length);
     S.ui.savedGuestQuery='';
   }
@@ -3538,8 +3670,8 @@ async function runHotelReviewCheckpoint(checkPoint, hotelCtx, optionId, currentA
     await showHotelNotifyModal({
       type:'notice',
       checkPoint:checkPoint,
-      title:'Unable to verify room',
-      message:'We could not complete room verification just now. Please try again.',
+      title:'Unable to verify room right now',
+      message:'We couldn’t verify the latest room availability. Please try again.',
       primary:'OK',
       secondary:'Back to results',
       hotelName:outcome.hotelName||(hotel()&&hotel().name)||'',
@@ -3582,15 +3714,33 @@ async function startReview(h, optionId){
     });
     return;
   }
+  const prevDraft=draft()||{};
+  const prevOfferCode=String(prevDraft.offerCode||(prevDraft.appliedOffer&&(prevDraft.appliedOffer.offerCode||prevDraft.appliedOffer.code))||'').trim();
+  // Drop Room A quote/review/offer before Room B is verified (same hotel, different rate).
+  clearStaleSelectedRateState(oid);
   const selectedBeforeReview=optionList(hotel).find(function(o){ return realOptionId(o)===oid; })||{};
   const currentAuth=hotelBaseFareAmount(selectedBeforeReview, hotel)||priceOf(selectedBeforeReview, hotel);
   const feeAtSelect=hotelServiceFeeAmount(selectedBeforeReview, hotel);
   const payableAtSelect=hotelCustomerPayableAmount(selectedBeforeReview, hotel);
-  setDraft({resultsSellAmount:hotelMoneyRound(currentAuth), resultsPayableAmount:payableAtSelect, travelYaraaServiceFee:feeAtSelect, serviceFee:feeAtSelect, convenienceFee:feeAtSelect});
+  setDraft({
+    resultsSellAmount:hotelMoneyRound(currentAuth),
+    resultsPayableAmount:payableAtSelect,
+    travelYaraaServiceFee:feeAtSelect,
+    serviceFee:feeAtSelect,
+    convenienceFee:feeAtSelect,
+    authoritativeSellAmount:0,
+    finalPayableAmount:0,
+    optionId:oid,
+    selectionOptionId:oid
+  });
   try{
     showLoader('Verifying hotel price and availability…');
     const result=await runHotelReviewCheckpoint('select', hotel, oid, currentAuth, selectedBeforeReview);
     if(!result.ok) return;
+    if(prevOfferCode){
+      try{ await applyHotelOffer(prevOfferCode); }
+      catch(_e){ try{ await removeHotelOffer(); }catch(__e){} }
+    }
     setPage('guest');
     renderGuestStep();
   }catch(e){
@@ -3848,7 +3998,7 @@ function hotelCouponHtml(applied){
     const code=o.code||o.offerCode||'';
     return '<option value="'+attr(code)+'">'+esc(code+(o.title?(' — '+o.title):''))+'</option>';
   }).join('');
-  const hint=firstText(offers[0]&&offers[0].customer_text, offers[0]&&offers[0].title, offers[0]&&offers[0].description)||'';
+  const hint=firstText(offers[0]&&offers[0].terms, offers[0]&&offers[0].customer_text, offers[0]&&offers[0].title, offers[0]&&offers[0].description)||'';
   return '<section class="tyh-offers-card">'
     +'<h2>TravelYaraa Offer</h2>'
     +(hint?('<p class="tyh-offer-hint">'+esc(hint)+'</p>'):'')
@@ -4931,6 +5081,18 @@ async function proceedToPayment(){
     const clientRequestId=d.clientRequestId||newHotelClientRequestId();
     if(!d.clientRequestId) setDraft({clientRequestId});
     const parts=hotelFareParts(d);
+    if(!hotelPaymentSummaryReconciles(parts)){
+      hideLoader();
+      await showHotelNotifyModal({
+        type:'notice',
+        title:'Unable to continue',
+        message:'Payment summary is out of sync with the selected room. Please choose the room again.',
+        primary:'OK',
+        secondary:'Back to results',
+        hotelName:hotel().name||''
+      });
+      return;
+    }
     tyhAssertPriceChain('proceedToPayment', parts);
     const searchPay=Object.assign({}, d.searchPayload||S.search||{}, {
       nationality:d.nationality||(d.searchPayload&&d.searchPayload.nationality)||searchNationality(),
