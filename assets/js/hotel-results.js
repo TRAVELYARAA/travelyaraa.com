@@ -4827,7 +4827,33 @@ async function proceedToPayment(){
       nationality:d.nationality||(d.searchPayload&&d.searchPayload.nationality)||searchNationality(),
       countryOfResidence:d.countryOfResidence||(d.searchPayload&&d.searchPayload.countryOfResidence)||searchResidenceCountry()
     });
-    const payload={ service:'hotel', clientRequestId, search:searchPay, selectedResult:Object.assign({},hotel(),{service:'hotel',hotelId:hotel().hotelId||hotel().id,optionId:d.optionId||option().optionId||option().id,rawOption:option().raw||option()}), details:Object.assign({},d,{clientRequestId,searchPayload:searchPay,nationality:searchPay.nationality,countryOfResidence:searchPay.countryOfResidence,offerCode:d.offerCode||(d.appliedOffer&&(d.appliedOffer.offerCode||d.appliedOffer.code))||null,appliedOffer:d.appliedOffer||null,discountAmount:d.discountAmount||0,baseBookingAmount:parts.sell,travelYaraaServiceFee:parts.serviceFee,serviceFee:parts.serviceFee,convenienceFee:parts.serviceFee,finalPayableAmount:parts.total}), supplier:'tripjack', tripjackReviewRaw:reviewRaw() };
+    const offerCodeValue=d.offerCode||(d.appliedOffer&&(d.appliedOffer.offerCode||d.appliedOffer.code))||null;
+    const payload={
+      service:'hotel',
+      clientRequestId,
+      // Top-level offer identity (same pattern as flights) so backend validateOffer cannot miss a nested-only code.
+      offerCode:offerCodeValue,
+      appliedOffer:d.appliedOffer||null,
+      offer:d.appliedOffer||null,
+      search:searchPay,
+      selectedResult:Object.assign({},hotel(),{service:'hotel',hotelId:hotel().hotelId||hotel().id,optionId:d.optionId||option().optionId||option().id,rawOption:option().raw||option()}),
+      details:Object.assign({},d,{
+        clientRequestId,
+        searchPayload:searchPay,
+        nationality:searchPay.nationality,
+        countryOfResidence:searchPay.countryOfResidence,
+        offerCode:offerCodeValue,
+        appliedOffer:d.appliedOffer||null,
+        discountAmount:d.discountAmount||0,
+        baseBookingAmount:parts.sell,
+        travelYaraaServiceFee:parts.serviceFee,
+        serviceFee:parts.serviceFee,
+        convenienceFee:parts.serviceFee,
+        finalPayableAmount:parts.total
+      }),
+      supplier:'tripjack',
+      tripjackReviewRaw:reviewRaw()
+    };
     // Hide loader BEFORE login UI so auth sheet is never covered by payment loader.
     hideLoader();
     await tyhRequireGuestOtpBeforePayment(payload);
@@ -4842,6 +4868,35 @@ async function proceedToPayment(){
       if(tyhIsAuthRequiredError(e)){
         if(typeof window.tyClearBackendSession==='function') window.tyClearBackendSession();
         throw new Error('Please log in to your TravelYaraa account.');
+      }
+      if(String(e&&e.code||'')==='HOTEL_PAYMENT_TOTAL_MISMATCH'){
+        hideLoader();
+        const authTotal=hotelMoneyRound(Number((e.data&&e.data.authoritativeTotal)||0));
+        const shown=hotelMoneyRound(Number((e.data&&e.data.displayedTotal)||parts.total||0));
+        if(authTotal>0){
+          const price=e.data&&e.data.price||{};
+          setDraft({
+            finalPayableAmount:authTotal,
+            baseBookingAmount:hotelMoneyRound(Number(price.ticketAmount||price.resultDisplayAmount||draft().baseBookingAmount||0))||draft().baseBookingAmount,
+            travelYaraaServiceFee:hotelMoneyRound(Number(price.convenienceFee!=null?price.convenienceFee:draft().travelYaraaServiceFee||0)),
+            serviceFee:hotelMoneyRound(Number(price.convenienceFee!=null?price.convenienceFee:draft().serviceFee||0)),
+            convenienceFee:hotelMoneyRound(Number(price.convenienceFee!=null?price.convenienceFee:draft().convenienceFee||0)),
+            discountAmount:hotelMoneyRound(Number(price.offerDiscount!=null?price.offerDiscount:draft().discountAmount||0))
+          });
+          if(!(Number(price.offerDiscount)>0)) setDraft({appliedOffer:null,offerCode:null,discountAmount:0});
+          syncHotelPayableDraft();
+          if(currentStep()==='guest'||currentStep()==='review') renderGuestStep();
+        }
+        await showHotelNotifyModal({
+          type:'notice',
+          title:'Payment total updated',
+          message:authTotal>0
+            ? ('The payable amount is now '+fareMoney(authTotal)+(shown&&shown!==authTotal?(' (was '+fareMoney(shown)+').'):'.')+' Please review the Payment summary before continuing.')
+            : (e.message||'The payment total has changed. Please review and try again.'),
+          primary:'OK',
+          secondary:'Close'
+        });
+        return;
       }
       if(isHotelRateLimitErr(e) || isHotelExpiredSearchErr(e) || isHotelReviewUnavailableErr(e)){
         await handleHotelApiFailureModal(e, 'payment');
