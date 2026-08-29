@@ -3092,28 +3092,103 @@ async function openRooms(h, silent, reqSeq){
 function roomSheet(h){
   return '<div class="tyh-modal-bg" data-close></div><section class="tyh-room"><header><div><h2>'+esc(h.name)+'</h2><p>'+esc(h.address||h.area||'')+'</p></div><button type="button" data-close>×</button></header><div class="tyh-room-body">'+roomRatesHtml(h)+'</div></section>';
 }
+function isHotelReviewContextErr(err){
+  if(!err) return false;
+  const code=String((err.data&&err.data.code)||err.code||'').toUpperCase();
+  return code==='HOTEL_REVIEW_CONTEXT_REQUIRED'
+    || code==='HOTEL_REVIEW_IDENTITY_MISMATCH'
+    || code==='HOTEL_REVIEW_STATE_ERROR'
+    || code==='HOTEL_BOOKING_ID_REQUIRED';
+}
 function isHotelReviewUnavailableErr(err){
   if(!err) return false;
-  if(isHotelRateLimitErr(err) || isHotelExpiredSearchErr(err)) return false;
+  if(isHotelRateLimitErr(err) || isHotelExpiredSearchErr(err) || isHotelReviewContextErr(err)) return false;
   const code=String((err.data&&err.data.code)||err.code||'').toUpperCase();
-  if(/NO_AVAIL|SOLD_OUT|UNAVAILABLE|NOT_AVAILABLE|OPTION_EXPIRED|REVIEW_FAILED|HOTEL_NO_AVAIL|HOTEL_OPTION|ROOM_SOLD|OPTION_NOT/i.test(code)) return true;
-  if(Number(err.status)===404) return true;
-  if(Number(err.status)===409 && /CONTEXT|EXPIRED|SEARCH/i.test(code)) return false;
-  if(Number(err.status)===409) return true;
+  // Confirmed sold-out / rate-unbookable codes only — not generic REVIEW_FAILED / HOTEL_OPTION / every 404/409.
+  if(/^(NO_AVAIL|NO_AVAILABILITY|SOLD_OUT|UNAVAILABLE|NOT_AVAILABLE|OPTION_EXPIRED|HOTEL_NO_AVAIL|ROOM_SOLD|OPTION_NOT_AVAILABLE|ROOM_UNAVAILABLE|RATE_UNAVAILABLE|HOTEL_OPTION_UNAVAILABLE|SELECTED_OPTION_UNAVAILABLE)$/i.test(code)) return true;
+  if(/NO_AVAIL|SOLD_OUT|ROOM_SOLD|OPTION_EXPIRED|RATE_UNAVAILABLE|ROOM_UNAVAILABLE|OPTION_NOT_AVAILABLE|HOTEL_NO_AVAIL|SELECTED_OPTION_UNAVAILABLE/i.test(code)
+    && !/CONTEXT|SEARCH_EXPIRED|REVIEW_FAILED|RATE_LIMIT|IDENTITY|STATE_ERROR/i.test(code)) return true;
   const m=String(err.message||'').toLowerCase();
-  return /sold out|no longer available|not available|option expired|unavailable|could not be completed/i.test(m);
+  // Require explicit sold-out / no-longer-bookable wording — not generic "not available" / "could not be completed".
+  return /sold out|no longer available|option (is )?expired|selected (room|option|rate).{0,48}(no longer|not) (available|bookable)|room rate is no longer/i.test(m);
 }
-async function fetchHotelReview(hotelCtx, optionId){
+function extractHotelReviewBookingId(reviewData, raw, res){
+  const r=raw&&typeof raw==='object'?raw:{};
+  const d=reviewData&&typeof reviewData==='object'?reviewData:{};
+  const top=res&&typeof res==='object'?res:{};
+  return String(
+    d.bookingId || d.booking_id ||
+    r.bookingId || r.booking_id || r.reviewId || r.review_id ||
+    (r.data&&(r.data.bookingId||r.data.booking_id||r.data.reviewId)) ||
+    (r.response&&(r.response.bookingId||r.response.booking_id)) ||
+    (r.result&&(r.result.bookingId||r.result.booking_id)) ||
+    (r.order&&(r.order.bookingId||r.order.booking_id)) ||
+    (r.status&&r.status.bookingId) ||
+    top.bookingId ||
+    ''
+  ).trim();
+}
+function assertCanonicalHotelReviewState(hotelCtx, optionId, checkPoint){
+  const hid=realHotelId(hotelCtx);
+  const oid=realOptionId({optionId:optionId,id:optionId});
+  const hash=realReviewHash(hotelCtx);
+  const liveSearch=normalizeHotelSearchOccupancy(Object.assign({}, S.search||{}, searchPayload()||{}));
   const context=Object.assign({}, S.search.searchContext||{}, hotelCtx.searchContext||{});
+  const draftState=draft()||{};
+  const draftHid=realHotelId(draftState.hotel||draftState.selected||{});
+  const draftOid=realOptionId(draftState.option||{})||String(draftState.optionId||'').trim();
+  const optOnHotel=optionList(hotelCtx).find(function(o){ return realOptionId(o)===oid; });
+
+  function mismatch(message){
+    const e=new Error(message||'Please choose the room again for this hotel.');
+    e.code='HOTEL_REVIEW_IDENTITY_MISMATCH';
+    e.status=409;
+    throw e;
+  }
+
+  if(!hid || !oid || !hash){
+    mismatch('Live room rates are not ready yet. Please choose the room again.');
+  }
   if(!context.correlationId || !(context.checkIn||context.checkinDate) || !(context.checkOut||context.checkoutDate)){
     const missing=new Error('Your hotel search session expired. Please search again, then continue.');
     missing.code='HOTEL_SEARCH_CONTEXT_REQUIRED';
     missing.status=409;
     throw missing;
   }
-  const hid=realHotelId(hotelCtx);
-  const oid=realOptionId({optionId:optionId,id:optionId});
-  const res=await api('/api/hotels/review',{hid:hid,hotelId:hid,optionId:oid,reviewHash:realReviewHash(hotelCtx),searchContext:context,correlationId:context.correlationId});
+  // Stale Hotel A option must never be reviewed under Hotel B.
+  if(draftHid && hid && draftHid!==hid){
+    mismatch('Your selected room does not match this hotel. Please choose the room again.');
+  }
+  if(checkPoint==='payment'){
+    if(draftOid && oid && draftOid!==oid){
+      mismatch('Your selected room changed. Please choose the room again.');
+    }
+    const draftCtx=draftState.searchContext||(draftState.searchPayload&&draftState.searchPayload.searchContext)||{};
+    if(draftCtx.correlationId && context.correlationId && String(draftCtx.correlationId)!==String(context.correlationId)){
+      const expired=new Error('Your hotel search has expired. Please search again.');
+      expired.code='HOTEL_SEARCH_EXPIRED';
+      expired.status=409;
+      throw expired;
+    }
+    // Occupancy must still match the active search (stale prior-search draft must not proceed).
+    const draftOcc=normalizeHotelSearchOccupancy(Object.assign({}, liveSearch, draftState.searchPayload||{}));
+    if(Number(draftOcc.adults||0)!==Number(liveSearch.adults||0)
+      || Number(draftOcc.children||0)!==Number(liveSearch.children||0)
+      || Number(draftOcc.roomCount||0)!==Number(liveSearch.roomCount||0)){
+      mismatch('Guest occupancy changed. Please search again and choose a room.');
+    }
+  }
+  if(optionList(hotelCtx).length && !optOnHotel){
+    mismatch('That room is not part of the current hotel rates. Please choose another room.');
+  }
+  return {hid:hid, oid:oid, hash:hash, context:context};
+}
+async function fetchHotelReview(hotelCtx, optionId, checkPoint){
+  const identity=assertCanonicalHotelReviewState(hotelCtx, optionId, checkPoint||'');
+  const hid=identity.hid;
+  const oid=identity.oid;
+  const context=identity.context;
+  const res=await api('/api/hotels/review',{hid:hid,hotelId:hid,optionId:oid,reviewHash:identity.hash,searchContext:context,correlationId:context.correlationId});
   return {
     res:res,
     raw:res.raw||res.review&&res.review.raw||res,
@@ -3132,7 +3207,7 @@ function buildHotelReviewOutcome(reviewPack, selectedBefore, hotelCtx, currentAu
   const oid=reviewPack.oid;
   const reviewedHotel=reviewData.hotel ? normHotel(Object.assign({},reviewData.hotel,{searchContext:res.searchContext||context,reviewHash:realReviewHash(hotelCtx)}),0) : hotelCtx;
   const reviewedOption=reviewData.option ? normOption(reviewData.option, reviewedHotel, 0) : selectedBefore;
-  const reviewBookingId=reviewData.bookingId||raw.bookingId||res.bookingId||'';
+  const reviewBookingId=extractHotelReviewBookingId(reviewData, raw, res);
   // Compare customer PAYABLE (canonical), never supplier totalPrice vs markup sell.
   const beforeTicket=hotelMoneyRound(Math.max(0, Number(currentAuthAmount||0)||hotelTicketSellAmount(selectedBefore, hotelCtx)||priceOf(selectedBefore, hotelCtx)));
   const newTicket=resolveReviewedCustomerSell(reviewData.option||reviewedOption, selectedBefore, hotelCtx, beforeTicket);
@@ -3165,8 +3240,15 @@ function buildHotelReviewOutcome(reviewPack, selectedBefore, hotelCtx, currentAu
   // Popup only when the canonical customer payable amount genuinely differs by ≥ ₹1.
   const priceChanged=currentAuth>0 && newSell>0 && Math.abs(newSell-currentAuth)>=1;
   const base={available:true, res:res, raw:raw, reviewData:reviewData, reviewedHotel:reviewedHotel, reviewedOption:reviewedOption, reviewBookingId:reviewBookingId, currentAuth:currentAuth, newSell:newSell, newTicket:newTicket, feeAfter:feeAfter, feeBefore:feeBefore, priceChanged:priceChanged, hotelName:hotelCtx.name||reviewedHotel.name||'', roomName:reviewedOption.roomSummary||selectedBefore.roomSummary||'', context:res.searchContext||context, hid:hid, oid:oid};
-  if(!reviewBookingId || reviewData.available===false || reviewData.isAvailable===false || reviewData.soldOut===true){
+  // REAL unavailable only when the review payload explicitly says the rate cannot be booked.
+  // Missing reviewBookingId alone is NEVER sold-out — treat as review state error downstream.
+  const explicitUnavailable=reviewData.available===false || reviewData.isAvailable===false || reviewData.soldOut===true
+    || raw.available===false || raw.isAvailable===false || raw.soldOut===true;
+  if(explicitUnavailable){
     return Object.assign({}, base, {available:false});
+  }
+  if(!reviewBookingId){
+    return Object.assign({}, base, {available:true, missingBookingId:true, reviewStateError:true});
   }
   return base;
 }
@@ -3285,6 +3367,18 @@ async function handleHotelApiFailureModal(err, checkPoint){
   if(isHotelReviewUnavailableErr(err)){
     await handleHotelUnavailableModal(checkPoint);
     return 'unavailable';
+  }
+  if(isHotelReviewContextErr(err)){
+    await showHotelNotifyModal({
+      type:'notice',
+      checkPoint:checkPoint,
+      title:'Unable to verify room',
+      message:friendlyError(err)||'Please choose the room again and continue.',
+      primary:'OK',
+      secondary:'Back to results',
+      hotelName:(hotel()&&hotel().name)||''
+    });
+    return 'back';
   }
   await showHotelNotifyModal({
     type:'notice',
@@ -3431,12 +3525,27 @@ async function handleHotelUnavailableModal(checkPoint){
   return action;
 }
 async function runHotelReviewCheckpoint(checkPoint, hotelCtx, optionId, currentAuthAmount, selectedBefore){
-  const pack=await fetchHotelReview(hotelCtx, optionId);
+  const pack=await fetchHotelReview(hotelCtx, optionId, checkPoint);
   const outcome=buildHotelReviewOutcome(pack, selectedBefore, hotelCtx, currentAuthAmount);
   if(!outcome.available){
     hideLoader();
     await handleHotelUnavailableModal(checkPoint);
     return {ok:false, reason:'unavailable'};
+  }
+  // Missing reviewBookingId is a review response/state error — never treat as sold-out.
+  if(outcome.missingBookingId || outcome.reviewStateError){
+    hideLoader();
+    await showHotelNotifyModal({
+      type:'notice',
+      checkPoint:checkPoint,
+      title:'Unable to verify room',
+      message:'We could not complete room verification just now. Please try again.',
+      primary:'OK',
+      secondary:'Back to results',
+      hotelName:outcome.hotelName||(hotel()&&hotel().name)||'',
+      roomName:outcome.roomName||''
+    });
+    return {ok:false, reason:'review-state'};
   }
   if(outcome.priceChanged){
     hideLoader();
