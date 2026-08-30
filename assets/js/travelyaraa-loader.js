@@ -36,14 +36,16 @@
     el.setAttribute("aria-live", "polite");
     el.innerHTML =
       '<div class="ty-results-flight-loader__box">' +
-        '<div class="ty-results-flight-loader__sky" aria-hidden="true">' +
-          '<span class="ty-results-flight-loader__plane">' +
-            '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
-              '<path fill="#ffffff" d="M58.2 29.4c1.4-.4 1.4-1.4 0-1.8L36.4 21.2 28.8 6.4c-.4-.8-1.2-.8-1.6 0L23.8 21.2 6.2 26.4c-1.6.4-1.6 1.4 0 1.8l17.6 5.2 3.4 14.8c.4.8 1.2.8 1.6 0l3.4-14.8 25.8-3.8z"/>' +
-              '<path fill="#22b7ff" d="M23.8 28.2l12.6-3.7-12.6-3.7v7.4z"/>' +
-            '</svg>' +
+        '<div class="ty-results-flight-loader__orbit" aria-hidden="true">' +
+          '<span class="ty-results-flight-loader__ring"></span>' +
+          '<span class="ty-results-flight-loader__orbit-arm">' +
+            '<span class="ty-results-flight-loader__plane">' +
+              '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
+                '<path fill="#ffffff" d="M32 5c.9 0 1.6.5 1.9 1.3L38 24l16.5 5.2c1.4.4 1.4 1.8 0 2.2L38 36.6l-4.1 17.1c-.3.9-1.1 1.3-1.9 1.3s-1.6-.4-1.9-1.3L26 36.6 9.5 31.4c-1.4-.4-1.4-1.8 0-2.2L26 24l4.1-17.7C30.4 5.5 31.1 5 32 5z"/>' +
+                '<path fill="#0062E3" d="M32 21.5l9 2.9-9 2.9-9-2.9 9-2.9z"/>' +
+              '</svg>' +
+            '</span>' +
           '</span>' +
-          '<span class="ty-results-flight-loader__wake"></span>' +
         '</div>' +
         '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
       '</div>';

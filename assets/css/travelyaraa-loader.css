@@ -1,7 +1,7 @@
 /* TravelYaraa loaders: one source for flight result loader and passport scan loader. */
 :root{
+  --ty-loader-blue:#0062E3;
   --ty-loader-plane:#ffffff;
-  --ty-loader-plane-accent:#22b7ff;
   --ty-loader-white:#fff;
 }
 .ty-results-flight-loader{
@@ -15,31 +15,51 @@
 .ty-results-flight-loader.is-active{display:flex}
 .ty-results-flight-loader__box{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:22px;width:min(94vw,640px);background:transparent;border:0;box-shadow:none;
+  gap:26px;width:min(94vw,640px);background:transparent;border:0;box-shadow:none;
 }
-.ty-results-flight-loader__sky{
-  position:relative;width:120px;height:120px;
+.ty-results-flight-loader__orbit{
+  --ty-orbit-size:clamp(176px,48vw,210px);
+  --ty-orbit-radius:calc(var(--ty-orbit-size) / 2 - 10px);
+  position:relative;width:var(--ty-orbit-size);height:var(--ty-orbit-size);
   overflow:visible;background:transparent;border:0;
 }
-.ty-results-flight-loader__plane{
-  position:absolute;left:50%;top:50%;width:72px;height:72px;
-  margin:-36px 0 0 -36px;
-  will-change:transform;
-  animation:tyResultsFlightBob 1.35s ease-in-out infinite;
-  filter:drop-shadow(0 12px 22px rgba(0,0,0,.35));
+/* Soft blue→white circular track (not a progress bar). */
+.ty-results-flight-loader__ring{
+  position:absolute;inset:18px;border-radius:50%;pointer-events:none;
+  background:
+    conic-gradient(
+      from 200deg,
+      var(--ty-loader-blue) 0%,
+      #ffffff 38%,
+      var(--ty-loader-blue) 68%,
+      #5aa6ff 100%
+    );
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+  box-shadow:0 0 28px rgba(0,98,227,.55);
+  filter:drop-shadow(0 0 10px rgba(255,255,255,.28));
 }
-.ty-results-flight-loader__plane svg{width:72px;height:72px;display:block}
-.ty-results-flight-loader__wake{
-  position:absolute;left:50%;top:58%;width:10px;height:10px;margin-left:-5px;
-  border-radius:50%;background:rgba(255,255,255,.55);
-  animation:tyResultsFlightWake 1.35s ease-out infinite;
+/* Arm spins clockwise; plane is fixed on the rim so nose stays tangent. */
+.ty-results-flight-loader__orbit-arm{
+  position:absolute;left:50%;top:50%;width:0;height:0;
+  will-change:transform;
+  animation:tyResultsFlightOrbit 2.35s linear infinite;
+}
+.ty-results-flight-loader__plane{
+  position:absolute;left:0;top:0;width:46px;height:46px;
+  margin:-23px 0 0 -23px;
+  /* At arm angle 0°, plane sits at top of ring; +90° aims nose clockwise (tangent). */
+  transform:translateY(calc(var(--ty-orbit-radius) * -1)) rotate(90deg);
+  filter:drop-shadow(0 0 12px rgba(255,255,255,.65)) drop-shadow(0 8px 16px rgba(0,0,0,.28));
   pointer-events:none;
 }
+.ty-results-flight-loader__plane svg{width:46px;height:46px;display:block}
 .ty-results-flight-loader__text{
   margin:0;max-width:min(92vw,650px);color:var(--ty-loader-white);
   font-size:clamp(17px,4vw,22px);font-weight:850;line-height:1.45;letter-spacing:.01em;
   white-space:normal;overflow:visible;text-overflow:clip;
   text-shadow:0 5px 18px rgba(0,0,0,.46);background:transparent;border:0;box-shadow:none;
+  /* Static copy only — no text animation. */
 }
 /* Lock page scroll while the Flight search overlay is visible (desktop + mobile touch). */
 html.ty-flight-loader-active,
@@ -70,13 +90,9 @@ body.ty-flight-loader-active{
 .ty-passport-scan-loader__dots i:nth-child(4){animation-delay:.36s}
 .ty-passport-scan-loader__dots i:nth-child(5){animation-delay:.48s}
 .ty-passport-scan-loader__text{margin:0;color:#071d49;font-size:clamp(13px,3.5vw,14px);line-height:1.45;font-weight:900}
-@keyframes tyResultsFlightBob{
-  0%,100%{transform:translateY(0) rotate(-6deg) scale(1)}
-  50%{transform:translateY(-14px) rotate(4deg) scale(1.04)}
-}
-@keyframes tyResultsFlightWake{
-  0%{transform:translateY(0) scale(.6);opacity:.7}
-  100%{transform:translateY(28px) scale(1.8);opacity:0}
+@keyframes tyResultsFlightOrbit{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
 }
 @keyframes tyPassportScanDot{
   0%,100%{opacity:.28;transform:translateY(0) scale(.78)}
