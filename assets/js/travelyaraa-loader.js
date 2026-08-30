@@ -36,8 +36,14 @@
     el.setAttribute("aria-live", "polite");
     el.innerHTML =
       '<div class="ty-results-flight-loader__box">' +
-        '<div class="ty-results-flight-loader__ring" aria-hidden="true">' +
-          '<span class="ty-results-flight-loader__plane"></span>' +
+        '<div class="ty-results-flight-loader__sky" aria-hidden="true">' +
+          '<span class="ty-results-flight-loader__plane">' +
+            '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
+              '<path fill="#ffffff" d="M58.2 29.4c1.4-.4 1.4-1.4 0-1.8L36.4 21.2 28.8 6.4c-.4-.8-1.2-.8-1.6 0L23.8 21.2 6.2 26.4c-1.6.4-1.6 1.4 0 1.8l17.6 5.2 3.4 14.8c.4.8 1.2.8 1.6 0l3.4-14.8 25.8-3.8z"/>' +
+              '<path fill="#22b7ff" d="M23.8 28.2l12.6-3.7-12.6-3.7v7.4z"/>' +
+            '</svg>' +
+          '</span>' +
+          '<span class="ty-results-flight-loader__wake"></span>' +
         '</div>' +
         '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
       '</div>';
@@ -74,6 +80,16 @@
     node.hidden = !text;
   }
 
+  function lockFlightScroll(){
+    document.documentElement.classList.add("ty-flight-loader-active");
+    document.body.classList.add("ty-flight-loader-active");
+  }
+
+  function unlockFlightScroll(){
+    document.documentElement.classList.remove("ty-flight-loader-active");
+    document.body.classList.remove("ty-flight-loader-active");
+  }
+
   function show(options){
     options = options || {};
     if(!isFlightContext(options)) return false;
@@ -81,24 +97,21 @@
     const el = ensureLoader();
     setText(el, options);
     el.classList.add("is-active");
-    document.documentElement.classList.add("ty-flight-loader-active");
-    document.body.classList.add("ty-flight-loader-active");
+    lockFlightScroll();
     return true;
   }
 
   function hide(){
     const el = document.getElementById(LOADER_ID);
     if(el) el.classList.remove("is-active");
-    document.documentElement.classList.remove("ty-flight-loader-active");
-    document.body.classList.remove("ty-flight-loader-active");
+    unlockFlightScroll();
     return true;
   }
 
   function remove(){
     const el = document.getElementById(LOADER_ID);
     if(el) el.remove();
-    document.documentElement.classList.remove("ty-flight-loader-active");
-    document.body.classList.remove("ty-flight-loader-active");
+    unlockFlightScroll();
     return true;
   }
 
