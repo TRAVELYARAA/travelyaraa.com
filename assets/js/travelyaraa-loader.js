@@ -9,6 +9,22 @@
   const DEFAULT_TEXT = "Please Wait, We are searching for the flights on this route";
   const LOADER_ID = "tyFlightApiLoader";
 
+  const ORBIT_MARKUP =
+    '<div class="ty-results-flight-loader__box">' +
+      '<div class="ty-results-flight-loader__orbit" aria-hidden="true">' +
+        '<span class="ty-results-flight-loader__ring"></span>' +
+        '<span class="ty-results-flight-loader__orbit-arm">' +
+          '<span class="ty-results-flight-loader__plane">' +
+            '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
+              '<path fill="#ffffff" d="M32 3.5c.7 0 1.3.4 1.5 1L39 24l18.2 6.2c1.3.4 1.3 1.7 0 2.1L39 38.5l-5.5 19.5c-.3.9-1.2 1.4-2 1.4s-1.7-.5-2-1.4L24 38.5 5.8 32.3c-1.3-.4-1.3-1.7 0-2.1L24 24l5.5-19.5c.2-.6.8-1 1.5-1z"/>' +
+              '<path fill="#0062E3" d="M32 18.5l8.2 2.8-8.2 2.8-8.2-2.8z"/>' +
+            '</svg>' +
+          '</span>' +
+        '</span>' +
+      '</div>' +
+      '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
+    '</div>';
+
   function isFlightContext(options){
     if(options && options.force === true) return true;
     const service = String((options && (options.service || options.type || options.module)) || "").toLowerCase();
@@ -27,29 +43,20 @@
 
   function ensureLoader(){
     let el = document.getElementById(LOADER_ID);
-    if(el) return el;
+    if(el){
+      /* Rebuild if a stale/pre-orbit markup shell is still in the DOM. */
+      if(!el.querySelector(".ty-results-flight-loader__orbit-arm")){
+        el.innerHTML = ORBIT_MARKUP;
+      }
+      return el;
+    }
 
     el = document.createElement("div");
     el.id = LOADER_ID;
     el.className = "ty-results-flight-loader";
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
-    el.innerHTML =
-      '<div class="ty-results-flight-loader__box">' +
-        '<div class="ty-results-flight-loader__orbit" aria-hidden="true">' +
-          '<span class="ty-results-flight-loader__ring"></span>' +
-          '<span class="ty-results-flight-loader__orbit-arm">' +
-            '<span class="ty-results-flight-loader__plane">' +
-              '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
-                '<path fill="#ffffff" d="M32 5c.9 0 1.6.5 1.9 1.3L38 24l16.5 5.2c1.4.4 1.4 1.8 0 2.2L38 36.6l-4.1 17.1c-.3.9-1.1 1.3-1.9 1.3s-1.6-.4-1.9-1.3L26 36.6 9.5 31.4c-1.4-.4-1.4-1.8 0-2.2L26 24l4.1-17.7C30.4 5.5 31.1 5 32 5z"/>' +
-                '<path fill="#0062E3" d="M32 21.5l9 2.9-9 2.9-9-2.9 9-2.9z"/>' +
-              '</svg>' +
-            '</span>' +
-          '</span>' +
-        '</div>' +
-        '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
-      '</div>';
-
+    el.innerHTML = ORBIT_MARKUP;
     document.body.appendChild(el);
     return el;
   }
