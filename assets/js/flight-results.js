@@ -727,6 +727,30 @@
     return flights.some(function(f){ return Boolean(f.ipa || flagFromDeep(rawSourcesForFlight(f), ['ipa','panRequired','isPanRequired'])); });
   }
 
+  function tyIsIndianCountryCode(value){
+    const code = String(tyPassportCountryForSelect(value) || '').toUpperCase();
+    return code === 'IN';
+  }
+
+  function tyPanFormatValid(value){
+    return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(String(value || '').trim().toUpperCase());
+  }
+
+  function tyPassengerLooksIndian(form, index){
+    if(!form) return true;
+    const i = Number(index || 0);
+    const nat = form.querySelector('[name="nationality_' + i + '"]');
+    const issue = form.querySelector('[name="passportIssueCountry_' + i + '"]');
+    if(nat && String(nat.value || '').trim()) return tyIsIndianCountryCode(nat.value);
+    if(issue && String(issue.value || '').trim()) return tyIsIndianCountryCode(issue.value);
+    /* API requested PAN and nationality not chosen yet — default nationality options start at IN. */
+    return true;
+  }
+
+  function tyPanRequiredForPassenger(form, index, flights){
+    return panRequiredForFlights(flights || []) && tyPassengerLooksIndian(form, index);
+  }
+
   function routeCountryStatus(){
     const legs = routeLegs();
     let known = false;
@@ -2332,7 +2356,9 @@
       return { min:addYears(today, -100), max:yesterday, order:'desc' };
     }
     if(mode === 'passportExpiry'){
-      return { min:tomorrow, max:addYears(today, 30), order:'asc' };
+      const minExp = minPassportExpiryDate();
+      const tomorrow = addDays(today, 1);
+      return { min: minExp > tomorrow ? minExp : tomorrow, max:addYears(today, 30), order:'asc' };
     }
     if(mode === 'dob'){
       if(t.includes('adult')) return { min:addYears(travel, -120), max:addYears(travel, -12), order:'desc' };
@@ -4516,8 +4542,8 @@ function renderShell(content, opts){
       ${previousSummary}
       <h3 class="ty-pax-panel-title">${esc(personLabel)}</h3>
       <div class="ty-form-grid ty-name-grid"><label class="ty-form-field ty-title-field"><span>${requiredLabel('Title')}</span><select name="title_${i}" required><option value="">Title</option><option>Mr</option><option>Ms</option><option>Mrs</option></select></label><label class="ty-form-field ty-first-field"><span>${requiredLabel('First & Middle Name')}</span><input name="firstName_${i}" required autocomplete="given-name"></label><label class="ty-form-field ty-last-field"><span>${requiredLabel('Last Name')}</span><input name="lastName_${i}" required autocomplete="family-name"></label>${desktopPanel && passReq ? '' : dobFieldHtml}</div>
-      ${passReq ? `<div class="ty-passport-box"><h3>Passport Details <em class="ty-required-star" aria-label="required">*</em></h3><div class="ty-field-note">Required for this selected flight as per airline rules.</div><div class="ty-form-grid two ty-passport-grid">${passportDobHtml}<label class="ty-form-field"><span>${requiredLabel('Passport Number')}</span><input name="passportNumber_${i}" required minlength="6" maxlength="15" pattern="[A-Za-z0-9]{6,15}" autocomplete="off"></label><label class="ty-form-field"><span>${requiredLabel('Passport Issuing Country')}</span><select name="passportIssueCountry_${i}" required>${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Nationality')}</span><select name="nationality_${i}" required>${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Passport Issue Date')}</span>${renderDateSelects('passportIssue_'+i, true, 'passportIssue')}</label><label class="ty-form-field"><span>${requiredLabel('Passport Expiry Date')}</span>${renderDateSelects('passportExpiry_'+i, true, 'passportExpiry')}</label></div></div>` : ''}
-      ${panReq ? `<div class="ty-form-grid two" style="margin-top:10px"><label class="ty-form-field"><span>${requiredLabel('PAN')}</span><input name="pan_${i}" pattern="[A-Z]{5}[0-9]{4}[A-Z]" required></label></div>` : ''}
+      ${passReq ? `<div class="ty-passport-box"><h3>Passport Details <em class="ty-required-star" aria-label="required">*</em></h3><div class="ty-field-note">Required for this selected flight as per airline rules.</div><div class="ty-form-grid two ty-passport-grid">${passportDobHtml}<label class="ty-form-field"><span>${requiredLabel('Passport Number')}</span><input name="passportNumber_${i}" required minlength="6" maxlength="15" pattern="[A-Za-z0-9]{6,15}" autocomplete="off"></label><label class="ty-form-field"><span>${requiredLabel('Passport Issuing Country')}</span><select name="passportIssueCountry_${i}" required data-doc-country="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Nationality')}</span><select name="nationality_${i}" required data-doc-nationality="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Passport Issue Date')}</span>${renderDateSelects('passportIssue_'+i, true, 'passportIssue')}</label><label class="ty-form-field"><span>${requiredLabel('Passport Expiry Date')}</span>${renderDateSelects('passportExpiry_'+i, true, 'passportExpiry')}</label></div></div>` : ''}
+      ${panReq ? `<div class="ty-pan-wrap" data-pan-wrap="${i}" style="margin-top:10px"><div class="ty-form-grid two"><label class="ty-form-field"><span>${requiredLabel('PAN')}</span><input name="pan_${i}" maxlength="10" minlength="10" pattern="[A-Z]{5}[0-9]{4}[A-Z]" autocomplete="off" inputmode="text" autocapitalize="characters" spellcheck="false" data-pan-input="${i}" style="text-transform:uppercase"></label></div></div>` : ''}
     </div>`;
   }
 
@@ -4606,12 +4632,65 @@ function renderShell(content, opts){
   }
 
   function tySetDate3(form, prefix, value){
-    const s = String(value || '').slice(0,10);
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const s = normalizePassportDateToYmd(value);
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if(!m) return;
     tySetInput(form, prefix + 'Year', m[1]);
     tySetInput(form, prefix + 'Month', m[2]);
     tySetInput(form, prefix + 'Day', m[3]);
+  }
+
+  function normalizePassportDateToYmd(value, role){
+    const raw = String(value == null ? '' : value).trim();
+    if(!raw) return '';
+    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return tyValidYmdParts(m[1], m[2], m[3]);
+    m = raw.match(/^(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})$/);
+    if(m) return tyValidYmdParts(m[3], m[2], m[1]);
+    m = raw.match(/^(\d{2})[\/\-.](\d{2})[\/\-.](\d{2})$/);
+    if(m){
+      const yy = Number(m[3]);
+      const year = yy <= 49 ? (2000 + yy) : (1900 + yy);
+      return tyValidYmdParts(String(year), m[2], m[1]);
+    }
+    const compact = raw.replace(/\D/g, '');
+    if(/^\d{8}$/.test(compact)){
+      /* Prefer YYYYMMDD when year looks plausible. */
+      const y1 = Number(compact.slice(0, 4));
+      if(y1 >= 1900 && y1 <= 2100) return tyValidYmdParts(compact.slice(0, 4), compact.slice(4, 6), compact.slice(6, 8));
+      return tyValidYmdParts(compact.slice(4, 8), compact.slice(2, 4), compact.slice(0, 2));
+    }
+    if(/^\d{6}$/.test(compact)){
+      const yy = Number(compact.slice(0, 2));
+      const mm = compact.slice(2, 4);
+      const dd = compact.slice(4, 6);
+      let year = 2000 + yy;
+      const as20 = new Date(year, Number(mm) - 1, Number(dd));
+      if(role === 'dob'){
+        if(!Number.isNaN(as20.getTime()) && as20.getTime() > Date.now()) year = 1900 + yy;
+      }else if(role === 'expiry'){
+        year = 2000 + yy;
+      }else if(!Number.isNaN(as20.getTime()) && as20.getTime() > Date.now() + 1000 * 60 * 60 * 24 * 365 * 40){
+        year = 1900 + yy;
+      }
+      return tyValidYmdParts(String(year), mm, dd);
+    }
+    return '';
+  }
+
+  function tyValidYmdParts(year, month, day){
+    const y = Number(year), m = Number(month), d = Number(day);
+    if(!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return '';
+    const dt = new Date(y, m - 1, d);
+    if(Number.isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return '';
+    return ymd(dt);
+  }
+
+  function tyKnownNationalityCode(value){
+    const code = String(tyPassportCountryForSelect(value) || '').toUpperCase();
+    if(!code || code.length !== 2) return '';
+    const known = NATIONALITY_COUNTRIES.some(function(row){ return row[0] === code; });
+    return known ? code : '';
   }
 
   function tyPassportCountryForSelect(value){
@@ -4619,18 +4698,17 @@ function renderShell(content, opts){
     if(!raw) return '';
     const map = { IND:'IN', INDIA:'IN', INDIAN:'IN', JPN:'JP', JAPAN:'JP', USA:'US', UNITEDSTATES:'US', UNITED_STATES:'US', GBR:'GB', UK:'GB', UNITEDKINGDOM:'GB', UNITED_KINGDOM:'GB', ARE:'AE', UAE:'AE' };
     const compact = raw.replace(/[^A-Z]/g, '');
-    return map[raw] || map[compact] || (raw.length === 2 ? raw : compact.slice(0, 2));
+    if(map[raw]) return map[raw];
+    if(map[compact]) return map[compact];
+    if(raw.length === 2 && /^[A-Z]{2}$/.test(raw)) return raw;
+    if(compact.length === 2 && /^[A-Z]{2}$/.test(compact)) return compact;
+    /* Do not invent country codes from partial OCR text. */
+    return '';
   }
 
-  function tyPassportNumberForDisplay(value, country){
-    let v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const c = tyPassportCountryForSelect(country);
-    if(c === 'IN' || !c){
-      if(/^A\d{6,8}$/.test(v)) v = 'Z' + v;
-      if(/^4\d{6,8}$/.test(v)) v = 'ZA' + v.slice(1);
-      v = v.replace(/^2A/, 'ZA').replace(/^Z4/, 'ZA').replace(/^24/, 'ZA');
-    }
-    return v;
+  function tyPassportNumberForDisplay(value){
+    /* Clean only — never invent or rewrite passport numbers. */
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
   function tyPassportNameForDisplay(value){
@@ -4646,22 +4724,81 @@ function renderShell(content, opts){
     if(typeof setPassengerPanelActive === 'function') setPassengerPanelActive(form, i);
     const selectedTravellerId = String(t.travellerId || t.id || '').trim();
     if(selectedTravellerId) state.selectedSavedTravellerByPassenger[i] = selectedTravellerId;
+
     const first = tyPassportNameForDisplay(t.firstName || t.first_name || t.givenName || t.fN || '');
     const middle = tyPassportNameForDisplay(t.middleName || t.middle_name || '');
     const last = tyPassportNameForDisplay(t.lastName || t.last_name || t.surname || t.lN || '');
-    const nationality = tyPassportCountryForSelect(t.nationality || t.pNat || t.passportIssueCountry || t.issuingCountry || '');
-    const issueCountry = tyPassportCountryForSelect(t.passportIssueCountry || t.passportIssuingCountry || t.issuingCountry || t.nationality || t.pNat || '');
-    tySetInput(form, `title_${i}`, t.title || t.ti || '');
-    tySetInput(form, `firstName_${i}`, [first, middle].filter(Boolean).join(' '));
-    tySetInput(form, `lastName_${i}`, last);
-    tySetDate3(form, `dob_${i}`, t.dob || t.dateOfBirth || t.date_of_birth || '');
-    tySetInput(form, `nationality_${i}`, nationality);
-    tySetInput(form, `passportNumber_${i}`, tyPassportNumberForDisplay(t.passportNumber || t.pNum || '', issueCountry || nationality));
-    tySetInput(form, `passportIssueCountry_${i}`, issueCountry || nationality);
-    tySetDate3(form, `passportIssue_${i}`, t.passportIssueDate || t.passport_issue_date || '');
-    tySetDate3(form, `passportExpiry_${i}`, t.passportExpiry || t.passport_expiry || t.eD || '');
+    const nationality = tyKnownNationalityCode(t.nationality || t.pNat || '');
+    const issueCountry = tyKnownNationalityCode(t.passportIssueCountry || t.passportIssuingCountry || t.issuingCountry || '');
+    const passportNumber = tyPassportNumberForDisplay(t.passportNumber || t.pNum || '');
+    const dob = normalizePassportDateToYmd(t.dob || t.dateOfBirth || t.date_of_birth || '', 'dob');
+    const issueDate = normalizePassportDateToYmd(t.passportIssueDate || t.passport_issue_date || t.pid || '', 'issue');
+    const expiryDate = normalizePassportDateToYmd(t.passportExpiry || t.passport_expiry || t.eD || '', 'expiry');
+    const gender = String(t.gender || t.sex || '').trim().toUpperCase();
+    const titleFromGender = gender === 'M' || gender === 'MALE' ? 'Mr' : (gender === 'F' || gender === 'FEMALE' ? 'Ms' : '');
+
+    if(t.title || t.ti || titleFromGender) tySetInput(form, `title_${i}`, t.title || t.ti || titleFromGender);
+    if(first || middle) tySetInput(form, `firstName_${i}`, [first, middle].filter(Boolean).join(' '));
+    if(last) tySetInput(form, `lastName_${i}`, last);
+    if(dob) tySetDate3(form, `dob_${i}`, dob);
+    if(nationality) tySetInput(form, `nationality_${i}`, nationality);
+    if(passportNumber) tySetInput(form, `passportNumber_${i}`, passportNumber);
+    if(issueCountry) tySetInput(form, `passportIssueCountry_${i}`, issueCountry);
+    if(issueDate) tySetDate3(form, `passportIssue_${i}`, issueDate);
+    if(expiryDate) tySetDate3(form, `passportExpiry_${i}`, expiryDate);
     try{ form.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
     try{ tyRenderSelectedTravellerUpdate(form, i); }catch(e){}
+    try{
+      const flights = state.reviewFlights && state.reviewFlights.length ? state.reviewFlights : [];
+      tySyncPanVisibility(form, flights);
+    }catch(e){}
+  }
+
+  function tySyncPanVisibility(form, flights){
+    if(!form) return;
+    const panApi = panRequiredForFlights(flights || []);
+    passengerMetas().forEach(function(meta){
+      const i = meta.index;
+      const wrap = form.querySelector('[data-pan-wrap="' + i + '"]');
+      const input = form.querySelector('[name="pan_' + i + '"]');
+      if(!wrap || !input) return;
+      const show = panApi && tyPassengerLooksIndian(form, i);
+      wrap.hidden = !show;
+      if(show){
+        input.required = true;
+        input.setAttribute('aria-required', 'true');
+      }else{
+        input.required = false;
+        input.removeAttribute('aria-required');
+        input.value = '';
+        const field = validationFieldFor(input);
+        if(field){
+          field.classList.remove('ty-field-invalid');
+          field.querySelectorAll('.ty-field-error').forEach(function(node){ node.remove(); });
+        }
+      }
+    });
+  }
+
+  function tyBindPanAndNationalityControls(form, flights){
+    if(!form || form.dataset.tyPanNatBound === '1') return;
+    form.dataset.tyPanNatBound = '1';
+    form.addEventListener('input', function(e){
+      const t = e && e.target;
+      if(!t || !t.getAttribute) return;
+      if(t.getAttribute('data-pan-input') != null || /^pan_\d+$/.test(String(t.name || ''))){
+        const cleaned = String(t.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+        if(t.value !== cleaned) t.value = cleaned;
+      }
+    }, true);
+    form.addEventListener('change', function(e){
+      const t = e && e.target;
+      if(!t || !t.name) return;
+      if(/^nationality_\d+$/.test(t.name) || /^passportIssueCountry_\d+$/.test(t.name)){
+        tySyncPanVisibility(form, flights || []);
+      }
+    }, true);
+    tySyncPanVisibility(form, flights || []);
   }
 
   function tyPassengerSlotOptions(){
@@ -5188,16 +5325,18 @@ function renderShell(content, opts){
       loader.id = 'tyPassportScanLoader';
       loader.className = 'ty-passport-scan-loader';
       loader.hidden = true;
-      loader.innerHTML = '<div class="ty-passport-scan-loader__box" role="status" aria-live="polite"><div class="ty-passport-scan-loader__dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><p class="ty-passport-scan-loader__text"></p></div>';
+      loader.innerHTML = '<div class="ty-passport-scan-loader__box" role="status" aria-live="polite"><div class="ty-passport-scan-loader__dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p class="ty-passport-scan-loader__text"></p></div>';
       document.body.appendChild(loader);
+    }else{
+      const dots = loader.querySelector('.ty-passport-scan-loader__dots');
+      if(dots && dots.querySelectorAll('i').length !== 4){
+        dots.innerHTML = '<i></i><i></i><i></i><i></i>';
+      }
     }
     const text = loader.querySelector('.ty-passport-scan-loader__text');
-    if(text) text.textContent = message || 'Scanning passport details…';
-    const activate = function(){
-      loader.hidden = false;
-      requestAnimationFrame(function(){ loader.classList.add('is-active'); });
-    };
-    activate();
+    if(text) text.textContent = message || 'Uploading passport...';
+    loader.hidden = false;
+    requestAnimationFrame(function(){ loader.classList.add('is-active'); });
     Promise.resolve(cssReady).catch(function(){});
   }
 
@@ -5215,14 +5354,27 @@ function renderShell(content, opts){
     }
   }
 
+  function tyPassportFriendlyScanError(message){
+    const raw = String(message || '');
+    if(tyLooksTechnicalCustomerError(raw) || !raw.trim()){
+      return 'We could not read this passport. Please upload a clearer photo or enter details manually.';
+    }
+    if(/clearer|manually|could not read|not clear|unsupported|too large/i.test(raw)){
+      return raw.length > 160
+        ? 'We could not read this passport. Please upload a clearer photo or enter details manually.'
+        : raw;
+    }
+    return 'We could not read this passport. Please upload a clearer photo or enter details manually.';
+  }
+
   function tyTravellerScanUsable(t){
     if(!t) return false;
     const first = String(t.firstName || t.first_name || t.givenName || t.fN || '').trim();
     const last = String(t.lastName || t.last_name || t.surname || t.lN || '').trim();
     const pass = String(t.passportNumber || t.pNum || '').trim();
-    const dob = String(t.dob || t.dateOfBirth || t.date_of_birth || '').trim();
-    const exp = String(t.passportExpiry || t.passport_expiry || t.eD || '').trim();
-    return Boolean(first && last && pass && (dob || exp));
+    const dob = normalizePassportDateToYmd(t.dob || t.dateOfBirth || t.date_of_birth || '', 'dob');
+    const exp = normalizePassportDateToYmd(t.passportExpiry || t.passport_expiry || t.eD || '', 'expiry');
+    return Boolean((first || last) && pass && (dob || exp));
   }
 
   async function tyPostPassportScanPayload(payload){
@@ -5233,7 +5385,9 @@ function renderShell(content, opts){
       cache:'no-store'
     });
     const data = await res.json().catch(()=>({}));
-    if(!res.ok || data.success === false || !data.traveller) throw new Error(data.message || data.error || 'Passport details are not clear. Please upload a sharper photo.');
+    if(!res.ok || data.success === false || !data.traveller){
+      throw new Error(tyPassportFriendlyScanError(data.message || data.error || ''));
+    }
     return data;
   }
 
@@ -5274,8 +5428,20 @@ function renderShell(content, opts){
     if(!file) return;
     const type = String(file.type || '').toLowerCase();
     const name = String(file.name || '').toLowerCase();
-    if(!(/^(image\/(jpeg|jpg|png|webp)|application\/pdf)$/i.test(type) || /\.(jpg|jpeg|png|webp|pdf)$/i.test(name))){ set('Unsupported file. Please use PNG, JPG, JPEG, WEBP or PDF.', true); return; }
-    if(file.size > 8 * 1024 * 1024){ set('File is too large. Please upload a file under 8 MB.', true); return; }
+    const rejectEarly = function(msg){
+      set(msg, true);
+      tyHidePassportScanLoader();
+      tySetPassportInlineScanning(false);
+      tyClearPassportScanLock();
+    };
+    if(!(/^(image\/(jpeg|jpg|png|webp)|application\/pdf)$/i.test(type) || /\.(jpg|jpeg|png|webp|pdf)$/i.test(name))){
+      rejectEarly('Unsupported file. Please use PNG, JPG, JPEG, WEBP or PDF.');
+      return;
+    }
+    if(file.size > 8 * 1024 * 1024){
+      rejectEarly('File is too large. Please upload a file under 8 MB.');
+      return;
+    }
 
     tyBeginPassportScan(form);
 
@@ -5284,23 +5450,25 @@ function renderShell(content, opts){
     const uploadInput = ROOT.querySelector('#tyPassportUploadInput');
     if(uploadBtn) uploadBtn.disabled = true;
     if(uploadInput) uploadInput.disabled = true;
-    if(uploadWrap) uploadWrap.classList.add('is-scanning'); tySetPassportInlineScanning(true);
+    if(uploadWrap) uploadWrap.classList.add('is-scanning');
+    tySetPassportInlineScanning(true);
 
     try{
-      tyShowPassportScanLoader('Scanning passport details…');
+      tyShowPassportScanLoader('Uploading passport...');
       await tyLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract');
+      tySetPassportScanOverlayText('Reading passport details...');
       const source = await tyPassportOcrSource(file);
 
       let visualOut = {text:'', confidence:0};
       try{
-        tySetPassportScanOverlayText('Passport scan is processing…');
+        tySetPassportScanOverlayText('Reading passport details...');
         visualOut = await tyRunPassportVisualOcr(source);
-      }catch(_visualError){ visualOut = {text:'', confidence:0, error:_visualError && _visualError.message}; }
+      }catch(_visualError){ visualOut = {text:'', confidence:0}; }
 
       const idx = Number(ROOT.querySelector('#tyTravellerSlot')?.value || tyActivePassengerIndex(form));
       if(visualOut.text && visualOut.text.replace(/\s+/g,'').length >= 12){
         try{
-          tySetPassportScanOverlayText('Filling traveller details...');
+          tySetPassportScanOverlayText('Reading passport details...');
           const visualData = await tyPostPassportScanPayload({
             ocrText: visualOut.text,
             text: visualOut.text,
@@ -5320,7 +5488,7 @@ function renderShell(content, opts){
         }catch(_fastParseError){ /* fall back to MRZ scan below */ }
       }
 
-      tySetPassportScanOverlayText('Checking passport details…');
+      tySetPassportScanOverlayText('Reading passport details...');
       const variants = tyPassportOcrVariants(source);
       let best = { text:'', lines:[], confidence:0, label:'' };
       const allTexts = [];
@@ -5344,9 +5512,11 @@ function renderShell(content, opts){
 
       allLines = tyUniqueLines(allLines);
       const combinedText = [visualOut.text || '', best.text || '', allLines.join('\n'), allTexts.join('\n')].filter(Boolean).join('\n');
-      if(!combinedText || combinedText.replace(/\s+/g,'').length < 6) throw new Error('Passport details are not clear. Please upload a sharper photo.');
+      if(!combinedText || combinedText.replace(/\s+/g,'').length < 6){
+        throw new Error('We could not read this passport. Please upload a clearer photo or enter details manually.');
+      }
 
-      tySetPassportScanOverlayText('Filling traveller details...');
+      tySetPassportScanOverlayText('Reading passport details...');
       const data = await tyPostPassportScanPayload({
         ocrText: combinedText,
         text: combinedText,
@@ -5357,18 +5527,22 @@ function renderShell(content, opts){
         confidence: Math.max(Number(best.confidence || 0), Number(visualOut.confidence || 0)),
         scanMode: best.label || 'mrz-fallback'
       });
+      if(!tyTravellerScanUsable(data.traveller)){
+        throw new Error('We could not read this passport. Please upload a clearer photo or enter details manually.');
+      }
       tyFillPassengerFromTraveller(form, idx, data.traveller);
       state.passportScanByPassenger[String(idx)] = Object.assign({}, data.traveller, {scannedAt:Date.now()});
       set('', false);
     }catch(e){
-      set((e && e.message) || 'Passport scan failed. Please enter details manually.', true);
+      set(tyPassportFriendlyScanError(e && e.message), true);
     }finally{
       tyHidePassportScanLoader();
       try{ hideBookingLoader(); }catch(e){}
       tyEndPassportScan(form);
       if(uploadBtn) uploadBtn.disabled = false;
       if(uploadInput) uploadInput.disabled = false;
-      if(uploadWrap) uploadWrap.classList.remove('is-scanning'); tySetPassportInlineScanning(false);
+      if(uploadWrap) uploadWrap.classList.remove('is-scanning');
+      tySetPassportInlineScanning(false);
     }
   }
 
@@ -5392,10 +5566,20 @@ function renderShell(content, opts){
     const upload = ROOT.querySelector('[data-passport-upload]');
     const input = ROOT.querySelector('#tyPassportUploadInput');
     const updateSaved = ROOT.querySelector('[data-update-saved-traveller]');
-    if(search) search.addEventListener('input', function(){ tyLoadSavedTravellers(form, false); tyRenderSavedTravellerList(form); });
-    if(updateSaved) updateSaved.addEventListener('click', function(){ tyUpdateSelectedTraveller(form); });
-    if(refresh) refresh.addEventListener('click', function(){ tyLoadSavedTravellers(form, true); });
-    if(upload && input){
+    if(search && search.dataset.tyBound !== '1'){
+      search.dataset.tyBound = '1';
+      search.addEventListener('input', function(){ tyLoadSavedTravellers(form, false); tyRenderSavedTravellerList(form); });
+    }
+    if(updateSaved && updateSaved.dataset.tyBound !== '1'){
+      updateSaved.dataset.tyBound = '1';
+      updateSaved.addEventListener('click', function(){ tyUpdateSelectedTraveller(form); });
+    }
+    if(refresh && refresh.dataset.tyBound !== '1'){
+      refresh.dataset.tyBound = '1';
+      refresh.addEventListener('click', function(){ tyLoadSavedTravellers(form, true); });
+    }
+    if(upload && input && upload.dataset.tyPassportBound !== '1'){
+      upload.dataset.tyPassportBound = '1';
       ['pointerdown','touchstart','mousedown'].forEach(function(evtName){
         upload.addEventListener(evtName, function(){
           tySetPassportUploadIntent(180000);
@@ -5409,7 +5593,8 @@ function renderShell(content, opts){
         try{ input.click(); }catch(_clickErr){}
       }, true);
     }
-    if(input){
+    if(input && input.dataset.tyPassportBound !== '1'){
+      input.dataset.tyPassportBound = '1';
       input.addEventListener('click', function(e){
         tySetPassportUploadIntent(180000);
         try{ hideBookingLoader(); }catch(_e){}
@@ -5428,24 +5613,33 @@ function renderShell(content, opts){
         tySetPassportScanLock(180000);
         try{ hideBookingLoader(); }catch(_e){}
         tySetPassportInlineScanning(true);
-        tyShowPassportScanLoader('Scanning passport details…');
+        /* Show overlay immediately so upload never looks silent. */
+        tyShowPassportScanLoader('Uploading passport...');
         requestAnimationFrame(function(){ tyScanPassportFile(selectedFile, form); });
         input.value='';
       }, true);
     }
-    ['input','change','submit'].forEach(function(evtName){
-      form.addEventListener(evtName, function(e){
-        const target = e && e.target;
-        if(tyIsPassportUploadTarget(target)){
-          if(evtName === 'submit') e.preventDefault();
-          e.stopPropagation();
-          if(e.stopImmediatePropagation) e.stopImmediatePropagation();
-        }
-      }, true);
-    });
-    form.querySelectorAll('[name="email"],[name="mobile"]').forEach(function(el){ el.addEventListener('change', function(){ tyLoadSavedTravellers(form, true); }); });
-    form.addEventListener('input', function(){ tyRenderSelectedTravellerUpdate(form); });
-    form.addEventListener('change', function(){ tyRenderSelectedTravellerUpdate(form); });
+    if(form.dataset.tyPassportFormGuard !== '1'){
+      form.dataset.tyPassportFormGuard = '1';
+      ['input','change','submit'].forEach(function(evtName){
+        form.addEventListener(evtName, function(e){
+          const target = e && e.target;
+          if(tyIsPassportUploadTarget(target)){
+            if(evtName === 'submit') e.preventDefault();
+            e.stopPropagation();
+            if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+      });
+      form.querySelectorAll('[name="email"],[name="mobile"]').forEach(function(el){
+        if(el.dataset.tySavedReloadBound === '1') return;
+        el.dataset.tySavedReloadBound = '1';
+        el.addEventListener('change', function(){ tyLoadSavedTravellers(form, true); });
+      });
+      form.addEventListener('input', function(){ tyRenderSelectedTravellerUpdate(form); });
+      form.addEventListener('change', function(){ tyRenderSelectedTravellerUpdate(form); });
+    }
+    tyBindPanAndNationalityControls(form, flights || []);
     tyLoadSavedTravellers(form, false);
     tyRenderSelectedTravellerUpdate(form);
   }
@@ -7550,11 +7744,30 @@ function mobileFareSheets(flights, fare, options){
     });
   }
 
+  function addMonths(date, months){
+    const d = dateOnly(date) || dateOnly(new Date());
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + Number(months || 0));
+    /* Clamp month overflow (e.g. Jan 31 + 1 month). */
+    if(d.getDate() < day) d.setDate(0);
+    return d;
+  }
+
+  function minPassportExpiryDate(){
+    const travel = dateOnly(state.search && state.search.departureDate) || dateOnly(new Date());
+    /* Must be valid for more than 6 months from travel date. */
+    const min = addMonths(travel, 6);
+    min.setDate(min.getDate() + 1);
+    min.setHours(0, 0, 0, 0);
+    return min;
+  }
+
   function minPassportExpiryMs(){
-    const d = new Date();
-    d.setHours(0,0,0,0);
-    d.setDate(d.getDate() + 1);
-    return d.getTime();
+    return minPassportExpiryDate().getTime();
+  }
+
+  function minPassportExpiryYmd(){
+    return ymd(minPassportExpiryDate());
   }
 
   function passengerCompletionErrors(form, meta, flights, show){
@@ -7562,7 +7775,6 @@ function mobileFareSheets(flights, fare, options){
     if(!form || !meta) return errors;
     const i = meta.index;
     const passReq = requiredPassport(flights || []);
-    const panReq = panRequiredForFlights(flights || []);
     const airlineDobReq = requiredDob(flights || []);
     const addMissing = function(el, message){
       errors.push({el:el, message:message || 'This field is required.'});
@@ -7608,15 +7820,32 @@ function mobileFareSheets(flights, fare, options){
       if(!expiry.complete){
         const el = form.querySelector(`[name="passportExpiry_${i}Day"]`) || form.querySelector(`[name="passportExpiry_${i}Month"]`) || form.querySelector(`[name="passportExpiry_${i}Year"]`);
         addMissing(el, 'Passport expiry date is required.');
-      }else if(dateValueMs(form, `passportExpiry_${i}`) < dateSelectRange(form, `passportExpiry_${i}`).min){
+      }else if(dateValueMs(form, `passportExpiry_${i}`) < minPassportExpiryMs()){
         const el = form.querySelector(`[name="passportExpiry_${i}Day"]`) || form.querySelector(`[name="passportExpiry_${i}Month"]`) || form.querySelector(`[name="passportExpiry_${i}Year"]`);
-        addMissing(el, 'Passport expiry date must be after today.');
+        addMissing(el, 'Passport must be valid for more than 6 months from the travel date.');
       }else if(issue.complete && dateValueMs(form, `passportExpiry_${i}`) <= dateValueMs(form, `passportIssue_${i}`)){
         const el = form.querySelector(`[name="passportExpiry_${i}Day"]`) || form.querySelector(`[name="passportExpiry_${i}Month"]`) || form.querySelector(`[name="passportExpiry_${i}Year"]`);
         addMissing(el, 'Passport expiry date must be after issue date.');
       }
+    }else{
+      /* Passport not required by API — validate only if customer entered passport fields. */
+      const pnoEl = form.querySelector(`[name="passportNumber_${i}"]`);
+      const expiry = getDate3(form, `passportExpiry_${i}`);
+      if(pnoEl && String(pnoEl.value || '').trim()){
+        if(!/^[A-Za-z0-9]{6,15}$/.test(String(pnoEl.value || '').trim())) addMissing(pnoEl, 'Passport number must be 6 to 15 letters or numbers.');
+      }
+      if(expiry.complete && dateValueMs(form, `passportExpiry_${i}`) < minPassportExpiryMs()){
+        const el = form.querySelector(`[name="passportExpiry_${i}Day"]`) || form.querySelector(`[name="passportExpiry_${i}Month"]`) || form.querySelector(`[name="passportExpiry_${i}Year"]`);
+        addMissing(el, 'Passport must be valid for more than 6 months from the travel date.');
+      }
     }
-    if(panReq) need(`pan_${i}`, 'PAN number is required.');
+    if(tyPanRequiredForPassenger(form, i, flights || [])){
+      const panEl = form.querySelector(`[name="pan_${i}"]`);
+      const panVal = String(panEl && panEl.value || '').trim().toUpperCase();
+      if(panEl) panEl.value = panVal;
+      if(!panVal) addMissing(panEl, 'PAN number is required.');
+      else if(!tyPanFormatValid(panVal)) addMissing(panEl, 'Please enter a valid PAN number.');
+    }
     return errors;
   }
 
@@ -7733,7 +7962,6 @@ function mobileFareSheets(flights, fare, options){
     const errors = [];
     const metas = passengerMetas();
     const passReq = requiredPassport(flights);
-    const panReq = panRequiredForFlights(flights);
     const minExpiry = minPassportExpiryMs();
     for(const m of metas){
       const i = m.index;
@@ -7760,10 +7988,31 @@ function mobileFareSheets(flights, fare, options){
         if(!issue.complete){ markDateError(form, `passportIssue_${i}`, 'Passport issue date is required.', show, errors, true); }
         else if(dateValueMs(form, `passportIssue_${i}`) > dateSelectRange(form, `passportIssue_${i}`).max){ markDateError(form, `passportIssue_${i}`, 'Passport issue date must be before today.', show, errors, true); }
         if(!expiry.complete){ markDateError(form, `passportExpiry_${i}`, 'Passport expiry date is required.', show, errors, true); }
-        else if(dateValueMs(form, `passportExpiry_${i}`) < minExpiry){ markDateError(form, `passportExpiry_${i}`, 'Passport expiry date must be after today.', show, errors, true); }
+        else if(dateValueMs(form, `passportExpiry_${i}`) < minExpiry){ markDateError(form, `passportExpiry_${i}`, 'Passport must be valid for more than 6 months from the travel date.', show, errors, true); }
         else if(issue.complete && dateValueMs(form, `passportExpiry_${i}`) <= dateValueMs(form, `passportIssue_${i}`)){ markDateError(form, `passportExpiry_${i}`, 'Passport expiry date must be after issue date.', show, errors, true); }
+      }else{
+        const pno = form.querySelector(`[name="passportNumber_${i}"]`);
+        const expiry = getDate3(form, `passportExpiry_${i}`);
+        if(pno && String(pno.value||'').trim() && !/^[A-Za-z0-9]{6,15}$/.test(String(pno.value||'').trim())){
+          errors.push({el:pno, message:'Passport number must be 6 to 15 letters or numbers.', openPanel:true});
+          if(show) markFieldError(pno, 'Passport number must be 6 to 15 letters or numbers.');
+        }
+        if(expiry.complete && dateValueMs(form, `passportExpiry_${i}`) < minExpiry){
+          markDateError(form, `passportExpiry_${i}`, 'Passport must be valid for more than 6 months from the travel date.', show, errors, true);
+        }
       }
-      if(panReq){ validateControl(form, `pan_${i}`, 'PAN number is required.', show, errors, true); }
+      if(tyPanRequiredForPassenger(form, i, flights)){
+        const panEl = form.querySelector(`[name="pan_${i}"]`);
+        const panVal = String(panEl && panEl.value || '').trim().toUpperCase();
+        if(panEl) panEl.value = panVal;
+        if(!panVal){
+          errors.push({el:panEl, message:'PAN number is required.', openPanel:true});
+          if(show && panEl) markFieldError(panEl, 'PAN number is required.');
+        }else if(!tyPanFormatValid(panVal)){
+          errors.push({el:panEl, message:'Please enter a valid PAN number.', openPanel:true});
+          if(show && panEl) markFieldError(panEl, 'Please enter a valid PAN number.');
+        }
+      }
     }
     const gstUse = form.querySelector('[name="gstUse"]');
     if(gstUse && gstUse.checked){
