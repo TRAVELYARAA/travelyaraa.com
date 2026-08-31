@@ -1850,10 +1850,16 @@
   function showFlightSearchLoader(){
     if(tyIsBackForwardNavigation()) return;
     hideBookingLoader();
-    try{ window.TravelYaraaLoader && window.TravelYaraaLoader.show({service:'flight', force:true}); }catch(e){}
+    try{
+      if(window.TravelYaraaLoader){
+        if(typeof window.TravelYaraaLoader.showFlight === "function") window.TravelYaraaLoader.showFlight();
+        else window.TravelYaraaLoader.show({service:"flight", force:true});
+      }
+    }catch(e){}
   }
   function hideFlightSearchLoader(){
-    try{ window.TravelYaraaLoader && window.TravelYaraaLoader.hide(); }catch(e){}
+    /* Final hide only — intermediate TravelYaraaLoader.hide() is ignored while loading. */
+    try{ window.TravelYaraaLoader && window.TravelYaraaLoader.hide({ final: true }); }catch(e){}
   }
 
   function showBookingLoader(){
@@ -3299,8 +3305,7 @@ function normalizeCabin(value){
 
   async function loadFlights(forceFresh){
     const cached = forceFresh ? [] : readCachedFlightResults();
-    /* The same loader must stay up from the search click until results are
-       painted, including the cached hand-off from the home page. */
+    /* One continuous loader from search until final results/error paint. */
     const showLoader = !tyIsBackForwardNavigation();
     state.searchError = '';
     try{
@@ -3311,16 +3316,18 @@ function normalizeCabin(value){
           sessionStorage.removeItem("ty_flight_search_error");
         }
       }catch(e){}
+
+      if(showLoader) showFlightSearchLoader();
+      else hideFlightSearchLoader();
+
       if(!ROOT.querySelector('.ty-fr-page')) renderShell('', { skipDateFares: true });
-      if(showLoader){
-        if(!cached.length){
-          state.rawFlights = [];
-          state.legFlights = {};
-          state.flights = [];
-          renderShell('', { skipDateFares: true });
-        }
-        showFlightSearchLoader();
-      }else hideFlightSearchLoader();
+      if(showLoader && !cached.length){
+        state.rawFlights = [];
+        state.legFlights = {};
+        state.flights = [];
+        renderShell('', { skipDateFares: true });
+      }
+
       const legs = routeLegs();
       state.legFlights = {};
       if(cached.length){
@@ -8774,7 +8781,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     }catch(error){
       renderBookingStatusLoadError(id, error && error.message ? error.message : 'Booking not found');
     }finally{
-      try{ window.TravelYaraaLoader && window.TravelYaraaLoader.hide(); }catch(_e){}
+      try{ window.TravelYaraaLoader && window.TravelYaraaLoader.hide({ final: true }); }catch(_e){}
     }
   }
 
