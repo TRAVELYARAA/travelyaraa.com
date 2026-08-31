@@ -526,6 +526,35 @@
     return number ? "₹" + Math.round(number).toLocaleString("en-IN") : "₹0";
   }
 
+  /* Customer-facing only: never show supplier/API/HTTP technical text. */
+  function tyLooksTechnicalCustomerError(message){
+    return /tripjack|supplier|backend|\bapi\b|http\s*\d{3}|\b50[023]\b|\b500\b|ECONN|ENOTFOUND|gateway|provider error|request failed|network error|failed to fetch/i.test(String(message || ""));
+  }
+
+  function tyCustomerFacingSearchMessage(message){
+    const raw = String(message || "")
+      .replace(/\b[A-Z]{2,8}_[A-Z0-9]{2,16}\b/g, "")
+      .replace(/tripjack/gi, "")
+      .replace(/HTTP\s*\d{3}/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if(!raw || tyLooksTechnicalCustomerError(message) || tyLooksTechnicalCustomerError(raw)){
+      return "Please modify your search and try again.";
+    }
+    if(/no flights|not found|empty|zero results/i.test(raw)){
+      return "Please modify your search and try again.";
+    }
+    return raw.length > 160 ? "Please modify your search and try again." : raw;
+  }
+
+  function tyCustomerFacingActionError(message, fallback){
+    const raw = String(message || "").replace(/tripjack/gi, "").replace(/HTTP\s*\d{3}/gi, "").replace(/\s+/g, " ").trim();
+    if(!raw || tyLooksTechnicalCustomerError(message) || tyLooksTechnicalCustomerError(raw)){
+      return fallback || "Something went wrong. Please try again.";
+    }
+    return raw.length > 180 ? (fallback || "Something went wrong. Please try again.") : raw;
+  }
+
   function timeText(value){
     if(value === undefined || value === null || value === '') return "--:--";
     if(value instanceof Date && !Number.isNaN(value.getTime())){
@@ -3292,8 +3321,7 @@ function normalizeCabin(value){
     });
     const data = await res.json().catch(function(){ return {}; });
     if(!res.ok || data.success === false){
-      const msg = String(data.message || data.code || ("Flight search request failed (" + res.status + ")")).trim();
-      throw new Error(msg || "Flight search request failed.");
+      throw new Error(tyCustomerFacingSearchMessage(data.message || data.code || ("HTTP " + res.status)));
     }
     return extractArray(data);
   }
@@ -3312,7 +3340,7 @@ function normalizeCabin(value){
       try{
         const priorErr = sessionStorage.getItem("ty_flight_search_error");
         if(priorErr){
-          state.searchError = String(priorErr);
+          state.searchError = tyCustomerFacingSearchMessage(priorErr);
           sessionStorage.removeItem("ty_flight_search_error");
         }
       }catch(e){}
@@ -3380,7 +3408,7 @@ function normalizeCabin(value){
     }catch(error){
       state.rawFlights = [];
       state.legFlights = {};
-      state.searchError = error && error.message ? error.message : '';
+      state.searchError = tyCustomerFacingSearchMessage(error && error.message ? error.message : '');
       applyFilters();
       hideFlightSearchLoader();
     }
@@ -3545,11 +3573,8 @@ function renderShell(content, opts){
 
 
   function renderNoFlightsFound(message){
-    const msg = String(message || "There were no flights found for this date & route combination")
-      .replace(/\b[A-Z]{2,8}_[A-Z0-9]{2,16}\b/g, "")
-      .replace(/\s+/g, " ")
-      .trim() || "There were no flights found for this date & route combination";
-    return `<section class="ty-empty ty-no-flights"><h2>Oops! No flights found</h2><p>${esc(msg)}</p><button type="button" data-modify-search>Modify Search & Try Again</button></section>`;
+    const friendly = tyCustomerFacingSearchMessage(message);
+    return `<section class="ty-empty ty-no-flights"><h2>Oops! No flights found</h2><p>${esc(friendly)}</p><button type="button" data-modify-search>Modify Search & Try Again</button></section>`;
   }
 
   function renderResults(){
@@ -8344,38 +8369,84 @@ function mobileFareSheets(flights, fare, options){
 
   function customerStatusLabel(raw){
     const s = String(raw || '').toUpperCase();
-    if(/SUPPLIER_BOOKING_FAILED|TICKET_FAILED|REFUND_REQUIRED|UNCONFIRMED/.test(s)) return 'Ticket not issued';
-    if(/PAYMENT_FAILED|DECLINED|FAILED|ERROR|ABORTED/.test(s)) return 'Action required';
+    if(/SUPPLIER_BOOKING_FAILED|TICKET_FAILED|REFUND_REQUIRED|UNCONFIRMED/.test(s)) return 'Unsuccessful';
+    if(/PAYMENT_FAILED|DECLINED|FAILED|ERROR|ABORTED/.test(s)) return 'Failed';
     if(/HOLD|PENDING|PROCESS|PNR_PENDING|PAYMENT_PENDING/.test(s)) return 'Pending';
-    if(/CANCEL|REFUND/.test(s)) return 'Refund status';
+    if(/PAYMENT_CANCELLED/.test(s)) return 'Cancelled';
+    if(/CANCEL|REFUND/.test(s)) return 'Cancelled';
     if(/CONFIRM|SUCCESS|PAID|BOOKED|TICKETED|COMPLETED/.test(s)) return 'Confirmed';
-    return s ? s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, function(ch){ return ch.toUpperCase(); }) : 'Pending';
+    return 'Pending';
   }
 
   function statusMeta(raw){
     const s = String(raw || '').toUpperCase();
-    if(/SUPPLIER_BOOKING_FAILED|REFUND_REQUIRED|TICKET_FAILED|UNCONFIRMED/.test(s)) return {kind:'failed', title:'Ticket Processing Failed / Refund Required', badge:'Ticket not issued', note:'Payment may be successful, but airline ticketing did not complete. Refund/support handling follows the latest TravelYaraa booking record.'};
-    if(/PAYMENT_FAILED|DECLINED|FAILED|ERROR|ABORTED/.test(s)) return {kind:'failed', title:'Payment / Booking Failed', badge:'Action required', note:'Booking could not be completed. If any amount is debited, refund will be handled as per payment gateway and airline fare rules.'};
-    if(/CANCEL|REFUND/.test(s)) return {kind:'cancelled', title:'Booking Cancelled / Refund Status', badge:'Refund status', note:'Cancellation/refund status is shown from the latest booking record.'};
-    if(/HOLD|PENDING|PROCESS|PNR_PENDING|PAYMENT_PENDING|SUPPLIER_BOOKING_IN_PROGRESS/.test(s)) return {kind:'hold', title:'Booking Status Pending', badge:'PNR pending', note:'We are verifying the booking with the airline. PNR and ticket actions will appear only after confirmation.'};
-    if(/CONFIRM|SUCCESS|PAID|COMPLETED|TICKETED/.test(s)) return {kind:'ok', title:'Booking Confirmed', badge:'Confirmed', note:'Your booking has been processed. Use PNR/ticket details shown below for travel.'};
-    return {kind:'hold', title:'Booking Status', badge:customerStatusLabel(s), note:'Latest booking status is shown below.'};
+    if(/SUPPLIER_BOOKING_FAILED|REFUND_REQUIRED|TICKET_FAILED|UNCONFIRMED/.test(s)) return {kind:'failed', title:'Booking unsuccessful', badge:'Unsuccessful', note:'Ticketing could not be completed. If any amount was charged, refund handling follows your TravelYaraa booking record. Contact support if you need help.'};
+    if(/PAYMENT_FAILED|DECLINED|FAILED|ERROR|ABORTED/.test(s)) return {kind:'failed', title:'Booking failed', badge:'Failed', note:'This booking could not be completed. If any amount was charged, please contact TravelYaraa support with your Booking ID.'};
+    if(/PAYMENT_CANCELLED/.test(s)) return {kind:'cancelled', title:'Payment cancelled', badge:'Cancelled', note:'Payment was not completed for this booking.'};
+    if(/CANCEL|REFUND/.test(s)) return {kind:'cancelled', title:'Booking cancelled', badge:'Cancelled', note:'Cancellation and refund details below are from your latest TravelYaraa booking record.'};
+    if(/HOLD|PENDING|PROCESS|PNR_PENDING|PAYMENT_PENDING|SUPPLIER_BOOKING_IN_PROGRESS/.test(s)) return {kind:'hold', title:'Booking pending', badge:'Pending', note:'We are confirming your booking with the airline. Ticket actions appear only after confirmation.'};
+    if(/CONFIRM|SUCCESS|PAID|COMPLETED|TICKETED|BOOKED/.test(s)) return {kind:'ok', title:'Booking confirmed', badge:'Confirmed', note:'Your booking is confirmed. Use the details below for travel and support.'};
+    return {kind:'hold', title:'Booking status', badge:customerStatusLabel(s), note:'Latest booking status is shown below. Refresh to check for updates.'};
   }
 
   function statusBookingId(booking, responseData){
-    return (responseData && (responseData.bookingId || responseData.id)) || booking.bookingId || booking.id || booking.tripjackReviewBookingId || booking.supplierBookingId || 'Pending';
+    return (responseData && (responseData.bookingId || responseData.id)) || booking.bookingId || booking.id || 'Pending';
+  }
+
+  function statusPresentText(value){
+    const text = String(value == null ? '' : value).trim();
+    if(!text || /^pending$/i.test(text) || text === '-' || text === 'N/A') return '';
+    return text;
   }
 
   function pnrValue(booking){
-    return statusDeepValue(booking, ['pnr','airlinePnr','airlinePNR','gdsPnr','gdsPNR','pnrDetails']) || 'Pending';
+    return statusPresentText(statusDeepValue(booking, ['pnr','airlinePnr','airlinePNR','gdsPnr','gdsPNR','pnrDetails'])) || 'Pending';
   }
 
   function ticketValue(booking){
-    return statusDeepValue(booking, ['ticketNumber','ticketNo','ticketNum','ticketNumberDetails','tktNo']) || 'Pending';
+    return statusPresentText(statusDeepValue(booking, ['ticketNumber','ticketNo','ticketNum','ticketNumberDetails','tktNo'])) || 'Pending';
   }
 
-  function paymentValue(booking){
-    return (booking.payment && (booking.payment.razorpay_payment_id || booking.payment.paymentId || booking.payment.id)) || booking.razorpayPaymentId || statusDeepValue(booking, ['razorpay_payment_id','paymentId']) || 'Pending';
+  function bookingReferenceValue(booking, responseData){
+    const fromBooking = statusPresentText(statusDeepValue(booking, [
+      'bookingReference','bookingRef','orderId','supplierBookingId','airlineBookingId','confirmationId','bookingConfirmationId'
+    ]));
+    const fromResponse = statusPresentText(
+      responseData && (responseData.bookingReference || responseData.bookingRef || responseData.supplierBookingId || responseData.orderId)
+    );
+    const value = fromBooking || fromResponse;
+    const bookingId = String(statusBookingId(booking, responseData) || '').trim();
+    if(!value || value === bookingId) return '';
+    return value;
+  }
+
+  function paymentIdValue(booking, responseData){
+    return statusPresentText(
+      (booking.payment && (booking.payment.razorpay_payment_id || booking.payment.paymentId || booking.payment.id)) ||
+      booking.razorpayPaymentId ||
+      statusDeepValue(booking, ['razorpay_payment_id','paymentId']) ||
+      (responseData && (responseData.paymentId || responseData.razorpay_payment_id || (responseData.payment && (responseData.payment.paymentId || responseData.payment.id))))
+    );
+  }
+
+  function paymentStatusValue(booking, responseData){
+    const raw = statusPresentText(
+      (responseData && (responseData.paymentStatus || (responseData.payment && responseData.payment.status))) ||
+      booking.paymentStatus ||
+      (booking.payment && booking.payment.status)
+    );
+    if(!raw) return '';
+    return customerStatusLabel(raw);
+  }
+
+  function paidAmountDisplay(booking, responseData){
+    const raw =
+      statusDeepValue(booking, ['paidAmount','amountPaid','totalPaid','totalAmount','amount','fare','finalAmount']) ||
+      (booking.payment && (booking.payment.paidAmount || booking.payment.amount || booking.payment.totalAmount)) ||
+      (responseData && (responseData.paidAmount || responseData.amountPaid || responseData.totalAmount || responseData.amount));
+    const n = Number(raw);
+    if(!Number.isFinite(n) || n <= 0) return '';
+    return money(n);
   }
 
   function travellerName(t){
@@ -8397,6 +8468,46 @@ function mobileFareSheets(flights, fare, options){
     return `<div class="ty-final-kv"><span>${esc(label)}</span><b>${esc(val)}</b>${copy && val !== 'Pending' ? `<button type="button" data-copy="${esc(val)}">Copy</button>` : ''}</div>`;
   }
 
+  function statusKvIf(label, value, copy){
+    const val = statusPresentText(value);
+    if(!val) return '';
+    return statusKv(label, val, copy);
+  }
+
+  function statusBaggageSummaryHtml(flights){
+    const rows = baggageRowsForPolicy(flights || []);
+    if(!rows.length) return '';
+    const body = rows.map(function(r){
+      return `<div class="ty-final-passenger"><span>${esc(r.route || 'Flight')}</span><b>${esc([r.cabin ? ('Cabin ' + r.cabin) : '', r.checkin ? ('Check-in ' + r.checkin) : ''].filter(Boolean).join(' · ') || '-')}</b></div>`;
+    }).join('');
+    return `<article class="ty-final-card"><h2 class="ty-final-card-title">Baggage summary</h2><div class="ty-final-card-body ty-final-passengers">${body}</div></article>`;
+  }
+
+  function statusRefundDetailsHtml(booking, responseData){
+    const source = responseData || booking || {};
+    const refund = statusDeepValue(source, ['refundAmount','refundableAmount','refund','netRefund']) ||
+      statusDeepValue(booking, ['refundAmount','refundableAmount','refund','netRefund']) ||
+      (booking.refund && (booking.refund.amount || booking.refund.refundAmount));
+    const charge = statusDeepValue(source, ['cancellationCharge','cancellationCharges','cancelCharge']) ||
+      statusDeepValue(booking, ['cancellationCharge','cancellationCharges','cancelCharge']);
+    const refundStatus = statusPresentText(
+      responseData && (responseData.refundStatus || responseData.cancellationStatus) ||
+      booking.refundStatus || booking.cancellationStatus || (booking.refund && booking.refund.status)
+    );
+    const note = statusPresentText(
+      (responseData && (responseData.refundMessage || responseData.cancellationMessage || responseData.message)) ||
+      booking.refundMessage || booking.cancellationMessage
+    );
+    const rows = [
+      statusKvIf('Refund status', refundStatus ? customerStatusLabel(refundStatus) : ''),
+      statusKvIf('Cancellation charge', (charge !== '' && typeof charge !== 'object') ? String(charge) : ''),
+      statusKvIf('Refund amount', (refund !== '' && typeof refund !== 'object') ? String(refund) : ''),
+      statusKvIf('Notes', note && !tyLooksTechnicalCustomerError(note) ? note : '')
+    ].join('');
+    if(!rows) return '';
+    return `<article class="ty-final-card"><h2 class="ty-final-card-title">Cancellation & refund</h2><div class="ty-final-card-body ty-final-reference-grid">${rows}</div></article>`;
+  }
+
   function ensureBookingStatusStyles(){
     if(document.getElementById('tyBookingStatusFinalStyles')) return;
     const style = document.createElement('style');
@@ -8405,13 +8516,14 @@ function mobileFareSheets(flights, fare, options){
       .ty-final-status{min-height:100vh;background:#f3f5f7;padding:18px 12px 56px;font-family:Inter,Roboto,Arial,sans-serif;color:#071d49}
       .ty-final-status-shell{max-width:1020px;margin:0 auto;display:grid;gap:14px}
       .ty-final-status-hero{border-radius:16px;background:#fff;padding:20px;display:flex;justify-content:space-between;gap:18px;align-items:flex-start;box-shadow:0 5px 20px rgba(7,29,73,.08);border-top:5px solid #f59e0b}
-      .ty-final-status-hero.ok{border-top-color:#16a34a}.ty-final-status-hero.failed{border-top-color:#dc2626}.ty-final-status-hero.cancelled{border-top-color:#64748b}
+      .ty-final-status-hero.ok{border-top-color:#16a34a}.ty-final-status-hero.failed{border-top-color:#dc2626}.ty-final-status-hero.cancelled{border-top-color:#64748b}.ty-final-status-hero.hold{border-top-color:#f59e0b}
       .ty-final-status-hero h1{font-size:25px;margin:4px 0 7px;color:#071d49}.ty-final-status-hero p{margin:0;color:#556274;font-size:14px;line-height:1.55;max-width:720px}
       .ty-final-status-badge{white-space:nowrap;border-radius:999px;padding:9px 14px;background:#fff7dd;color:#8a5a00;font-weight:900;font-size:13px}
       .ty-final-status-hero.ok .ty-final-status-badge{background:#e8f8ed;color:#137333}.ty-final-status-hero.failed .ty-final-status-badge{background:#fff0f0;color:#b42318}.ty-final-status-hero.cancelled .ty-final-status-badge{background:#edf1f5;color:#475569}
       .ty-final-card{background:#fff;border-radius:16px;box-shadow:0 5px 20px rgba(7,29,73,.07);overflow:hidden}
       .ty-final-card-title{margin:0;padding:14px 17px;background:#eaf5ff;font-size:17px;font-weight:950}
       .ty-final-card-body{padding:15px 17px}.ty-final-reference-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+      .ty-final-kv{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-bottom:1px solid #edf1f5}.ty-final-kv:last-child{border-bottom:0}.ty-final-kv span{color:#64748b;font-size:12px;font-weight:800}.ty-final-kv b{font-size:14px;word-break:break-word}.ty-final-kv button{align-self:flex-start;margin-top:4px;border:0;background:#eaf5ff;color:#0062e3;border-radius:8px;padding:5px 10px;font-weight:900;cursor:pointer}
       .ty-final-passengers{display:grid;gap:9px}.ty-final-passenger{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #edf1f5;padding:10px 0}.ty-final-passenger:last-child{border-bottom:0}
       .ty-final-passenger span{color:#64748b;font-size:12px;font-weight:800}.ty-final-passenger b{font-size:14px;text-align:right}
       .ty-final-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px}
@@ -8427,6 +8539,13 @@ function mobileFareSheets(flights, fare, options){
     return `<button type="button" class="ty-final-action ${variant || ''}" ${attrs || ''}>${esc(label)}</button>`;
   }
 
+  function statusSafeNavActions(includeRefresh){
+    return (includeRefresh ? statusAction('Refresh status','data-refresh-status','primary') : '') +
+      statusAction('My Bookings','data-my-bookings','') +
+      statusAction('TravelYaraa support','data-contact-support','') +
+      statusAction('New booking','data-new-booking','orange full');
+  }
+
   function tySupportPageUrlForBooking(bookingId){
     const id = encodeURIComponent(String(bookingId || '').trim());
     return '/customer-support.html' + (id ? '?bookingId=' + id + '&service=flight&source=status' : '?service=flight&source=status');
@@ -8435,7 +8554,7 @@ function mobileFareSheets(flights, fare, options){
   async function statusPost(route, body){
     const res = await fetch(API_BASE + route, {method:'POST', headers:Object.assign({'Content-Type':'application/json'}, tyGuestAuthHeaders()), body:JSON.stringify(body || {}), cache:'no-store'});
     const data = await res.json().catch(()=>({}));
-    if(!res.ok || data.success === false) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    if(!res.ok || data.success === false) throw new Error(tyCustomerFacingActionError(data.message || data.error || ('HTTP ' + res.status)));
     return data;
   }
 
@@ -8467,7 +8586,7 @@ function mobileFareSheets(flights, fare, options){
   async function statusGet(route){
     const res = await fetch(API_BASE + route, {headers:tyGuestAuthHeaders(), cache:'no-store'});
     const data = await res.json().catch(()=>({}));
-    if(!res.ok || data.success === false) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    if(!res.ok || data.success === false) throw new Error(tyCustomerFacingActionError(data.message || data.error || ('HTTP ' + res.status), 'We could not load this booking right now. Please try again.'));
     return data;
   }
 
@@ -8475,7 +8594,7 @@ function mobileFareSheets(flights, fare, options){
     const response = await fetch(API_BASE + route, {headers:tyGuestAuthHeaders(), cache:'no-store'});
     if(!response.ok){
       const data = await response.json().catch(()=>({}));
-      throw new Error(data.message || data.error || ('HTTP ' + response.status));
+      throw new Error(tyCustomerFacingActionError(data.message || data.error || ('HTTP ' + response.status), 'Download failed. Please try again.'));
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -8491,8 +8610,9 @@ function mobileFareSheets(flights, fare, options){
   function setFinalStatusMessage(message, bad){
     const node = ROOT.querySelector('#tyFinalStatusMessage');
     if(!node) return;
-    node.textContent = message || '';
-    node.hidden = !message;
+    const text = bad ? tyCustomerFacingActionError(message, message || 'Something went wrong. Please try again.') : String(message || '');
+    node.textContent = text;
+    node.hidden = !text;
     node.classList.toggle('bad', !!bad);
   }
 
@@ -8504,11 +8624,69 @@ function mobileFareSheets(flights, fare, options){
     const parts = [];
     if(charge !== '' && typeof charge !== 'object') parts.push('Cancellation charge: ' + currency + ' ' + charge);
     if(refund !== '' && typeof refund !== 'object') parts.push('Estimated refund: ' + currency + ' ' + refund);
-    if(!parts.length && data && data.message) parts.push(String(data.message));
+    if(!parts.length && data && data.message && !tyLooksTechnicalCustomerError(data.message)) parts.push(String(data.message));
     return parts.join('\n') || 'Airline cancellation charges were received. Submit the cancellation request?';
   }
 
-  function bindFinalBookingStatusActions(bookingId, bookingPayload, responseData, confirmed){
+  let tyStatusPollTimer = null;
+  let tyStatusPollCount = 0;
+
+  function stopPendingStatusPoll(){
+    if(tyStatusPollTimer){
+      clearInterval(tyStatusPollTimer);
+      tyStatusPollTimer = null;
+    }
+    tyStatusPollCount = 0;
+  }
+
+  function startPendingStatusPoll(bookingId, bookingPayload){
+    stopPendingStatusPoll();
+    const id = String(bookingId || '').trim();
+    if(!id) return;
+    tyStatusPollTimer = setInterval(async function(){
+      tyStatusPollCount += 1;
+      if(tyStatusPollCount > 5){
+        stopPendingStatusPoll();
+        return;
+      }
+      try{
+        const data = await statusGet('/api/bookings/' + encodeURIComponent(id) + '/status');
+        const booking = statusBookingObject(data, bookingPayload);
+        const rawStatus = statusValueFrom(booking, data, data.bookingStatus || data.status || 'PENDING');
+        let meta = statusMeta(rawStatus);
+        const airlineReference = pnrValue(booking);
+        const ticketNumber = ticketValue(booking);
+        const confirmed = meta.kind === 'ok' && (airlineReference !== 'Pending' || ticketNumber !== 'Pending');
+        if(meta.kind === 'ok' && !confirmed) meta = {kind:'hold'};
+        if(meta.kind !== 'hold'){
+          stopPendingStatusPoll();
+          renderBookingStatusView(rawStatus, bookingPayload, data);
+        }
+      }catch(_e){}
+    }, 8000);
+  }
+
+  function bindStatusPolicyButtons(flights){
+    ROOT.querySelectorAll('[data-open-policy]').forEach(function(btn){
+      btn.onclick = function(){
+        const hasBaggage = baggageRowsForPolicy(flights || []).length > 0;
+        const hasCancel = policyTextRows(flights || [], 'cancel').length > 0;
+        const hasChange = policyTextRows(flights || [], 'change').length > 0;
+        const target = btn.getAttribute('data-policy-target') || 'cancel';
+        if(target === 'baggage' && !hasBaggage){
+          setFinalStatusMessage('Baggage details are not available for this booking yet.', true);
+          return;
+        }
+        if((target === 'cancel' || target === 'change') && !hasCancel && !hasChange && !hasBaggage){
+          setFinalStatusMessage('Fare rules are not available for this booking yet.', true);
+          return;
+        }
+        openPolicyModal(flights || [], target);
+      };
+    });
+  }
+
+  function bindFinalBookingStatusActions(bookingId, bookingPayload, responseData, confirmed, metaKind, flights){
     const safeId = encodeURIComponent(String(bookingId || ''));
     ROOT.querySelectorAll('[data-copy]').forEach(function(button){
       button.addEventListener('click', async function(){
@@ -8516,6 +8694,18 @@ function mobileFareSheets(flights, fare, options){
       });
     });
     ROOT.querySelector('[data-new-booking]')?.addEventListener('click', function(){ location.href='/index.html?service=flight'; });
+    ROOT.querySelector('[data-my-bookings]')?.addEventListener('click', function(){ location.href='/my-bookings.html'; });
+    ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(bookingId); });
+    ROOT.querySelector('[data-refresh-status]')?.addEventListener('click', async function(){
+      try{
+        setFinalStatusMessage('Refreshing booking status...');
+        const data = await statusGet('/api/bookings/' + safeId + '/status');
+        renderBookingStatusView(data.bookingStatus || data.status || data.booking && data.booking.bookingStatus || 'PENDING', bookingPayload, data);
+      }catch(error){
+        setFinalStatusMessage(error.message || 'Could not refresh status.', true);
+      }
+    });
+    bindStatusPolicyButtons(flights || []);
     if(!confirmed) return;
     ROOT.querySelector('[data-download-ticket]')?.addEventListener('click', async function(){
       try{ setFinalStatusMessage('Preparing e-ticket...'); await downloadBookingFile('/api/bookings/' + safeId + '/ticket', 'TravelYaraa-E-Ticket-' + bookingId + '.pdf'); setFinalStatusMessage('E-ticket download started.'); }catch(error){ setFinalStatusMessage(error.message || 'Ticket download failed.', true); }
@@ -8528,12 +8718,18 @@ function mobileFareSheets(flights, fare, options){
       const email = window.prompt('Enter email address:', current.split(',')[0].trim());
       if(email === null) return;
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return setFinalStatusMessage('Please enter a valid email address.', true);
-      try{ const data = await statusPost('/api/bookings/' + safeId + '/resend-email', {email:String(email).trim()}); setFinalStatusMessage(data.message || 'Email sent.'); }catch(error){ setFinalStatusMessage(error.message || 'Email could not be sent.', true); }
+      try{
+        const data = await statusPost('/api/bookings/' + safeId + '/resend-email', {email:String(email).trim()});
+        setFinalStatusMessage(data.message && !tyLooksTechnicalCustomerError(data.message) ? data.message : 'Email sent.');
+      }catch(error){ setFinalStatusMessage(error.message || 'Email could not be sent.', true); }
     });
     ROOT.querySelector('[data-change-request]')?.addEventListener('click', async function(){
       const requestedDate = window.prompt('Enter preferred new travel date (YYYY-MM-DD):', '');
       if(!requestedDate) return;
-      try{ const data = await statusPost('/api/bookings/' + safeId + '/change-request', {requestedDate}); setFinalStatusMessage(data.message || 'Change request recorded.'); }catch(error){ setFinalStatusMessage(error.message || 'Change request failed.', true); }
+      try{
+        const data = await statusPost('/api/bookings/' + safeId + '/change-request', {requestedDate});
+        setFinalStatusMessage(data.message && !tyLooksTechnicalCustomerError(data.message) ? data.message : 'Change request recorded.');
+      }catch(error){ setFinalStatusMessage(error.message || 'Change request failed.', true); }
     });
     ROOT.querySelector('[data-cancel-booking]')?.addEventListener('click', async function(){
       if(!window.confirm('Check airline cancellation charges for this booking?')) return;
@@ -8546,16 +8742,20 @@ function mobileFareSheets(flights, fare, options){
           return;
         }
         const submitted = await statusPost('/api/bookings/' + safeId + '/cancel', {confirm:true, reason});
-        setFinalStatusMessage(submitted.message || 'Cancellation/refund request submitted.');
+        setFinalStatusMessage(submitted.message && !tyLooksTechnicalCustomerError(submitted.message) ? submitted.message : 'Cancellation/refund request submitted.');
+        try{
+          const fresh = await statusGet('/api/bookings/' + safeId + '/status');
+          renderBookingStatusView(fresh.bookingStatus || fresh.status || 'CANCELLED', bookingPayload, fresh);
+        }catch(_e){}
       }catch(error){
         setFinalStatusMessage(error.message || 'Cancellation request failed.', true);
       }
     });
-    ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(bookingId); });
   }
 
   function renderBookingStatusView(status, bookingPayload, responseData){
     ensureBookingStatusStyles();
+    stopPendingStatusPoll();
     const booking = statusBookingObject(responseData, bookingPayload);
     const flights = (booking.selectedFlights || (booking.selectedResult ? [booking.selectedResult] : []) || []).filter(Boolean).length
       ? (booking.selectedFlights || [booking.selectedResult]).filter(Boolean)
@@ -8566,28 +8766,75 @@ function mobileFareSheets(flights, fare, options){
     const bookingId = statusBookingId(booking, responseData);
     const airlineReference = pnrValue(booking);
     const ticketNumber = ticketValue(booking);
+    const bookingRef = bookingReferenceValue(booking, responseData);
+    const contact = statusContact(booking, bookingPayload || {});
+    const payStatus = paymentStatusValue(booking, responseData);
+    const payId = paymentIdValue(booking, responseData);
+    const paidAmt = paidAmountDisplay(booking, responseData);
     const confirmed = meta.kind === 'ok' && (airlineReference !== 'Pending' || ticketNumber !== 'Pending');
     if(meta.kind === 'ok' && !confirmed){
       meta = {kind:'hold', title:'Booking confirmation pending', badge:'Pending', note:'Payment has been processed. Airline reference and ticket actions will appear only after confirmed ticketing.'};
     }
+
     const passengerHtml = travellers.map(function(traveller, index){
       return `<div class="ty-final-passenger"><span>${esc(traveller.passengerType || traveller.type || traveller.pt || 'Traveller')} ${index + 1}</span><b>${esc(travellerName(traveller))}</b></div>`;
     }).join('');
-    const actions = confirmed
-      ? `${statusAction('Download e-ticket','data-download-ticket','primary')}${statusAction('Download receipt','data-download-receipt','')}${statusAction('Resend confirmation email','data-resend-email','')}${statusAction('Change flight request','data-change-request','')}${statusAction('Cancel / refund options','data-cancel-booking','')}${statusAction('TravelYaraa support','data-contact-support','')}${statusAction('New booking','data-new-booking','orange full')}`
-      : statusAction('New booking','data-new-booking','orange full');
+
+    const contactRows = [
+      statusKvIf('Name', contact.name),
+      statusKvIf('Email', contact.email),
+      statusKvIf('Phone', contact.phone)
+    ].join('');
+
+    const paymentRows = [
+      statusKvIf('Payment status', payStatus),
+      statusKvIf('Payment ID', payId, true),
+      statusKvIf('Amount paid', paidAmt)
+    ].join('');
+
+    let detailCards = '';
+    if(confirmed){
+      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking references</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Airline Reference', airlineReference !== 'Pending' ? airlineReference : '', true)}${statusKvIf('Ticket number', ticketNumber !== 'Pending' ? ticketNumber : '', true)}${statusKvIf('Booking Reference', bookingRef, true)}</div></article>`;
+      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
+      if(contactRows) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Contact details</h2><div class="ty-final-card-body ty-final-reference-grid">${contactRows}</div></article>`;
+      if(paymentRows) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Payment</h2><div class="ty-final-card-body ty-final-reference-grid">${paymentRows}</div></article>`;
+      detailCards += statusBaggageSummaryHtml(flights);
+    }else if(meta.kind === 'cancelled'){
+      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Status', meta.badge)}</div></article>`;
+      detailCards += statusRefundDetailsHtml(booking, responseData);
+      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
+    }else if(meta.kind === 'failed'){
+      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount', paidAmt)}</div></article>`;
+    }else{
+      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount paid', paidAmt)}</div></article>`;
+      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
+    }
+
+    let actions = '';
+    if(confirmed){
+      actions = statusAction('Download e-ticket','data-download-ticket','primary') +
+        statusAction('Download receipt','data-download-receipt','') +
+        statusAction('Resend confirmation email','data-resend-email','') +
+        statusAction('Change flight request','data-change-request','') +
+        statusAction('Cancel / refund options','data-cancel-booking','') +
+        statusAction('My Bookings','data-my-bookings','') +
+        statusAction('TravelYaraa support','data-contact-support','') +
+        statusAction('New booking','data-new-booking','orange full');
+    }else if(meta.kind === 'hold'){
+      actions = statusSafeNavActions(true);
+    }else{
+      actions = statusSafeNavActions(false);
+    }
 
     try{ history.replaceState({step:'booking-status', bookingId},'', '/pages/results/flights.html?service=flight&step=booking-status&bookingId=' + encodeURIComponent(bookingId)); }catch(_e){}
-    const confirmedDetails = confirmed
-      ? `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking references</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKv('Airline Reference', airlineReference, airlineReference !== 'Pending')}</div></article>${passengerHtml ? `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>` : ''}`
-      : '';
     ROOT.innerHTML = `<div class="ty-final-status"><main class="ty-final-status-shell">
       <section class="ty-final-status-hero ${esc(meta.kind)}"><div><small>TravelYaraa booking status</small><h1>${esc(meta.title)}</h1><p>${esc(meta.note)}</p></div><b class="ty-final-status-badge">${esc(meta.badge)}</b></section>
       ${renderItineraryCard(flights, {compact:true})}
-      ${confirmedDetails}
+      ${detailCards}
       <article class="ty-final-card"><div class="ty-final-actions">${actions}</div><p id="tyFinalStatusMessage" class="ty-final-message" hidden></p></article>
     </main></div>`;
-    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData || {}, confirmed);
+    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData || {}, confirmed, meta.kind, flights);
+    if(meta.kind === 'hold') startPendingStatusPoll(bookingId, bookingPayload);
   }
 
 
@@ -8755,16 +9002,22 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
 
   function renderBookingStatusLoadError(bookingId, message){
     ensureBookingStatusStyles();
+    stopPendingStatusPoll();
     const payload = cachedStatusPayloadForBooking(bookingId);
     const safeId = String(bookingId || payload.bookingId || 'Pending');
     const flights = (payload && (payload.selectedFlights || [payload.selectedFlight]).filter(Boolean)) || [];
     const authMissing = /log in|login|auth/i.test(String(message || ''));
+    const friendly = authMissing
+      ? 'Please log in to the same TravelYaraa account used for this booking.'
+      : tyCustomerFacingActionError(message, 'Booking could not be loaded. Open it again from My Bookings or contact support.');
     ROOT.innerHTML = `<div class="ty-final-status"><main class="ty-final-status-shell">
-      <section class="ty-final-status-hero failed"><div><small>TravelYaraa booking status</small><h1>${authMissing ? 'Login required' : 'Booking details unavailable'}</h1><p>${esc(message || 'Booking could not be loaded. Open it again from the same TravelYaraa account used for booking.')}</p></div><b class="ty-final-status-badge">Action required</b></section>
+      <section class="ty-final-status-hero failed"><div><small>TravelYaraa booking status</small><h1>${authMissing ? 'Login required' : 'Booking details unavailable'}</h1><p>${esc(friendly)}</p></div><b class="ty-final-status-badge">Action required</b></section>
       ${flights.length ? renderItineraryCard(flights, {compact:true}) : ''}
-      <article class="ty-final-card"><div class="ty-final-actions">${authMissing ? statusAction('Login / Sign up','data-login-booking','primary full') : ''}${statusAction('New booking','data-new-booking','orange full')}</div></article>
+      <article class="ty-final-card"><div class="ty-final-actions">${authMissing ? statusAction('Login / Sign up','data-login-booking','primary full') : ''}${statusAction('My Bookings','data-my-bookings','')}${statusAction('TravelYaraa support','data-contact-support','')}${statusAction('New booking','data-new-booking','orange full')}</div></article>
     </main></div>`;
     ROOT.querySelector('[data-new-booking]')?.addEventListener('click', function(){ location.href='/index.html?service=flight'; });
+    ROOT.querySelector('[data-my-bookings]')?.addEventListener('click', function(){ location.href='/my-bookings.html'; });
+    ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(safeId); });
     ROOT.querySelector('[data-login-booking]')?.addEventListener('click', function(){ location.href='/index.html?openLogin=1&redirect=' + encodeURIComponent(location.pathname + location.search); });
   }
 
