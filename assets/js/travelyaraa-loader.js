@@ -8,22 +8,40 @@
 
   const DEFAULT_TEXT = "Please Wait, We are searching for the flights on this route";
   const LOADER_ID = "tyFlightApiLoader";
+  const MARKUP_VERSION = "dotSpin3";
+  const HOLD_KEY = "ty_flight_loader_hold";
+  const LOADING_KEY = "ty_flight_search_loading";
 
-  const ORBIT_MARKUP =
-    '<div class="ty-results-flight-loader__box">' +
-      '<div class="ty-results-flight-loader__orbit" aria-hidden="true">' +
-        '<span class="ty-results-flight-loader__ring"></span>' +
-        '<span class="ty-results-flight-loader__orbit-arm">' +
-          '<span class="ty-results-flight-loader__plane">' +
-            '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" focusable="false">' +
-              '<path fill="#ffffff" d="M32 3.5c.7 0 1.3.4 1.5 1L39 24l18.2 6.2c1.3.4 1.3 1.7 0 2.1L39 38.5l-5.5 19.5c-.3.9-1.2 1.4-2 1.4s-1.7-.5-2-1.4L24 38.5 5.8 32.3c-1.3-.4-1.3-1.7 0-2.1L24 24l5.5-19.5c.2-.6.8-1 1.5-1z"/>' +
-              '<path fill="#0062E3" d="M32 18.5l8.2 2.8-8.2 2.8-8.2-2.8z"/>' +
-            '</svg>' +
-          '</span>' +
-        '</span>' +
+  const LOADER_MARKUP =
+    '<div class="ty-results-flight-loader__box" data-ty-loader-v="' + MARKUP_VERSION + '">' +
+      '<div class="ty-results-flight-loader__spinner" aria-hidden="true">' +
+        '<i></i><i></i><i></i><i></i><i></i><i></i>' +
+        '<i></i><i></i><i></i><i></i><i></i><i></i>' +
       '</div>' +
       '<p class="ty-results-flight-loader__text">' + DEFAULT_TEXT + '</p>' +
     '</div>';
+
+  let isVisible = false;
+
+  function setFlag(key, on){
+    try{
+      if(on) sessionStorage.setItem(key, "1");
+      else sessionStorage.removeItem(key);
+    }catch(e){}
+  }
+
+  function getFlag(key){
+    try{ return sessionStorage.getItem(key) === "1"; }catch(e){ return false; }
+  }
+
+  function isFlightSearchLoading(){
+    return getFlag(LOADING_KEY) || getFlag(HOLD_KEY);
+  }
+
+  function isFlightResultsPath(){
+    const path = String(location.pathname || "").toLowerCase();
+    return path.includes("/flights") || path.includes("flight-results");
+  }
 
   function isFlightContext(options){
     if(options && options.force === true) return true;
@@ -44,9 +62,10 @@
   function ensureLoader(){
     let el = document.getElementById(LOADER_ID);
     if(el){
-      /* Rebuild if a stale/pre-orbit markup shell is still in the DOM. */
-      if(!el.querySelector(".ty-results-flight-loader__orbit-arm")){
-        el.innerHTML = ORBIT_MARKUP;
+      const ver = el.querySelector("[data-ty-loader-v]");
+      /* Never remount while visible — remounting restarts the spinner. */
+      if((!ver || ver.getAttribute("data-ty-loader-v") !== MARKUP_VERSION) && !el.classList.contains("is-active")){
+        el.innerHTML = LOADER_MARKUP;
       }
       return el;
     }
@@ -56,13 +75,11 @@
     el.className = "ty-results-flight-loader";
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
-    el.innerHTML = ORBIT_MARKUP;
-    document.body.appendChild(el);
+    el.innerHTML = LOADER_MARKUP;
+    (document.body || document.documentElement).appendChild(el);
     return el;
   }
 
-  /* Never let a non-string reach textContent: that is what produced the
-     literal "[object Object]" on the results page. */
   function readableText(value, depth){
     if(typeof value === "string") return value.trim();
     if(typeof value === "number" || typeof value === "boolean") return String(value);
@@ -91,46 +108,101 @@
 
   function lockFlightScroll(){
     document.documentElement.classList.add("ty-flight-loader-active");
-    document.body.classList.add("ty-flight-loader-active");
+    if(document.body) document.body.classList.add("ty-flight-loader-active");
   }
 
   function unlockFlightScroll(){
     document.documentElement.classList.remove("ty-flight-loader-active");
-    document.body.classList.remove("ty-flight-loader-active");
+    if(document.body) document.body.classList.remove("ty-flight-loader-active");
+  }
+
+  function applyHide(){
+    setFlag(HOLD_KEY, false);
+    setFlag(LOADING_KEY, false);
+    const el = document.getElementById(LOADER_ID);
+    if(el) el.classList.remove("is-active");
+    isVisible = false;
+    unlockFlightScroll();
   }
 
   function show(options){
     options = options || {};
     if(!isFlightContext(options)) return false;
 
-    const el = ensureLoader();
-    setText(el, options);
-    el.classList.add("is-active");
-    lockFlightScroll();
+    setFlag(HOLD_KEY, true);
+    setFlag(LOADING_KEY, true);
+
+    const mount = function(){
+      const el = ensureLoader();
+      setText(el, options);
+      lockFlightScroll();
+
+      /* Already up: keep the same DOM/animation — no remount / restart. */
+      if(isVisible && el.classList.contains("is-active")) return true;
+
+      el.classList.add("is-active");
+      isVisible = true;
+      return true;
+    };
+
+    if(document.body) return mount();
+    document.addEventListener("DOMContentLoaded", mount, { once: true });
     return true;
   }
 
-  function hide(){
-    const el = document.getElementById(LOADER_ID);
-    if(el) el.classList.remove("is-active");
-    unlockFlightScroll();
+  /* Home page arms loading without mounting — results page mounts once. */
+  function armFlightSearch(){
+    setFlag(HOLD_KEY, true);
+    setFlag(LOADING_KEY, true);
     return true;
   }
 
-  function remove(){
+  /*
+    Intermediate hide() calls are ignored while a flight search is loading.
+    Callers must pass { final: true } only when results/error/timeout/navigation
+    is fully ready (or back-forward / non-search cancel).
+  */
+  function hide(options){
+    options = options || {};
+    const isFinal = options.final === true || options.force === true || options.done === true;
+    if(isFlightSearchLoading() && !isFinal){
+      return false;
+    }
+    applyHide();
+    return true;
+  }
+
+  function remove(options){
+    options = options || {};
+    const isFinal = options.final === true || options.force === true || options.done === true;
+    if(isFlightSearchLoading() && !isFinal){
+      return false;
+    }
+    applyHide();
     const el = document.getElementById(LOADER_ID);
     if(el) el.remove();
-    unlockFlightScroll();
     return true;
   }
+
+  /* Restore continuous loader across home → results navigation. */
+  function bootFromHold(){
+    if(!getFlag(HOLD_KEY) && !getFlag(LOADING_KEY)) return;
+    if(!isFlightResultsPath()) return;
+    show({ service: "flight", force: true });
+  }
+
+  if(document.body) bootFromHold();
+  else document.addEventListener("DOMContentLoaded", bootFromHold, { once: true });
 
   window.TravelYaraaLoader = {
     show: show,
     hide: hide,
     remove: remove,
     ensure: ensureLoader,
+    isLoading: isFlightSearchLoading,
+    armFlightSearch: armFlightSearch,
     showFlight: function(){
-      return show({service:"flight", force:true});
+      return show({ service: "flight", force: true });
     }
   };
 })();
