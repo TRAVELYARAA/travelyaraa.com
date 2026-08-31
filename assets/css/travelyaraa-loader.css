@@ -1,65 +1,72 @@
 /* TravelYaraa loaders: one source for flight result loader and passport scan loader. */
 :root{
+  --ty-loader-navy:#071d49;
   --ty-loader-blue:#0062E3;
-  --ty-loader-plane:#ffffff;
-  --ty-loader-white:#fff;
-  --ty-loader-orbit:200px;
-  --ty-loader-ring:160px;
-  --ty-loader-radius:80px;
+  --ty-loader-orange:#eb814b;
+  --ty-loader-radius:118px;
 }
 .ty-results-flight-loader{
   position:fixed;inset:0;z-index:2147483000;
   display:none;align-items:center;justify-content:center;text-align:center;
   padding:clamp(18px,5vw,24px);pointer-events:auto;
-  background:linear-gradient(145deg,rgba(7,29,73,.9),rgba(0,98,227,.74));
-  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  background:
+    radial-gradient(ellipse 85% 65% at 50% 38%, rgba(0,98,227,.14) 0%, rgba(7,29,73,0) 58%),
+    rgba(7,29,73,.72);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
   overscroll-behavior:none;touch-action:none;
 }
 .ty-results-flight-loader.is-active{display:flex}
 .ty-results-flight-loader__box{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:28px;width:min(94vw,640px);background:transparent;border:0;box-shadow:none;
+  gap:clamp(28px,6vw,44px);width:min(94vw,680px);background:transparent;border:0;box-shadow:none;
 }
-.ty-results-flight-loader__orbit{
+.ty-results-flight-loader__sky{
   position:relative;
-  width:var(--ty-loader-orbit);height:var(--ty-loader-orbit);
-  max-width:min(52vw,200px);max-height:min(52vw,200px);
+  width:min(92vw,340px);height:min(92vw,340px);
+  max-width:340px;max-height:340px;
   overflow:visible;background:transparent;border:0;flex:0 0 auto;
 }
-/* Visible circular track only — not a progress bar / loading line. */
-.ty-results-flight-loader__ring{
-  position:absolute;left:50%;top:50%;
-  width:var(--ty-loader-ring);height:var(--ty-loader-ring);
-  margin:calc(var(--ty-loader-ring) / -2) 0 0 calc(var(--ty-loader-ring) / -2);
-  border-radius:50%;pointer-events:none;box-sizing:border-box;
-  border:3px solid #ffffff;
-  box-shadow:
-    0 0 0 2px var(--ty-loader-blue),
-    0 0 26px rgba(255,255,255,.55),
-    0 0 34px rgba(0,98,227,.7),
-    inset 0 0 16px rgba(0,98,227,.35);
-  background:radial-gradient(circle,rgba(255,255,255,.08) 0%,transparent 62%);
+/* Soft blue atmosphere — not a ring. */
+.ty-results-flight-loader__sky::before{
+  content:"";position:absolute;left:50%;top:50%;width:280px;height:280px;
+  margin:-140px 0 0 -140px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(0,98,227,.34) 0%,rgba(0,98,227,.12) 38%,rgba(7,29,73,0) 72%);
+  filter:blur(3px);
 }
-/* Arm spins clockwise; plane offset on rim keeps nose tangent to travel. */
-.ty-results-flight-loader__orbit-arm{
-  position:absolute;left:50%;top:50%;width:0;height:0;
-  will-change:transform;
-  animation:tyResultsFlightOrbit 2.4s linear infinite;
+.ty-results-flight-loader__trail{
+  position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:1;
+}
+.ty-results-flight-loader__trail-dot{
+  position:absolute;left:0;top:0;border-radius:50%;
+  transform:translate(-50%,-50%);
+  will-change:opacity,width,height;
+}
+/*
+  Invisible circular orbit; offset-rotate:auto keeps nose tangent to travel.
+  Local +X on the SVG is the nose direction.
+*/
+.ty-results-flight-loader__carrier{
+  position:absolute;left:0;top:0;width:0;height:0;z-index:3;
+  offset-path:path("M170 52 A118 118 0 1 1 169.9 52");
+  offset-distance:0%;
+  offset-rotate:auto;
+  offset-anchor:center;
+  will-change:offset-distance;
+  animation:tyResultsFlightOrbit 7.5s linear infinite;
 }
 .ty-results-flight-loader__plane{
-  position:absolute;left:0;top:0;width:52px;height:52px;
-  margin:-26px 0 0 -26px;
-  /* Fixed px radius — avoids nested clamp()/var() transform failures. */
-  transform:translateY(calc(var(--ty-loader-radius) * -1)) rotate(90deg);
-  filter:drop-shadow(0 0 14px rgba(255,255,255,.75)) drop-shadow(0 8px 16px rgba(0,0,0,.3));
+  position:absolute;left:0;top:0;width:136px;height:50px;
+  margin:-25px 0 0 -68px;
+  filter:drop-shadow(0 0 14px rgba(0,98,227,.45)) drop-shadow(0 6px 14px rgba(7,29,73,.4));
   pointer-events:none;
 }
-.ty-results-flight-loader__plane svg{width:52px;height:52px;display:block;overflow:visible}
+.ty-results-flight-loader__plane svg{width:136px;height:50px;display:block;overflow:visible}
 .ty-results-flight-loader__text{
-  margin:0;max-width:min(92vw,650px);color:var(--ty-loader-white);
+  margin:0;max-width:min(92vw,650px);color:#fff;
   font-size:clamp(17px,4vw,22px);font-weight:850;line-height:1.45;letter-spacing:.01em;
   white-space:normal;overflow:visible;text-overflow:clip;
-  text-shadow:0 5px 18px rgba(0,0,0,.46);background:transparent;border:0;box-shadow:none;
+  text-shadow:0 4px 16px rgba(0,0,0,.45);background:transparent;border:0;box-shadow:none;
+  position:relative;z-index:2;
 }
 html.ty-flight-loader-active,
 body.ty-flight-loader-active{
@@ -90,8 +97,8 @@ body.ty-flight-loader-active{
 .ty-passport-scan-loader__dots i:nth-child(5){animation-delay:.48s}
 .ty-passport-scan-loader__text{margin:0;color:#071d49;font-size:clamp(13px,3.5vw,14px);line-height:1.45;font-weight:900}
 @keyframes tyResultsFlightOrbit{
-  from{transform:rotate(0deg)}
-  to{transform:rotate(360deg)}
+  from{offset-distance:0%}
+  to{offset-distance:100%}
 }
 @keyframes tyPassportScanDot{
   0%,100%{opacity:.28;transform:translateY(0) scale(.78)}
