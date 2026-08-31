@@ -32,7 +32,9 @@
     activeSeatPassenger: 0,
     activeSeatSegment: "",
     fareDateCache: {},
+    fareDateNone: {},
     fareDateLoading: new Set(),
+    fareFetchGen: 0,
     lookups: { airports: {}, airlines: {} },
     bookingHoldTimer: null,
     bookingHoldDeadline: 0,
@@ -2555,62 +2557,113 @@ function normalizeCabin(value){
     return [{key:"onward", label:"Flights", from:s.origin, to:s.destination, date:s.departureDate}];
   }
 
-  function buildSingleLegPayload(from, to, date){
-    const original = state.search;
+  /* Same shape as homepage search-bar supplierPayload, so date-chip search
+     matches the working initial search (from/to/cabin/passengers/searchModifiers). */
+  function buildWorkingFlightSearchPayload(opts){
+    opts = opts || {};
+    const s = state.search || {};
+    const from = String(opts.from || s.origin || "").toUpperCase();
+    const to = String(opts.to || s.destination || "").toUpperCase();
+    const departureDate = String(opts.departureDate || s.departureDate || "").slice(0, 10);
+    const tripType = opts.forceOneway ? "oneway" : String(opts.tripType || s.tripType || "oneway");
+    let returnDate = "";
+    if(tripType === "roundtrip"){
+      returnDate = String(opts.returnDate != null ? opts.returnDate : (s.returnDate || "")).slice(0, 10);
+      if(returnDate && departureDate && returnDate < departureDate) returnDate = departureDate;
+    }
+    const fareType = normalizeFare(s.fareType);
+    const cabin = normalizeCabin(s.cabinClass);
+    const adults = Math.max(1, Number(s.adults || 1));
+    const children = Math.max(0, Number(s.children || 0));
+    const infants = Math.max(0, Number(s.infants || 0));
+    const pftMod = (fareType === "STUDENT" || fareType === "SENIOR_CITIZEN") ? fareType : "REGULAR";
+    const routeInfos = [];
+    if(opts.forceOneway || tripType === "oneway"){
+      addRoute(routeInfos, from, to, departureDate);
+    }else{
+      routeLegs().forEach(function(leg){
+        const legDate = leg.key === "onward" ? departureDate : (leg.key === "return" ? (returnDate || leg.date) : leg.date);
+        addRoute(routeInfos, leg.from, leg.to, legDate);
+      });
+      if(!routeInfos.length){
+        addRoute(routeInfos, from, to, departureDate);
+        if(returnDate) addRoute(routeInfos, to, from, returnDate);
+      }
+    }
     return {
-      from, to,
-      departureDate: date,
-      returnDate: "",
-      tripType: "oneway",
-      cabinClass: normalizeCabin(original.cabinClass),
-      fareType: normalizeFare(original.fareType),
-      pft: normalizeFare(original.fareType),
-      adults: original.adults,
-      children: original.children,
-      infants: original.infants,
-      passengers:{adults:original.adults,children:original.children,infants:original.infants},
-      searchQuery:{
-        cabinClass: normalizeCabin(original.cabinClass),
+      from: from,
+      to: to,
+      departureDate: departureDate,
+      returnDate: tripType === "oneway" ? "" : returnDate,
+      tripType: tripType,
+      passengers: {adults: adults, children: children, infants: infants},
+      cabin: cabin,
+      cabinClass: cabin,
+      fareType: fareType,
+      pft: fareType,
+      adults: adults,
+      children: children,
+      infants: infants,
+      searchModifiers: {pft: pftMod},
+      searchQuery: {
+        cabinClass: cabin,
         preferredAirline: [],
-        searchModifiers:{pft:normalizeFare(original.fareType)},
-        routeInfos:[{
-          fromCityOrAirport:{code:String(from).toUpperCase()},
-          toCityOrAirport:{code:String(to).toUpperCase()},
-          travelDate:String(date).slice(0,10)
-        }],
-        paxInfo:{ADULT:original.adults,CHILD:original.children,INFANT:original.infants}
+        searchModifiers: {pft: pftMod},
+        routeInfos: routeInfos,
+        paxInfo: {ADULT: adults, CHILD: children, INFANT: infants}
       }
     };
   }
 
-  function buildApiPayload(){
-    const s = state.search;
-    const routeInfos = [];
-    routeLegs().forEach(function(leg){
-      addRoute(routeInfos, leg.from, leg.to, leg.date);
+  function buildSingleLegPayload(from, to, date){
+    return buildWorkingFlightSearchPayload({
+      from: from,
+      to: to,
+      departureDate: date,
+      forceOneway: true
     });
+  }
 
-    return {
-      from: s.origin,
-      to: s.destination,
-      departureDate: s.departureDate,
-      returnDate: s.returnDate,
-      tripType: s.tripType,
-      cabinClass: normalizeCabin(s.cabinClass),
-      fareType: normalizeFare(s.fareType),
-      pft: normalizeFare(s.fareType),
-      adults: s.adults,
-      children: s.children,
-      infants: s.infants,
-      passengers: {adults:s.adults,children:s.children,infants:s.infants},
-      searchQuery: {
-        cabinClass: normalizeCabin(s.cabinClass),
-        preferredAirline: [],
-        searchModifiers:{pft:normalizeFare(s.fareType)},
-        routeInfos,
-        paxInfo: {ADULT:s.adults,CHILD:s.children,INFANT:s.infants}
-      }
-    };
+  function buildApiPayload(){
+    return buildWorkingFlightSearchPayload({});
+  }
+
+  function persistFlightSearchSession(pickedDate){
+    const picked = normalizeFutureYmd(pickedDate || state.search.departureDate);
+    state.search.departureDate = picked;
+    if(state.search.tripType === "roundtrip" && state.search.returnDate){
+      state.search.returnDate = normalizeFutureYmd(state.search.returnDate);
+      if(state.search.returnDate < picked) state.search.returnDate = picked;
+    }
+    const live = buildWorkingFlightSearchPayload({departureDate: picked, returnDate: state.search.returnDate});
+    try{
+      sessionStorage.setItem("tySearchContext", JSON.stringify(state.search));
+      sessionStorage.setItem("ty_last_search_payload", JSON.stringify(Object.assign({type: "flight", service: "flight"}, live)));
+      const existing = parseJSON(sessionStorage.getItem("tySearchPayload"), {});
+      existing.service = "flight";
+      existing.search = Object.assign({}, existing.search || {}, {
+        from: state.search.origin,
+        to: state.search.destination,
+        origin: state.search.origin,
+        destination: state.search.destination,
+        departureDate: picked,
+        depart: picked,
+        returnDate: state.search.returnDate || "",
+        tripType: state.search.tripType,
+        adults: state.search.adults,
+        children: state.search.children,
+        infants: state.search.infants,
+        cabin: live.cabin,
+        cabinClass: live.cabin,
+        fareType: live.fareType
+      });
+      existing.livePayload = Object.assign({}, existing.livePayload || {}, live);
+      existing.createdAt = new Date().toISOString();
+      sessionStorage.setItem("tySearchPayload", JSON.stringify(existing));
+      sessionStorage.removeItem("ty_live_results_flight");
+      sessionStorage.removeItem("ty_flight_search_error");
+    }catch(e){}
+    return live;
   }
   function readCachedFlightResults(){
     try{
@@ -3426,11 +3479,23 @@ function normalizeCabin(value){
     return arr.slice(0,15);
   }
 
+  function dateChipFareLabel(d){
+    const fare = Number(state.fareDateCache[d] || 0);
+    if(fare > 0) return money(fare);
+    if(state.fareDateNone[d]) return "No fare";
+    return "Check fare";
+  }
+
+  function setDateChipFareLabel(d, label){
+    const el = ROOT.querySelector('[data-date-pick="' + CSS.escape(String(d)) + '"] span');
+    if(el) el.textContent = label;
+  }
+
   function renderDateFareStrip(){
+    const activeDate = String(normalizeFutureYmd(state.search.departureDate));
     const pills = dateStripItems().map(function(d){
-      const active = String(d) === String(normalizeFutureYmd(state.search.departureDate));
-      const fare = state.fareDateCache[d];
-      return `<button type="button" class="ty-date-pill ${active?'active':''}" data-date-pick="${esc(d)}"><b>${esc(dateText(d).replace(',', ''))}</b><span>${fare ? money(fare) : 'Check fare'}</span></button>`;
+      const active = String(d) === activeDate;
+      return `<button type="button" class="ty-date-pill ${active?'active':''}" data-date-pick="${esc(d)}"><b>${esc(dateText(d).replace(',', ''))}</b><span>${esc(dateChipFareLabel(d))}</span></button>`;
     }).join('');
     return `<div class="ty-date-strip-shell"><button type="button" class="ty-date-nav prev" data-date-scroll="-1" aria-label="Previous dates">‹</button><div class="ty-date-strip" data-date-strip>${pills}</div><button type="button" class="ty-date-nav next" data-date-scroll="1" aria-label="Next dates">›</button></div>`;
   }
@@ -3477,21 +3542,56 @@ function normalizeCabin(value){
 
 
   async function fetchDateFares(){
+    const gen = ++state.fareFetchGen;
     const dates = dateStripItems();
-    const current = minPrice(state.flights);
-    if(current) state.fareDateCache[state.search.departureDate] = current;
-    dates.forEach(async function(d){
-      if(state.fareDateCache[d] || state.fareDateLoading.has(d)) return;
+    const current = minPrice(state.rawFlights && state.rawFlights.length ? state.rawFlights : state.flights);
+    const selected = normalizeFutureYmd(state.search.departureDate);
+    if(current > 0){
+      state.fareDateCache[selected] = current;
+      delete state.fareDateNone[selected];
+      setDateChipFareLabel(selected, money(current));
+    }
+
+    for(let i = 0; i < dates.length; i++){
+      if(gen !== state.fareFetchGen) return;
+      const d = dates[i];
+      if(Number(state.fareDateCache[d] || 0) > 0 || state.fareDateNone[d] || state.fareDateLoading.has(d)) continue;
       state.fareDateLoading.add(d);
       try{
-        const leg = {from:state.search.origin,to:state.search.destination,date:d,key:'faredate',label:'Fare Date'};
-        const data = await postFlightSearch(buildSingleLegPayload(leg.from, leg.to, leg.date)).catch(()=>({}));
-        let list = extractArray(data);
-        const normalized = list.map((it,i)=>normalizeFlight(it,i,leg)).filter(tyRealFlightCard);
+        const payload = buildSingleLegPayload(state.search.origin, state.search.destination, d);
+        const res = await fetch(API_BASE + "/api/flights/search", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload),
+          cache: "no-store"
+        });
+        if(gen !== state.fareFetchGen) return;
+        const data = await res.json().catch(function(){ return {}; });
+        if(!res.ok || data.success === false){
+          /* Keep "Check fare" on temporary/API failures; never show technical text. */
+          continue;
+        }
+        const list = extractArray(data);
+        const leg = {from: state.search.origin, to: state.search.destination, date: d, key: "faredate", label: "Fare Date"};
+        const normalized = list.map(function(it, idx){ return normalizeFlight(it, idx, leg); }).filter(tyRealFlightCard);
         const low = minPrice(normalized);
-        if(low){ state.fareDateCache[d]=low; const el=ROOT.querySelector(`[data-date-pick="${CSS.escape(d)}"] span`); if(el) el.textContent=money(low); }
-      }catch(e){} finally{ state.fareDateLoading.delete(d); }
-    });
+        if(low > 0){
+          state.fareDateCache[d] = low;
+          delete state.fareDateNone[d];
+          setDateChipFareLabel(d, money(low));
+        }else{
+          state.fareDateNone[d] = true;
+          delete state.fareDateCache[d];
+          setDateChipFareLabel(d, "No fare");
+        }
+      }catch(e){
+        /* Leave chip as Check fare; do not expose technical errors. */
+      }finally{
+        state.fareDateLoading.delete(d);
+      }
+      if(gen !== state.fareFetchGen) return;
+      await new Promise(function(resolve){ setTimeout(resolve, 180); });
+    }
   }
 
 function renderShell(content, opts){
@@ -3976,17 +4076,17 @@ function renderShell(content, opts){
     });
     ROOT.querySelectorAll("[data-date-pick]").forEach(btn => btn.onclick = () => {
       const d = btn.getAttribute("data-date-pick");
-      if(d){
-        const picked = normalizeFutureYmd(d);
-        state.search.departureDate = picked;
-        state.searchError = '';
-        try{
-          sessionStorage.setItem("tySearchContext", JSON.stringify(state.search));
-          sessionStorage.setItem("ty_last_search_payload", JSON.stringify(Object.assign({}, state.search, {departureDate:picked,date:picked})));
-          sessionStorage.removeItem("ty_live_results_flight");
-        }catch(e){}
-        loadFlights(true);
-      }
+      if(!d) return;
+      const picked = normalizeFutureYmd(d);
+      const current = normalizeFutureYmd(state.search.departureDate);
+      if(picked === current && state.rawFlights && state.rawFlights.length) return;
+      /* Cancel in-flight fare calendar requests so they cannot race the full search. */
+      state.fareFetchGen += 1;
+      state.fareDateLoading.clear();
+      state.searchError = "";
+      persistFlightSearchSession(picked);
+      /* Same full search path as search-bar flow; forceFresh clears stale date results. */
+      loadFlights(true);
     });
     ROOT.querySelectorAll("[data-chip-sort]").forEach(btn => btn.onclick = () => { state.sort=btn.getAttribute("data-chip-sort") || "priceLow"; applyFilters(); });
     ROOT.querySelectorAll("[data-filter-sort]").forEach(btn => btn.onclick = () => { state.sort=btn.getAttribute("data-filter-sort") || state.sort; applyFilters(); });
