@@ -5621,11 +5621,15 @@ function renderShell(content, opts){
     }
     if(form.dataset.tyPassportFormGuard !== '1'){
       form.dataset.tyPassportFormGuard = '1';
+      /* Capture guard must NOT stop input/change on #tyPassportUploadInput — that
+         blocked the file input's own scan handler (loader + OCR never ran). */
       ['input','change','submit'].forEach(function(evtName){
         form.addEventListener(evtName, function(e){
           const target = e && e.target;
-          if(tyIsPassportUploadTarget(target)){
-            if(evtName === 'submit') e.preventDefault();
+          if(!tyIsPassportUploadTarget(target)) return;
+          if(evtName === 'input' || evtName === 'change') return;
+          if(evtName === 'submit'){
+            e.preventDefault();
             e.stopPropagation();
             if(e.stopImmediatePropagation) e.stopImmediatePropagation();
           }
