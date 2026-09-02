@@ -8900,12 +8900,16 @@ function mobileFareSheets(flights, fare, options){
   }
 
   function statusContact(booking, bookingPayload){
-    const details = booking.details || bookingPayload && bookingPayload.passenger || {};
-    const first = Array.isArray(booking.details && booking.details.passengers) ? booking.details.passengers[0] : null;
+    const details = (booking && booking.details) || {};
+    const contact = details.contact || (booking && booking.contact) || (bookingPayload && bookingPayload.contact) || {};
+    const first = Array.isArray(details.passengers) ? details.passengers[0] : null;
+    const nameFromContact = statusPresentText(contact.name) ||
+      [contact.title || contact.ti, contact.firstName || contact.fN, contact.lastName || contact.lN].filter(Boolean).join(' ');
+    const nameFromDetails = [details.title || details.ti, details.firstName || details.fN, details.lastName || details.lN].filter(Boolean).join(' ');
     return {
-      name: [details.title || details.ti || first && (first.title || first.ti), details.firstName || details.fN || first && (first.firstName || first.fN), details.lastName || details.lN || first && (first.lastName || first.lN)].filter(Boolean).join(' ') || travellerName(first || {}),
-      email: details.contactEmail || details.email || booking.user && booking.user.email || '',
-      phone: details.mobileFull || details.contactPhone || details.phone || booking.user && booking.user.phone || ''
+      name: nameFromContact || nameFromDetails || travellerName(first || {}),
+      email: statusPresentText(contact.email || details.contactEmail || details.email || (booking && booking.user && booking.user.email)) || '',
+      phone: statusPresentText(contact.phone || contact.mobile || details.mobileFull || details.contactPhone || details.phone || (booking && booking.user && booking.user.phone)) || ''
     };
   }
 
@@ -8977,76 +8981,125 @@ function mobileFareSheets(flights, fare, options){
       .ty-final-action.primary{background:#0062e3;border-color:#0062e3;color:#fff}.ty-final-action.orange{background:#eb814b;border-color:#eb814b;color:#fff}.ty-final-action.full{grid-column:1/-1}
       .ty-final-message{margin:0 16px 16px;padding:11px 13px;border-radius:9px;background:#edf6ff;color:#0b4f93;font-weight:800;font-size:13px}.ty-final-message.bad{background:#fff0f0;color:#b42318}
       @media(max-width:700px){.ty-final-status{padding:0 0 34px}.ty-final-status-shell{gap:10px}.ty-final-status-hero,.ty-final-card{border-radius:0}.ty-final-status-hero{padding:17px 14px}.ty-final-status-hero h1{font-size:21px}.ty-final-status-badge{font-size:11px;padding:7px 9px}.ty-final-reference-grid{grid-template-columns:1fr}.ty-final-card-body{padding:12px}.ty-final-actions{grid-template-columns:1fr;padding:12px}.ty-final-action.full{grid-column:auto}}
-      .ty-bd-page{padding:0 0 40px;background:#f4f7fb}
-      .ty-bd-header{position:sticky;top:0;z-index:90;display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;background:#fff;border-bottom:1px solid #e5edf7;box-shadow:0 2px 10px rgba(7,29,73,.06)}
-      .ty-bd-header button{border:0;background:transparent;color:#071d49;font-size:28px;line-height:1;padding:0 6px;cursor:pointer}
-      .ty-bd-header span{font-size:17px;font-weight:950;color:#071d49}
-      .ty-bd-sticky-bar{position:sticky;top:52px;z-index:85;display:none;padding:9px 14px;background:#fff;border-bottom:1px solid #e8eef6;font-size:12px;font-weight:850;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .ty-bd-page{padding:0 0 28px;background:#eef1f6;min-height:100vh;font-family:Inter,Roboto,Arial,sans-serif;color:#111827}
+      .ty-bd-header{position:sticky;top:0;z-index:90;display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;background:#fff;border-bottom:1px solid #e5e9f0}
+      .ty-bd-header button{border:0;background:transparent;color:#111827;font-size:26px;line-height:1;padding:0 4px;cursor:pointer;font-weight:800}
+      .ty-bd-header span{font-size:18px;font-weight:900;color:#111827}
+      .ty-bd-sticky-bar{position:sticky;top:52px;z-index:85;display:none;padding:10px 14px;background:#d9ecff;border-bottom:1px solid #c7e0f8;font-size:13px;font-weight:700;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .ty-bd-sticky-bar.is-visible{display:block}
-      .ty-bd-hero{min-height:148px;background:linear-gradient(135deg,#071d49 0%,#0062e3 55%,#3b9bff 100%);display:flex;align-items:flex-end;padding:18px 16px;color:#fff}
-      .ty-bd-hero-city{font-size:22px;font-weight:950;line-height:1.2;text-shadow:0 2px 12px rgba(7,29,73,.35)}
-      .ty-bd-shell{max-width:720px;margin:0 auto;padding:12px 12px 0;display:grid;gap:12px}
-      .ty-bd-card{background:#fff;border-radius:14px;box-shadow:0 4px 16px rgba(7,29,73,.07);overflow:hidden}
-      .ty-bd-status-band{background:#e8f8ed;color:#137333;padding:10px 14px;font-size:13px;font-weight:950}
-      .ty-bd-status-band.completed{background:#eef6ff;color:#0b4f93}
-      .ty-bd-status-band.cancelled{background:#fff1f0;color:#b42318}
-      .ty-bd-status-band.failed{background:#fff1f0;color:#b42318}
+      .ty-bd-hero{position:relative;height:168px;overflow:hidden;background:linear-gradient(135deg,#0b3d91 0%,#1d7ad8 48%,#69b7ff 100%)}
+      .ty-bd-hero:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 78% 28%,rgba(255,255,255,.28),transparent 42%),linear-gradient(180deg,rgba(7,29,73,.05),rgba(7,29,73,.42))}
       .ty-bd-page.cancelled .ty-bd-hero,.ty-bd-page.failed .ty-bd-hero{background:linear-gradient(135deg,#3f1d1d 0%,#b42318 55%,#f97066 100%)}
       .ty-bd-page.completed .ty-bd-hero{background:linear-gradient(135deg,#071d49 0%,#0b4f93 55%,#3b9bff 100%)}
-      .ty-bd-note{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px;font-weight:800;line-height:1.45}
-      .ty-bd-note.completed{background:#eef6ff;color:#0b4f93}
-      .ty-bd-note.cancelled,.ty-bd-note.failed{background:#fff1f0;color:#b42318}
-      .ty-bd-status-body{padding:14px}
-      .ty-bd-status-body h1{margin:0 0 8px;font-size:20px;font-weight:950;color:#071d49}
-      .ty-bd-meta{display:flex;flex-wrap:wrap;gap:8px 14px;color:#64748b;font-size:12px;font-weight:800;margin-bottom:10px}
-      .ty-bd-meta em{font-style:normal}
-      .ty-bd-booking-id{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #edf1f5;font-size:13px;font-weight:850;color:#334155}
-      .ty-bd-booking-id b{color:#071d49;font-weight:950}
-      .ty-bd-copy{border:0;background:#eef6ff;color:#0062e3;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:900;cursor:pointer}
-      .ty-bd-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 0}
-      .ty-bd-section-head h2{margin:0;font-size:16px;font-weight:950;color:#071d49}
-      .ty-bd-section-head button{border:0;background:#eef6ff;color:#0062e3;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer}
-      .ty-bd-section-body{padding:12px 14px 14px;color:#556274;font-size:13px;line-height:1.5}
-      .ty-bd-muted{color:#64748b;font-size:13px;line-height:1.45;margin:0}
-      .ty-bd-flight-row{display:grid;grid-template-columns:42px minmax(0,1fr);gap:10px;align-items:start;padding:4px 0}
-      .ty-bd-flight-row b{display:block;font-size:14px;color:#071d49;font-weight:950}
-      .ty-bd-flight-row span{display:block;font-size:12px;color:#64748b;font-weight:800;margin-top:2px}
-      .ty-bd-route-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-      .ty-bd-route-grid small{display:block;color:#64748b;font-size:11px;font-weight:800}
-      .ty-bd-route-grid strong{display:block;color:#071d49;font-size:15px;font-weight:950;margin-top:2px}
-      .ty-bd-link{border:0;background:transparent;color:#0062e3;font-size:13px;font-weight:950;padding:8px 0 0;cursor:pointer;text-align:left}
-      .ty-bd-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-      .ty-bd-btn{min-height:46px;border-radius:12px;border:1px solid #d9e2ed;background:#fff;color:#071d49;font-size:14px;font-weight:950;cursor:pointer;padding:10px 12px}
-      .ty-bd-btn.primary{background:#0062e3;border-color:#0062e3;color:#fff}
-      .ty-bd-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;border:0;background:#fff;padding:14px;font-size:14px;font-weight:850;color:#071d49;text-align:left;cursor:pointer;border-bottom:1px solid #edf1f5}
-      .ty-bd-list-row:last-child{border-bottom:0}
-      .ty-bd-list-row:after{content:"›";color:#94a3b8;font-size:18px;font-weight:900}
-      .ty-bd-passenger-card{padding:12px 14px;border-bottom:1px solid #edf1f5;cursor:pointer}
-      .ty-bd-passenger-card:last-child{border-bottom:0}
-      .ty-bd-passenger-card b{display:block;font-size:14px;color:#071d49;font-weight:950}
-      .ty-bd-passenger-card span{display:block;font-size:12px;color:#64748b;font-weight:800;margin-top:3px}
-      .ty-bd-support{padding:16px;background:linear-gradient(180deg,#eef6ff,#fff)}
-      .ty-bd-support p{margin:0 0 10px;font-size:13px;color:#475569;line-height:1.45}
-      .ty-bd-support a,.ty-bd-support button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;border-radius:10px;padding:0 14px;font-size:13px;font-weight:950;text-decoration:none;cursor:pointer;margin-right:8px;margin-top:6px}
-      .ty-bd-support .primary{background:#0062e3;color:#fff;border:0}
-      .ty-bd-support .ghost{background:#fff;color:#0062e3;border:1px solid #cfe0ff}
-      .ty-bd-sheet{position:fixed;inset:0;z-index:200;display:flex;align-items:flex-end;justify-content:center}
-      .ty-bd-sheet-backdrop{position:absolute;inset:0;background:rgba(7,29,73,.45)}
-      .ty-bd-sheet-panel{position:relative;width:min(720px,100%);max-height:88vh;background:#fff;border-radius:18px 18px 0 0;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .22s ease}
-      .ty-bd-sheet.is-open .ty-bd-sheet-panel{transform:translateY(0)}
-      .ty-bd-sheet-panel header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid #edf1f5}
-      .ty-bd-sheet-panel header h2{margin:0;font-size:17px;font-weight:950;color:#071d49}
-      .ty-bd-sheet-panel header button{border:0;background:transparent;font-size:32px;line-height:1;color:#64748b;cursor:pointer}
-      .ty-bd-sheet-body{padding:14px 16px 24px;overflow:auto}
-      .ty-bd-timeline{display:grid;gap:14px}
-      .ty-bd-timeline-item{border-left:2px solid #cfe0ff;padding-left:12px}
-      .ty-bd-timeline-item b{display:block;font-size:14px;color:#071d49;font-weight:950}
-      .ty-bd-timeline-item span{display:block;font-size:12px;color:#64748b;font-weight:800;margin-top:3px}
-      .ty-bd-form-field{display:grid;gap:6px;margin:12px 0}
-      .ty-bd-form-field label{font-size:12px;font-weight:900;color:#64748b}
-      .ty-bd-form-field input{width:100%;min-height:42px;border:1px solid #dce6f1;border-radius:10px;padding:8px 10px;font-size:14px}
-      .ty-bd-form-actions{display:flex;gap:10px;margin-top:14px}
-      @media(max-width:700px){.ty-bd-shell{padding:10px 10px 0;gap:10px}.ty-bd-primary-actions{grid-template-columns:1fr}.ty-bd-route-grid{grid-template-columns:1fr}}
+      .ty-bd-hero-city{position:absolute;left:16px;bottom:44px;z-index:1;color:#fff;font-size:28px;font-weight:900;letter-spacing:-.03em;text-shadow:0 2px 10px rgba(0,0,0,.25)}
+      .ty-bd-shell{max-width:720px;margin:-18px auto 0;padding:0;position:relative;z-index:2;display:grid;gap:0}
+      .ty-bd-status-card{background:#fff;overflow:hidden;box-shadow:0 1px 0 rgba(15,23,42,.04)}
+      .ty-bd-status-band{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:14px;font-weight:900}
+      .ty-bd-status-band.confirmed{background:#d9f5e1;color:#0f7a3a}
+      .ty-bd-status-band.completed{background:#1f2a44;color:#fff}
+      .ty-bd-status-band.cancelled{background:#fde2e4;color:#c62828}
+      .ty-bd-status-band.failed{background:#fff3cd;color:#8a6d1d}
+      .ty-bd-status-body{padding:16px 16px 18px;background:#fff}
+      .ty-bd-status-body h1{margin:0 0 10px;font-size:24px;line-height:1.2;font-weight:900;color:#111827;letter-spacing:-.02em}
+      .ty-bd-meta{display:grid;gap:6px;margin:0 0 10px}
+      .ty-bd-meta em{display:inline-flex;align-items:center;gap:6px;font-style:normal;font-size:14px;color:#374151;font-weight:600}
+      .ty-bd-booking-id{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:#0062e3;font-size:13px;font-weight:700}
+      .ty-bd-booking-id button,.ty-bd-airline-ref button,.ty-bd-copy{border:0;background:transparent;color:#0062e3;cursor:pointer;padding:0;font-size:15px;line-height:1;font-weight:800}
+      .ty-bd-alert{margin:12px 16px 0;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.45;font-weight:600}
+      .ty-bd-alert.info{background:#e8f3ff;color:#1e3a5f}
+      .ty-bd-alert.warn{background:#fff1e0;color:#8a4b12}
+      .ty-bd-alert.fail{background:#fff7e6;color:#7a5b00}
+      .ty-bd-alert b{display:block;margin-bottom:4px;font-size:14px;font-weight:900}
+      .ty-bd-alert a,.ty-bd-alert button.linkish{border:0;background:transparent;color:#0062e3;font-weight:800;cursor:pointer;padding:0;margin-top:8px;display:inline-block}
+      .ty-bd-block{margin-top:12px;background:#fff}
+      .ty-bd-block-pad{padding:14px 16px}
+      .ty-bd-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;font-size:17px;font-weight:900;color:#111827}
+      .ty-bd-section-title .ty-bd-chev{color:#0062e3;font-size:18px;font-weight:800;line-height:1}
+      .ty-bd-muted{margin:0;color:#6b7280;font-size:13px;line-height:1.45;font-weight:600}
+      .ty-bd-live-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+      .ty-bd-live-head button{border:0;background:transparent;color:#0062e3;font-size:13px;font-weight:800;cursor:pointer}
+      .ty-bd-live-card{border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#fff}
+      .ty-bd-details-card{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff}
+      .ty-bd-details-banner{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#1f2a44;color:#fff;font-size:13px;font-weight:800}
+      .ty-bd-flight-head{display:flex;align-items:center;gap:10px;padding:12px 12px 6px}
+      .ty-bd-flight-head img{width:28px;height:28px;object-fit:contain}
+      .ty-bd-flight-head b{display:block;font-size:14px;color:#111827;font-weight:800}
+      .ty-bd-airline-ref{display:inline-flex;align-items:center;gap:6px;padding:0 12px 10px;color:#0062e3;font-size:13px;font-weight:700}
+      .ty-bd-route-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:start;padding:4px 12px 12px}
+      .ty-bd-route-grid > div{min-width:0}
+      .ty-bd-route-grid strong{display:block;font-size:22px;line-height:1.1;font-weight:900;color:#111827;margin:0 0 4px}
+      .ty-bd-route-grid b{display:block;font-size:13px;font-weight:800;color:#111827}
+      .ty-bd-route-grid span{display:block;font-size:12px;color:#6b7280;font-weight:600;line-height:1.35;margin-top:2px}
+      .ty-bd-route-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:8px;min-width:72px}
+      .ty-bd-route-mid .line{width:56px;height:2px;background:#c5cdd8;position:relative;margin-bottom:6px}
+      .ty-bd-route-mid .line:after{content:"";position:absolute;right:-1px;top:50%;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid #c5cdd8;transform:translateY(-50%)}
+      .ty-bd-route-mid em{font-style:normal;font-size:12px;color:#6b7280;font-weight:700}
+      .ty-bd-route-mid .stops{font-size:12px;font-weight:800;color:#374151;margin-bottom:2px}
+      .ty-bd-details-link{display:block;width:100%;border:0;border-top:1px solid #eef0f4;background:#fff;color:#0062e3;font-size:14px;font-weight:800;padding:12px;cursor:pointer;text-align:center}
+      .ty-bd-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px;background:#fff}
+      .ty-bd-primary-actions.single{grid-template-columns:1fr}
+      .ty-bd-btn{appearance:none;border-radius:999px;padding:12px 14px;font-size:14px;font-weight:800;cursor:pointer;text-align:center;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;min-height:46px;box-sizing:border-box}
+      .ty-bd-btn.primary{border:0;background:#0062e3;color:#fff}
+      .ty-bd-btn.ghost{border:1.5px solid #0062e3;background:#fff;color:#0062e3}
+      .ty-bd-pax-route{display:flex;align-items:center;gap:8px;margin:10px 0 8px;font-size:13px;font-weight:700;color:#374151}
+      .ty-bd-pax-item{display:block;width:100%;border:0;background:#fff;padding:4px 0 12px;text-align:left;cursor:pointer}
+      .ty-bd-pax-item .type{display:block;font-size:12px;color:#9ca3af;font-weight:700;margin-bottom:2px}
+      .ty-bd-pax-item .name{display:block;font-size:15px;font-weight:900;color:#111827;text-transform:uppercase;letter-spacing:.02em}
+      .ty-bd-bag-row{display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:13px;color:#374151;font-weight:600}
+      .ty-bd-bag-row label{min-width:118px;color:#4b5563;font-weight:700}
+      .ty-bd-bag-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#e8f3ff;color:#1e3a5f;font-size:12px;font-weight:700;max-width:100%}
+      .ty-bd-contact-name{margin:8px 0 6px;font-size:15px;font-weight:900;color:#111827;text-transform:uppercase}
+      .ty-bd-contact-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px;font-weight:700;color:#111827;word-break:break-word}
+      .ty-bd-policy-row,.ty-bd-pay-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:#fff;padding:4px 0 2px;cursor:pointer;text-align:left}
+      .ty-bd-pay-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9f5e1;color:#0f7a3a;font-size:12px;font-weight:800;margin-bottom:8px}
+      .ty-bd-pay-total{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:14px;font-weight:700;color:#111827}
+      .ty-bd-pay-total b{font-weight:900}
+      .ty-bd-manage-row{display:flex;align-items:center;gap:12px;width:100%;border:0;border-top:1px solid #eef0f4;background:#fff;padding:14px 16px;cursor:pointer;text-align:left;font-size:14px;font-weight:800;color:#111827}
+      .ty-bd-manage-row:first-of-type{border-top:0}
+      .ty-bd-manage-row .ico{width:22px;text-align:center;color:#111827;font-size:16px;flex:0 0 auto}
+      .ty-bd-support-wrap{padding:14px 16px 18px;background:#fff}
+      .ty-bd-help-card{display:grid;gap:10px;padding:14px;border-radius:12px;background:#e8f3ff;margin-top:10px}
+      .ty-bd-help-card p{margin:0;font-size:14px;font-weight:800;color:#0062e3;line-height:1.35}
+      .ty-bd-help-card .ty-bd-btn{width:fit-content}
+      .ty-bd-airline-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:12px 14px;border-radius:999px;background:#eef5ff;color:#111827;font-size:14px;font-weight:800;text-decoration:none}
+      .ty-bd-sheet{position:fixed;inset:0;z-index:1200;display:none}
+      .ty-bd-sheet.open{display:block}
+      .ty-bd-sheet-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+      .ty-bd-sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:0 0 20px;box-shadow:0 -10px 30px rgba(15,23,42,.18)}
+      .ty-bd-sheet-head{position:sticky;top:0;z-index:2;display:block;padding:14px 16px;background:#fff;border-bottom:1px solid #eef0f4}
+      .ty-bd-sheet-head h3{margin:0;text-align:center;font-size:17px;font-weight:900;color:#111827;padding:0 40px}
+      .ty-bd-sheet-close{position:absolute;right:12px;top:10px;width:34px;height:34px;border-radius:999px;border:1.5px solid #0062e3;background:#fff;color:#0062e3;font-size:18px;font-weight:800;cursor:pointer;line-height:1}
+      .ty-bd-sheet-body{padding:14px 16px 8px}
+      .ty-bd-sheet-route{margin:0 0 12px;font-size:15px;font-weight:900;color:#111827}
+      .ty-bd-sheet-msg{margin:18px 8px 8px;font-size:15px;line-height:1.5;color:#111827;font-weight:600;text-align:center}
+      .ty-bd-sheet-sub{margin:0 0 14px;font-size:13px;color:#6b7280;font-weight:600;text-align:center}
+      .ty-bd-field{margin:12px 0 16px}
+      .ty-bd-field label{display:block;font-size:12px;color:#6b7280;font-weight:700;margin-bottom:6px}
+      .ty-bd-field input{width:100%;border:1px solid #d1d5db;border-radius:10px;padding:12px;font-size:14px;font-weight:700;color:#111827;box-sizing:border-box}
+      .ty-bd-sheet-cta{display:block;width:100%;border:0;border-radius:999px;padding:13px 16px;background:#0062e3;color:#fff;font-size:15px;font-weight:800;cursor:pointer;text-align:center;box-sizing:border-box;text-decoration:none;margin-top:12px}
+      .ty-bd-policy-card{background:#eef5ff;border-radius:12px;padding:12px 14px;margin-bottom:12px}
+      .ty-bd-policy-card h4{margin:0 0 8px;font-size:15px;font-weight:900;color:#111827}
+      .ty-bd-policy-card .who{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#374151;margin-bottom:6px}
+      .ty-bd-policy-card p{margin:0;font-size:13px;line-height:1.45;color:#374151;font-weight:600}
+      .ty-bd-pay-lines{display:grid;gap:10px;margin-top:8px}
+      .ty-bd-pay-lines > div{display:flex;justify-content:space-between;gap:12px;font-size:14px;font-weight:600;color:#111827}
+      .ty-bd-pay-lines .disc{color:#0f7a3a}
+      .ty-bd-pay-lines .total{padding-top:10px;border-top:1px solid #e5e7eb;font-weight:900;font-size:15px}
+      .ty-bd-pax-sheet-name{margin:0;font-size:20px;font-weight:900;color:#111827;text-transform:uppercase;letter-spacing:.02em}
+      .ty-bd-pax-sheet-parts{margin:6px 0 0;font-size:13px;color:#6b7280;font-weight:600;line-height:1.4}
+      .ty-bd-pax-sheet-meta{margin:10px 0 0;font-size:13px;font-weight:700;color:#374151}
+      .ty-bd-pax-sheet-ticket{margin:8px 0 0;font-size:13px;color:#6b7280;font-weight:600}
+      .ty-bd-bag-block{margin-top:16px}
+      .ty-bd-bag-block h4{margin:0 0 8px;font-size:15px;font-weight:900}
+      .ty-bd-bag-block .bag{margin:0 0 12px}
+      .ty-bd-bag-block .bag b{display:block;font-size:13px;margin-bottom:4px}
+      .ty-bd-bag-block ul{margin:0;padding-left:18px;font-size:13px;line-height:1.45;color:#374151;font-weight:600}
+      .ty-bd-seg-card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
+      .ty-bd-seg-card .top{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:800;color:#111827;margin-bottom:8px}
+      .ty-bd-seg-card .times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .ty-bd-seg-card strong{display:block;font-size:18px;font-weight:900}
+      .ty-bd-seg-card span{display:block;font-size:12px;color:#6b7280;font-weight:600;margin-top:2px}
+      @media(max-width:700px){.ty-bd-route-grid strong{font-size:20px}.ty-bd-status-body h1{font-size:22px}}
     `;
     document.head.appendChild(style);
   }
@@ -9308,6 +9361,19 @@ function mobileFareSheets(flights, fare, options){
     return [city, airport, c].filter(Boolean).join(' · ');
   }
 
+  function statusCityCodeLabel(code){
+    const c = String(code || '').toUpperCase();
+    const city = cityNameFromCode(c);
+    if(city && c) return city + ' (' + c + ')';
+    return city || c || '';
+  }
+
+  function statusAirportNameOnly(code){
+    const c = String(code || '').toUpperCase();
+    const info = airportInfo(c);
+    return info && info.name ? String(info.name).trim() : '';
+  }
+
   function statusRouteContext(flights, booking, bookingPayload){
     const segments = collectFlightSegmentsForCard(flights);
     const firstItem = segments[0] || {seg:{}, flight:{}};
@@ -9333,8 +9399,10 @@ function mobileFareSheets(flights, fare, options){
       routeTitle: fromCity + ' → ' + toCity,
       stickyLabel: [fromCity + ' - ' + toCity, depDate, depTime].filter(Boolean).join(' • '),
       tripType: statusTripTypeLabel(booking, bookingPayload),
-      fromAirportLabel: statusAirportLabel(fromCode),
-      toAirportLabel: statusAirportLabel(toCode)
+      fromAirportLabel: statusCityCodeLabel(fromCode),
+      toAirportLabel: statusCityCodeLabel(toCode),
+      fromAirportName: statusAirportNameOnly(fromCode),
+      toAirportName: statusAirportNameOnly(toCode)
     };
   }
 
@@ -9357,16 +9425,37 @@ function mobileFareSheets(flights, fare, options){
     return '';
   }
 
-  function statusTravellerBaggageText(traveller, flights){
+  function statusTravellerBaggageParts(traveller, flights){
     const directCabin = statusPresentText(traveller.cabinBaggage || traveller.cabinBag);
     const directCheckin = statusPresentText(traveller.checkInBaggage || traveller.checkinBaggage || traveller.baggage);
-    if(directCabin || directCheckin){
-      return [directCabin ? ('Cabin ' + directCabin) : '', directCheckin ? ('Check-in ' + directCheckin) : ''].filter(Boolean).join(' · ');
-    }
+    if(directCabin || directCheckin) return {cabin:directCabin, checkin:directCheckin};
     const rows = baggageRowsForPolicy(flights || []);
-    if(!rows.length) return '';
-    const row = rows[0];
-    return [row.cabin ? ('Cabin ' + row.cabin) : '', row.checkin ? ('Check-in ' + row.checkin) : ''].filter(Boolean).join(' · ');
+    if(!rows.length) return {cabin:'', checkin:''};
+    return {cabin: statusPresentText(rows[0].cabin), checkin: statusPresentText(rows[0].checkin)};
+  }
+
+  function statusTravellerBaggageText(traveller, flights){
+    const parts = statusTravellerBaggageParts(traveller, flights);
+    return [parts.cabin ? ('Cabin ' + parts.cabin) : '', parts.checkin ? ('Check-in ' + parts.checkin) : ''].filter(Boolean).join(' · ');
+  }
+
+  function statusTravellerGenderLabel(traveller){
+    const gender = String(traveller.gender || traveller.sex || '').trim().toUpperCase();
+    if(gender === 'M' || gender === 'MALE') return 'Male';
+    if(gender === 'F' || gender === 'FEMALE') return 'Female';
+    const title = String(traveller.title || traveller.ti || '').trim().toLowerCase();
+    if(title === 'mr' || title === 'mister') return 'Male';
+    if(title === 'ms' || title === 'mrs' || title === 'miss') return 'Female';
+    return '';
+  }
+
+  function statusCopyIconButton(value){
+    return '<button type="button" class="ty-bd-copy" data-copy="' + esc(value) + '" aria-label="Copy">⧉</button>';
+  }
+
+  function statusBagPill(label){
+    if(!label) return '';
+    return '<span class="ty-bd-bag-pill">' + esc(label) + '</span>';
   }
 
   function statusStoredMoney(value, currency){
@@ -9506,10 +9595,9 @@ function mobileFareSheets(flights, fare, options){
     closeBookingDetailSheet();
     const wrap = document.createElement('div');
     wrap.id = 'tyBdSheet';
-    wrap.className = 'ty-bd-sheet';
-    wrap.innerHTML = '<div class="ty-bd-sheet-backdrop" data-bd-sheet-close></div><div class="ty-bd-sheet-panel" role="dialog" aria-modal="true"><header><h2>' + esc(title) + '</h2><button type="button" data-bd-sheet-close aria-label="Close">×</button></header><div class="ty-bd-sheet-body">' + bodyHtml + '</div></div>';
+    wrap.className = 'ty-bd-sheet open';
+    wrap.innerHTML = '<div class="ty-bd-sheet-backdrop" data-bd-sheet-close></div><div class="ty-bd-sheet-panel" role="dialog" aria-modal="true"><div class="ty-bd-sheet-head"><h3>' + esc(title) + '</h3><button type="button" class="ty-bd-sheet-close" data-bd-sheet-close aria-label="Close">×</button></div><div class="ty-bd-sheet-body">' + bodyHtml + '</div></div>';
     document.body.appendChild(wrap);
-    requestAnimationFrame(function(){ wrap.classList.add('is-open'); });
     wrap.querySelectorAll('[data-bd-sheet-close]').forEach(function(btn){
       btn.addEventListener('click', closeBookingDetailSheet);
     });
@@ -9521,8 +9609,6 @@ function mobileFareSheets(flights, fare, options){
     return segments.map(function(item){
       const seg = item.seg || {};
       const flight = item.flight || {};
-      const depCode = String(seg.depCode || flight.departureCity || '').toUpperCase();
-      const arrCode = String(seg.arrCode || flight.arrivalCity || '').toUpperCase();
       const airlineName = seg.airlineName || flight.airlineName || 'Airline';
       const flightNo = seg.flightCode || flight.flightCode || [seg.airlineCode || flight.airlineCode, seg.flightNumber].filter(Boolean).join(' ');
       const cabin = normalizeCabin(state.search.cabinClass || flight.cabinClass || flight.cabin || 'ECONOMY').replace(/_/g, ' ');
@@ -9530,43 +9616,64 @@ function mobileFareSheets(flights, fare, options){
       const arrTime = cardSegmentTime(seg, flight, 'arr');
       const depDate = compactDateForSegment(seg.depDate);
       const arrDate = compactDateForSegment(seg.arrDate);
-      const depCity = cityNameFromCode(depCode);
-      const arrCity = cityNameFromCode(arrCode);
-      const depAirportLabel = statusAirportLabel(depCode);
-      const arrAirportLabel = statusAirportLabel(arrCode);
+      const depAirportLabel = statusAirportLabel(String(seg.depCode || flight.departureCity || '').toUpperCase());
+      const arrAirportLabel = statusAirportLabel(String(seg.arrCode || flight.arrivalCity || '').toUpperCase());
       const depTerminal = seg.depTerminal ? cleanTerminal(seg.depTerminal) : '';
       const arrTerminal = seg.arrTerminal ? cleanTerminal(seg.arrTerminal) : '';
-      return '<div class="ty-bd-timeline-item"><b>' + esc(depTime) + ' · ' + esc(depAirportLabel) + '</b><span>' + esc(depDate) + (depTerminal ? (' · ' + esc(depTerminal)) : '') + '</span><span>' + esc(airlineName) + ' · ' + esc(cabin) + ' · ' + esc(flightNo || '') + '</span>' + (airlineReference ? '<span>Airline Reference: ' + esc(airlineReference) + '</span>' : '') + '<b style="margin-top:8px">' + esc(arrTime) + ' · ' + esc(arrAirportLabel) + '</b><span>' + esc(arrDate) + (arrTerminal ? (' · ' + esc(arrTerminal)) : '') + '</span><span>Duration: ' + esc(seg.duration || flight.duration || '') + '</span></div>';
+      return '<div class="ty-bd-seg-card"><div class="top"><span>' + esc(airlineName) + (flightNo ? (' · ' + esc(flightNo)) : '') + '</span><span>' + esc(cabin) + '</span></div><div class="times"><div><strong>' + esc(depTime) + '</strong><span>' + esc(depAirportLabel) + '</span><span>' + esc(depDate) + (depTerminal ? (' · ' + esc(depTerminal)) : '') + '</span></div><div><strong>' + esc(arrTime) + '</strong><span>' + esc(arrAirportLabel) + '</span><span>' + esc(arrDate) + (arrTerminal ? (' · ' + esc(arrTerminal)) : '') + '</span></div></div>' + (airlineReference ? '<div class="ty-bd-airline-ref" style="padding:10px 0 0">Airline Reference: ' + esc(airlineReference) + '</div>' : '') + '<span style="display:block;margin-top:8px;font-size:12px;color:#6b7280;font-weight:700">Duration: ' + esc(seg.duration || flight.duration || '') + '</span></div>';
     }).join('');
   }
 
   function renderPassengersSheetHtml(travellers, flights, airlineReference, ticketNumber){
     if(!travellers.length) return '<p class="ty-bd-muted">Passenger details are not available for this booking.</p>';
-    return travellers.map(function(traveller, index){
+    return travellers.map(function(traveller){
       const type = statusPassengerTypeLabel(traveller);
       const name = travellerName(traveller);
-      const titleGender = statusTravellerGenderTitle(traveller);
+      const gender = statusTravellerGenderLabel(traveller);
       const first = statusPresentText(traveller.firstName || traveller.fN);
       const middle = statusPresentText(traveller.middleName || traveller.middle_name);
       const last = statusPresentText(traveller.lastName || traveller.lN || traveller.surname);
-      const baggage = statusTravellerBaggageText(traveller, flights);
-      const doc = statusTravellerDocumentLabel(traveller);
+      const bags = statusTravellerBaggageParts(traveller, flights);
       const ticket = statusPresentText(traveller.ticketNumber || traveller.ticketNo || ticketNumber);
-      return '<div class="ty-bd-timeline-item"><b>' + esc(name) + '</b><span>' + esc(type) + (titleGender ? (' · ' + esc(titleGender)) : '') + '</span>' + (first ? '<span>First / middle: ' + esc([first, middle].filter(Boolean).join(' ')) + '</span>' : '') + (last ? '<span>Last name: ' + esc(last) + '</span>' : '') + (ticket ? '<span>Ticket number: ' + esc(ticket) + '</span>' : '') + (!ticket && airlineReference ? '<span>Airline Reference: ' + esc(airlineReference) + '</span>' : '') + (baggage ? '<span>Baggage: ' + esc(baggage) + '</span>' : '') + (doc ? '<span>' + esc(doc) + '</span>' : '') + '</div>';
+      const meta = [type, gender].filter(Boolean).join(' · ');
+      const bagHtml = (bags.cabin || bags.checkin)
+        ? ('<div class="ty-bd-bag-block"><h4>Baggage:</h4>' +
+            (bags.cabin ? '<div class="bag"><b>Cabin baggage</b><ul><li>' + esc(bags.cabin) + '</li></ul></div>' : '') +
+            (bags.checkin ? '<div class="bag"><b>Checked baggage</b><ul><li>' + esc(bags.checkin) + '</li></ul></div>' : '') +
+          '</div>')
+        : '';
+      return '<div style="margin-bottom:18px"><p class="ty-bd-pax-sheet-name">' + esc(name) + '</p>' +
+        ((first || last) ? '<p class="ty-bd-pax-sheet-parts">' + (first ? ('First and middle name: ' + esc([first, middle].filter(Boolean).join(' ')) + '<br>') : '') + (last ? ('Last name: ' + esc(last)) : '') + '</p>' : '') +
+        (meta ? '<p class="ty-bd-pax-sheet-meta">👤 ' + esc(meta) + '</p>' : '') +
+        (ticket ? '<p class="ty-bd-pax-sheet-ticket">Ticket number: ' + esc(ticket) + '</p>' : (!ticket && airlineReference ? '<p class="ty-bd-pax-sheet-ticket">Airline Reference: ' + esc(airlineReference) + '</p>' : '')) +
+        bagHtml + '</div>';
     }).join('');
   }
 
-  function renderPaymentSheetHtml(payment){
-    const rows = [
-      payment.payStatus ? '<div class="ty-bd-timeline-item"><b>Status</b><span>' + esc(payment.payStatus) + '</span></div>' : '',
-      payment.base ? '<div class="ty-bd-timeline-item"><b>Base fare</b><span>' + esc(payment.base) + '</span></div>' : '',
-      payment.taxes ? '<div class="ty-bd-timeline-item"><b>Taxes and fees</b><span>' + esc(payment.taxes) + '</span></div>' : '',
-      payment.discount ? '<div class="ty-bd-timeline-item"><b>Discount</b><span>' + esc(payment.discount) + '</span></div>' : '',
-      payment.total ? '<div class="ty-bd-timeline-item"><b>Total amount</b><span>' + esc(payment.total) + '</span></div>' : '',
-      payment.payId ? '<div class="ty-bd-timeline-item"><b>Payment reference</b><span>' + esc(payment.payId) + '</span></div>' : ''
-    ].join('');
-    if(!rows) return '<p class="ty-bd-muted">Payment details are not available for this booking.</p>';
-    return rows;
+  function renderPaymentSheetHtml(payment, paid){
+    const lines = [];
+    if(paid) lines.push('<div class="ty-bd-pay-badge">✓ Booking was paid</div>');
+    lines.push('<h4 style="margin:0 0 8px;font-size:16px;font-weight:900">Flight tickets</h4>');
+    const rows = [];
+    if(payment.base) rows.push('<div><span>Base fare</span><span>' + esc(payment.base) + '</span></div>');
+    if(payment.taxes) rows.push('<div><span>Taxes and fees</span><span>' + esc(payment.taxes) + '</span></div>');
+    if(payment.discount) rows.push('<div class="disc"><span>Regular discount</span><span>' + esc(payment.discount) + '</span></div>');
+    if(payment.total) rows.push('<div class="total"><span>Total amount</span><span>' + esc(payment.total) + '</span></div>');
+    if(!rows.length) return '<p class="ty-bd-muted">Payment details are not available for this booking.</p>';
+    return lines.join('') + '<div class="ty-bd-pay-lines">' + rows.join('') + '</div>';
+  }
+
+  function renderPoliciesSheetHtml(flights, routeTitle){
+    const cancelRows = policyTextRows(flights || [], 'cancel');
+    const changeRows = policyTextRows(flights || [], 'change');
+    if(!cancelRows.length && !changeRows.length){
+      return '<p class="ty-bd-muted">Cancellation and change policies are not available for this booking right now.</p>';
+    }
+    const cancelText = cancelRows.map(function(r){ return r.value; }).filter(Boolean).join(' ') || 'Cancellation details are not available right now. Please contact TravelYaraa support or the airline for help.';
+    const changeText = changeRows.map(function(r){ return r.value; }).filter(Boolean).join(' ') || 'Change details are not available right now. Please contact TravelYaraa support or the airline for help.';
+    return (routeTitle ? '<p class="ty-bd-sheet-route">' + esc(routeTitle) + '</p>' : '') +
+      '<div class="ty-bd-policy-card"><h4>Cancellation policy</h4><div class="who">👤 Adult tickets</div><p>' + esc(cancelText) + '</p></div>' +
+      '<div class="ty-bd-policy-card"><h4>Change policy</h4><div class="who">👤 Adult tickets</div><p>' + esc(changeText) + '</p></div>';
   }
 
   function bindConfirmedBookingDetailChrome(route){
@@ -9584,15 +9691,17 @@ function mobileFareSheets(flights, fare, options){
     ROOT.querySelector('[data-bd-back-my-bookings]')?.addEventListener('click', function(){ location.href = '/my-bookings.html'; });
   }
 
-  function bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, airlineReference, ticketNumber, contact, payment){
+  function bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, airlineReference, ticketNumber, contact, payment, route){
     const safeId = encodeURIComponent(String(bookingId || ''));
     const canTicketActions = mode === 'confirmed' || mode === 'completed';
+    const paid = statusPaymentLooksPaid(statusBookingObject(responseData, bookingPayload), responseData);
     ROOT.querySelectorAll('[data-copy]').forEach(function(button){
       button.addEventListener('click', async function(){
+        const original = button.textContent;
         try{
           await navigator.clipboard.writeText(button.getAttribute('data-copy') || '');
-          button.textContent = 'Copied';
-          setTimeout(function(){ button.textContent = 'Copy'; }, 1200);
+          button.textContent = '✓';
+          setTimeout(function(){ button.textContent = original; }, 1200);
         }catch(_e){}
       });
     });
@@ -9601,32 +9710,28 @@ function mobileFareSheets(flights, fare, options){
       if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
     });
     ROOT.querySelector('[data-bd-open-flight-details]')?.addEventListener('click', function(){
-      openBookingDetailSheet('Flight details', '<div class="ty-bd-timeline">' + renderFlightDetailsTimelineHtml(flights, airlineReference) + '</div>');
+      openBookingDetailSheet('Flight details', renderFlightDetailsTimelineHtml(flights, airlineReference));
     });
-    ROOT.querySelector('[data-bd-open-passengers]')?.addEventListener('click', function(){
-      openBookingDetailSheet('Passengers', '<div class="ty-bd-timeline">' + renderPassengersSheetHtml(travellers, flights, airlineReference, ticketNumber) + '</div>');
+    function openPassengersSheet(){
+      openBookingDetailSheet('Passengers', renderPassengersSheetHtml(travellers, flights, airlineReference, ticketNumber));
+    }
+    ROOT.querySelectorAll('[data-bd-open-passengers]').forEach(function(btn){
+      btn.addEventListener('click', openPassengersSheet);
     });
     ROOT.querySelector('[data-bd-open-policies]')?.addEventListener('click', function(){
-      const hasCancel = policyTextRows(flights || [], 'cancel').length > 0;
-      const hasChange = policyTextRows(flights || [], 'change').length > 0;
-      const hasBaggage = baggageRowsForPolicy(flights || []).length > 0;
-      if(!hasCancel && !hasChange && !hasBaggage){
-        openBookingDetailSheet('Ticket policies', '<p class="ty-bd-muted">Cancellation and change policies are not available for this booking right now.</p>');
-        return;
-      }
-      openPolicyModal(flights || [], hasCancel ? 'cancel' : (hasChange ? 'change' : 'baggage'));
+      openBookingDetailSheet('Ticket policies', renderPoliciesSheetHtml(flights || [], route && route.routeTitle));
     });
     ROOT.querySelector('[data-bd-open-payment]')?.addEventListener('click', function(){
-      if(mode === 'failed' && !statusPaymentLooksPaid(statusBookingObject(responseData, bookingPayload), responseData)){
+      if(mode === 'failed' && !paid){
         openBookingDetailSheet('Payment details', '<p class="ty-bd-muted">Payment was not completed for this booking.</p>');
         return;
       }
-      openBookingDetailSheet('Payment details', renderPaymentSheetHtml(payment));
+      openBookingDetailSheet('Payment details', renderPaymentSheetHtml(payment, paid));
     });
     ROOT.querySelector('[data-bd-live-refresh]')?.addEventListener('click', async function(){
       const node = ROOT.querySelector('#tyBdLiveMessage');
       try{
-        if(node) node.textContent = 'Refreshing booking status...';
+        if(node) node.textContent = 'Refreshing...';
         await statusGet('/api/bookings/' + safeId + '/status');
         if(node) node.textContent = 'Live flight updates are not available right now.';
       }catch(error){
@@ -9635,7 +9740,10 @@ function mobileFareSheets(flights, fare, options){
     });
     function openResendSheet(){
       const current = contact.email || '';
-      openBookingDetailSheet('Resend email', '<div class="ty-bd-form-field"><label for="tyBdResendEmail">Email address</label><input id="tyBdResendEmail" type="email" value="' + esc(current.split(',')[0].trim()) + '"></div><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-submit-resend>Send email</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Cancel</button></div>');
+      openBookingDetailSheet('Resend confirmation email',
+        '<p class="ty-bd-sheet-sub">Your flight confirmation details will be sent to this email address</p>' +
+        '<div class="ty-bd-field"><label for="tyBdResendEmail">email address</label><input id="tyBdResendEmail" type="email" value="' + esc(current.split(',')[0].trim()) + '"></div>' +
+        '<button type="button" class="ty-bd-sheet-cta" data-bd-submit-resend>Send confirmation email</button>');
       document.querySelector('[data-bd-submit-resend]')?.addEventListener('click', async function(){
         const email = String(document.getElementById('tyBdResendEmail')?.value || '').trim();
         if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setFinalStatusMessage('Please enter a valid email address.', true);
@@ -9648,8 +9756,10 @@ function mobileFareSheets(flights, fare, options){
         }
       });
     }
-    function openCompletedUnavailableSheet(){
-      openBookingDetailSheet('Not available', '<p class="ty-bd-muted">This flight has already departed, so cancellations or changes are no longer available for this booking.</p><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-sheet-close>Back to booking</button></div>');
+    function openCompletedUnavailableSheet(title){
+      openBookingDetailSheet(title || 'Request cancellation & refund',
+        '<p class="ty-bd-sheet-msg">This flight has already departed, so cancellations or changes are no longer available for this booking.</p>' +
+        '<button type="button" class="ty-bd-sheet-cta" data-bd-sheet-close>Back to booking</button>');
     }
     ROOT.querySelector('[data-bd-resend-primary]')?.addEventListener('click', function(){ openResendSheet(); });
     ROOT.querySelector('[data-bd-manage-resend]')?.addEventListener('click', function(){ openResendSheet(); });
@@ -9672,8 +9782,11 @@ function mobileFareSheets(flights, fare, options){
     if(changeBtn){
       changeBtn.replaceWith(changeBtn.cloneNode(true));
       ROOT.querySelector('[data-change-request]')?.addEventListener('click', async function(){
-        if(mode === 'completed') return openCompletedUnavailableSheet();
-        openBookingDetailSheet('Request flight changes', '<div class="ty-bd-form-field"><label for="tyBdChangeDate">Preferred new travel date</label><input id="tyBdChangeDate" type="date"></div><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-submit-change>Submit request</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Cancel</button></div>');
+        if(mode === 'completed') return openCompletedUnavailableSheet('Request flight changes');
+        openBookingDetailSheet('Request flight changes',
+          '<p class="ty-bd-sheet-sub">Tell us your preferred new travel date. TravelYaraa support will review airline rules and get back to you.</p>' +
+          '<div class="ty-bd-field"><label for="tyBdChangeDate">Preferred new travel date</label><input id="tyBdChangeDate" type="date"></div>' +
+          '<button type="button" class="ty-bd-sheet-cta" data-bd-submit-change>Submit request</button>');
         document.querySelector('[data-bd-submit-change]')?.addEventListener('click', async function(){
           const requestedDate = String(document.getElementById('tyBdChangeDate')?.value || '').trim();
           if(!requestedDate) return setFinalStatusMessage('Please choose a travel date.', true);
@@ -9691,20 +9804,24 @@ function mobileFareSheets(flights, fare, options){
     if(cancelBtn){
       cancelBtn.replaceWith(cancelBtn.cloneNode(true));
       ROOT.querySelector('[data-cancel-booking]')?.addEventListener('click', async function(){
-        if(mode === 'completed') return openCompletedUnavailableSheet();
-        openBookingDetailSheet('Request cancellation & refund', '<p class="ty-bd-muted">Review airline cancellation charges for this booking before submitting a request.</p><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-review-cancel>Review charges</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Close</button></div><div id="tyBdCancelSummary" hidden style="margin-top:12px"></div><div class="ty-bd-form-actions" id="tyBdCancelConfirmActions" hidden><button type="button" class="ty-bd-btn primary" data-bd-submit-cancel>Submit cancellation</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Keep booking</button></div>');
+        if(mode === 'completed') return openCompletedUnavailableSheet('Request cancellation & refund');
+        openBookingDetailSheet('Request cancellation & refund',
+          '<p class="ty-bd-sheet-sub">Review airline cancellation charges for this booking before submitting a request.</p>' +
+          '<button type="button" class="ty-bd-sheet-cta" data-bd-review-cancel>Review charges</button>' +
+          '<div id="tyBdCancelSummary" hidden style="margin-top:12px"></div>' +
+          '<button type="button" class="ty-bd-sheet-cta" id="tyBdCancelConfirmBtn" data-bd-submit-cancel hidden style="margin-top:10px;background:#b42318">Submit cancellation</button>');
         document.querySelector('[data-bd-review-cancel]')?.addEventListener('click', async function(){
           try{
             const reason = 'Customer requested from TravelYaraa booking page';
             const review = await statusPost('/api/bookings/' + safeId + '/cancel', {confirm:false, reason});
             const summary = statusCancellationSummary(review);
             const summaryNode = document.getElementById('tyBdCancelSummary');
-            const confirmActions = document.getElementById('tyBdCancelConfirmActions');
+            const confirmBtn = document.getElementById('tyBdCancelConfirmBtn');
             if(summaryNode){
               summaryNode.hidden = false;
-              summaryNode.innerHTML = '<div class="ty-bd-timeline-item"><b>Cancellation summary</b><span>' + esc(summary) + '</span></div>';
+              summaryNode.innerHTML = '<div class="ty-bd-policy-card"><h4>Cancellation summary</h4><p>' + esc(summary) + '</p></div>';
             }
-            if(confirmActions) confirmActions.hidden = false;
+            if(confirmBtn) confirmBtn.hidden = false;
             document.querySelector('[data-bd-review-cancel]')?.setAttribute('hidden', 'hidden');
             document.querySelector('[data-bd-submit-cancel]')?.addEventListener('click', async function(){
               try{
@@ -9726,11 +9843,10 @@ function mobileFareSheets(flights, fare, options){
       });
     }
     const airlineUrl = airlineWebsiteFromStatus(statusBookingObject(responseData, bookingPayload), flights);
-    const airlineBtn = ROOT.querySelector('[data-bd-airline-site]');
-    if(airlineBtn){
+    ROOT.querySelectorAll('[data-bd-airline-site]').forEach(function(airlineBtn){
       if(airlineUrl) airlineBtn.href = airlineUrl;
       else airlineBtn.remove();
-    }
+    });
   }
 
   function renderBookingDetailView(mode, status, bookingPayload, responseData){
@@ -9757,17 +9873,17 @@ function mobileFareSheets(flights, fare, options){
     const lastFlight = lastItem.flight || {};
     const airlineName = first.airlineName || firstFlight.airlineName || 'Airline';
     const flightNo = first.flightCode || firstFlight.flightCode || [first.airlineCode || firstFlight.airlineCode, first.flightNumber].filter(Boolean).join(' ');
-    const cabin = normalizeCabin((booking.search && booking.search.cabinClass) || state.search.cabinClass || firstFlight.cabinClass || firstFlight.cabin || 'ECONOMY').replace(/_/g, ' ');
+    const cabin = normalizeCabin((booking.search && booking.search.cabinClass) || state.search.cabinClass || firstFlight.cabinClass || firstFlight.cabin || 'ECONOMY').replace(/_/g, ' ').replace(/\w\S*/g, function(word){ return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); });
     const depTime = cardSegmentTime(first, firstFlight, 'dep');
     const arrTime = cardSegmentTime(last, lastFlight, 'arr');
     const duration = first.duration || firstFlight.duration || last.duration || lastFlight.duration || '';
+    const stopsCount = Math.max(0, (route.segments || []).length - 1);
     const showAirlineRef = Boolean(airlineRefDisplay) && mode !== 'failed';
     const showLive = mode === 'confirmed' || mode === 'completed';
     const showPassengers = mode !== 'failed' || travellers.length > 0;
     const showContact = mode !== 'failed' && Boolean([contact.name, contact.email, contact.phone].filter(Boolean).length);
     const showPolicies = mode === 'confirmed' || mode === 'completed' || mode === 'cancelled';
     const showPayment = mode === 'confirmed' || mode === 'completed' || (mode === 'cancelled' && paid) || (mode === 'failed' && paid);
-    const showTicket = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
     const showReceipt = ((mode === 'confirmed' || mode === 'completed') && hasTicketEvidence) || (mode === 'cancelled' && paid && hasTicketEvidence) || (mode === 'failed' && paid && hasTicketEvidence);
     const showResend = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
     const showChangeCancel = mode === 'confirmed' || mode === 'completed';
@@ -9775,61 +9891,119 @@ function mobileFareSheets(flights, fare, options){
       : (mode === 'cancelled' ? 'Booking cancelled'
       : (mode === 'failed' ? (/UNSUCCESS|SUPPLIER_BOOKING_FAILED|TICKET_FAILED|REFUND_REQUIRED|UNCONFIRMED/i.test(String(statusValueFrom(booking, responseData, status) || '')) ? 'Booking unsuccessful' : 'Booking failed')
       : 'Booking confirmed'));
-    const detailsNote = mode === 'completed'
-      ? '<p class="ty-bd-note completed">This flight has completed</p>'
-      : (mode === 'cancelled'
-        ? (refund.hasAny
-          ? '<div class="ty-bd-note cancelled">' +
-              [refund.refundStatus ? ('Refund status: ' + esc(refund.refundStatus)) : '',
-               refund.charge ? ('Cancellation charge: ' + esc(refund.charge)) : '',
-               refund.refundAmount ? ('Refund amount: ' + esc(refund.refundAmount)) : '',
-               refund.refundDate ? ('Refund date: ' + esc(refund.refundDate)) : '',
-               refund.note ? esc(refund.note) : ''].filter(Boolean).join('<br>') +
-            '</div>'
-          : '<p class="ty-bd-note cancelled">Refund details are not available right now.</p>')
-        : (mode === 'failed'
-          ? '<p class="ty-bd-note failed">' + esc(paid ? 'Payment was recorded, but this booking could not be completed.' : 'Payment was not completed for this booking.') + '</p>'
-          : ''));
+    const alerts = [];
+    if(mode === 'cancelled'){
+      if(refund.hasAny){
+        alerts.push('<div class="ty-bd-alert info"><b>Refund details</b>' +
+          [refund.refundAmount ? ('Your most recent refund of ' + esc(refund.refundAmount) + (refund.refundDate ? (' was processed on ' + esc(refund.refundDate)) : '') + '.') : '',
+           refund.charge ? ('Cancellation charge: ' + esc(refund.charge) + '.') : '',
+           refund.refundStatus ? ('Refund status: ' + esc(refund.refundStatus) + '.') : '',
+           refund.note ? esc(refund.note) : '',
+           (!refund.refundAmount && !refund.note) ? 'If you have not received your refund yet, please contact your bank or card company.' : ''
+          ].filter(Boolean).join(' ') + '</div>');
+      }else{
+        alerts.push('<div class="ty-bd-alert info"><b>Refund details</b>Refund details are not available right now. TravelYaraa support can help if you need an update.</div>');
+      }
+      alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></div>');
+    }else if(mode === 'completed'){
+      alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></div>');
+    }else if(mode === 'failed'){
+      alerts.push('<div class="ty-bd-alert fail">' + esc(paid ? 'Payment was recorded, but this booking could not be completed. TravelYaraa support can help with next steps.' : 'Payment was not completed for this booking. You can start a new booking anytime.') + '</div>');
+    }
     const passengerCards = travellers.map(function(traveller){
-      const baggage = statusTravellerBaggageText(traveller, flights);
-      const doc = statusTravellerDocumentLabel(traveller);
-      const metaLine = [statusPassengerTypeLabel(traveller), statusTravellerGenderTitle(traveller)].filter(Boolean).join(' · ');
-      const ticket = statusPresentText(traveller.ticketNumber || traveller.ticketNo || ticketDisplay);
-      const refLine = ticket ? ('Ticket: ' + ticket) : (showAirlineRef ? ('Airline Reference: ' + airlineRefDisplay) : '');
-      const extra = [refLine, baggage ? ('Baggage: ' + baggage) : '', doc].filter(Boolean).join(' · ');
-      return '<button type="button" class="ty-bd-passenger-card" data-bd-open-passengers><b>' + esc(travellerName(traveller)) + '</b><span>' + esc(metaLine) + '</span>' + (extra ? '<span>' + esc(extra) + '</span>' : '') + '</button>';
+      const bags = statusTravellerBaggageParts(traveller, flights);
+      const type = statusPassengerTypeLabel(traveller);
+      return '<button type="button" class="ty-bd-pax-item" data-bd-open-passengers>' +
+        '<span class="type">' + esc(type || 'Passenger') + '</span>' +
+        '<span class="name">' + esc(travellerName(traveller)) + '</span>' +
+        (bags.cabin ? '<div class="ty-bd-bag-row"><label>Cabin baggage:</label>' + statusBagPill(bags.cabin) + '</div>' : '') +
+        (bags.checkin ? '<div class="ty-bd-bag-row"><label>Checked baggage:</label>' + statusBagPill(bags.checkin) + '</div>' : '') +
+      '</button>';
     }).join('');
-    const contactRows = [statusKvIf('Name', contact.name), statusKvIf('Email', contact.email), statusKvIf('Phone', contact.phone)].join('');
-    const paymentRowLabel = mode === 'failed' && !paid
-      ? 'Payment was not completed'
-      : [payment.payStatus || (paid ? 'Paid' : ''), payment.total].filter(Boolean).join(' · ');
+    const paxRouteLabel = [route.fromAirportLabel, route.toAirportLabel].filter(Boolean).join(' - ') || route.routeTitle || '';
+    const fromCityCode = route.fromAirportLabel || statusCityCodeLabel(route.fromCode);
+    const toCityCode = route.toAirportLabel || statusCityCodeLabel(route.toCode);
+    const fromAirportName = route.fromAirportName || statusAirportNameOnly(route.fromCode);
+    const toAirportName = route.toAirportName || statusAirportNameOnly(route.toCode);
+    const contactBlock = showContact
+      ? ('<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Contact details</h2>' +
+          (contact.name ? '<div class="ty-bd-contact-name">' + esc(contact.name) + '</div>' : '') +
+          (contact.phone ? '<div class="ty-bd-contact-row">📞 ' + esc(contact.phone) + '</div>' : '') +
+          (contact.email ? '<div class="ty-bd-contact-row">✉ ' + esc(contact.email) + '</div>' : '') +
+        '</div></section>')
+      : '';
     const primaryActions = mode === 'failed'
-      ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-new-booking>New booking</button><button type="button" class="ty-bd-btn" data-my-bookings>My Bookings</button></div>'
+      ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-new-booking>New booking</button><button type="button" class="ty-bd-btn ghost" data-my-bookings>My Bookings</button></div>'
       : (mode === 'cancelled'
-        ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button><button type="button" class="ty-bd-btn" data-contact-support>Flight Help Center</button></div>'
-        : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn" data-contact-support>Flight Help Center</button>') + '</div>');
+        ? '<div class="ty-bd-primary-actions single"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button></div>'
+        : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn ghost" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn ghost" data-contact-support>Flight Help Center</button>') + '</div>');
     const manageRows = [
-      showResend ? '<button type="button" class="ty-bd-list-row" data-bd-manage-resend>Resend confirmation email</button>' : '',
-      showReceipt ? '<button type="button" class="ty-bd-list-row" data-download-receipt>' + (mode === 'cancelled' || mode === 'failed' ? 'Request payment receipt' : 'Request e-receipt') + '</button>' : '',
-      showChangeCancel ? '<button type="button" class="ty-bd-list-row" data-change-request>Request flight changes</button>' : '',
-      showChangeCancel ? '<button type="button" class="ty-bd-list-row" data-cancel-booking>Request cancellation &amp; refund</button>' : '',
-      showTicket ? '<button type="button" class="ty-bd-list-row" data-download-ticket>Download e-ticket</button>' : '',
-      mode === 'failed' ? '<button type="button" class="ty-bd-list-row" data-new-booking>Try again / New booking</button>' : '',
-      '<button type="button" class="ty-bd-list-row" data-my-bookings>My Bookings</button>'
+      showResend ? '<button type="button" class="ty-bd-manage-row" data-bd-manage-resend><span class="ico">✉</span><span>Resend confirmation email</span></button>' : '',
+      showReceipt ? '<button type="button" class="ty-bd-manage-row" data-download-receipt><span class="ico">▤</span><span>Request e-receipt</span></button>' : '',
+      showChangeCancel ? '<button type="button" class="ty-bd-manage-row" data-change-request><span class="ico">↻</span><span>Request flight changes</span></button>' : '',
+      showChangeCancel ? '<button type="button" class="ty-bd-manage-row" data-cancel-booking><span class="ico">⊘</span><span>Request cancellation &amp; refund</span></button>' : '',
+      mode === 'failed' ? '<button type="button" class="ty-bd-manage-row" data-new-booking><span class="ico">＋</span><span>Try again / New booking</span></button>' : ''
     ].join('');
+    const detailsBanner = mode === 'completed'
+      ? '<div class="ty-bd-details-banner">✈ This flight has completed</div>'
+      : '';
     try{ history.replaceState({step:'booking-status', bookingId:bookingId}, '', '/pages/results/flights.html?service=flight&step=booking-status&bookingId=' + encodeURIComponent(bookingId)); }catch(_e){}
-    ROOT.innerHTML = '<div class="ty-final-status ty-bd-page ' + esc(mode) + '"><header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header><div class="ty-bd-sticky-bar" id="tyBdStickyBar"></div><div class="ty-bd-hero"><span class="ty-bd-hero-city">' + esc(route.toCity || 'TravelYaraa') + '</span></div><main class="ty-bd-shell"><section class="ty-bd-card"><div class="ty-bd-status-band ' + esc(mode) + '">' + esc(statusBand) + '</div><div class="ty-bd-status-body"><h1>' + esc(route.routeTitle || 'Flight booking') + '</h1><div class="ty-bd-meta"><em>📅 ' + esc(route.depDate || '') + '</em><em>' + esc(paxCount + ' Passenger' + (paxCount > 1 ? 's' : '')) + ' · ' + esc(route.tripType) + '</em></div><div class="ty-bd-booking-id"><span>Booking ID: <b>' + esc(bookingId) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(bookingId) + '">Copy</button></div>' + (showAirlineRef ? '<div class="ty-bd-booking-id"><span>Airline Reference: <b>' + esc(airlineRefDisplay) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(airlineRefDisplay) + '">Copy</button></div>' : '') + detailsNote + '</div></section>' +
-      (showLive ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Live flight updates</h2><button type="button" data-bd-live-refresh>Refresh</button></div><div class="ty-bd-section-body"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></section>' : '') +
-      '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Your booking details</h2></div><div class="ty-bd-section-body"><div class="ty-bd-flight-row"><div>' + segAirlineLogo(first, firstFlight) + '</div><div><b>' + esc(airlineName) + '</b><span>' + esc([flightNo, cabin].filter(Boolean).join(' · ')) + '</span>' + (showAirlineRef ? '<span>Airline Reference: ' + esc(airlineRefDisplay) + '</span>' : '') + '</div></div><div class="ty-bd-route-grid"><div><small>Departure</small><strong>' + esc(depTime) + '</strong><span>' + esc(route.fromAirportLabel) + '</span></div><div><small>Arrival</small><strong>' + esc(arrTime) + '</strong><span>' + esc(route.toAirportLabel) + '</span></div></div><span style="display:block;margin-top:8px;font-size:12px;color:#64748b;font-weight:800">Duration: ' + esc(duration) + '</span><button type="button" class="ty-bd-link" data-bd-open-flight-details>View scheduled flight details</button></div></section>' +
-      primaryActions +
-      (showPassengers ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Passengers</h2></div><div class="ty-bd-section-body" style="padding:0"><p style="padding:12px 14px 0;margin:0;font-size:12px;color:#64748b;font-weight:800">' + esc(route.routeTitle) + '</p>' + (passengerCards || '<p class="ty-bd-muted" style="padding:12px 14px">Passenger details are not available for this booking.</p>') + '</div></section>' : '') +
-      (showContact ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Contact details</h2></div><div class="ty-bd-section-body ty-final-reference-grid" style="padding-top:0">' + contactRows + '</div></section>' : '') +
-      (showPolicies ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Ticket policies</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-policies>Cancellation and change policies</button></section>' : '') +
-      (showPayment ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Payment details</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-payment>' + esc(paymentRowLabel || 'View payment details') + '</button></section>' : '') +
-      '<section class="ty-bd-card" id="tyBdManageSection"><div class="ty-bd-section-head"><h2>Manage my bookings</h2></div><div style="padding:0">' + manageRows + '</div></section>' +
-      '<section class="ty-bd-card ty-bd-support"><p>Need help or have questions about this booking?</p><a class="primary" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a><a class="ghost" data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></section><p id="tyFinalStatusMessage" class="ty-final-message" hidden style="margin:12px 0 0"></p></main></div>';
+    ROOT.innerHTML =
+      '<div class="ty-final-status ty-bd-page ' + esc(mode) + '">' +
+        '<header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header>' +
+        '<div class="ty-bd-sticky-bar" id="tyBdStickyBar"></div>' +
+        '<div class="ty-bd-hero"><span class="ty-bd-hero-city">' + esc(route.toCity || 'TravelYaraa') + '</span></div>' +
+        '<main class="ty-bd-shell">' +
+          '<section class="ty-bd-status-card">' +
+            '<div class="ty-bd-status-band ' + esc(mode) + '">' + esc(statusBand) + '</div>' +
+            '<div class="ty-bd-status-body">' +
+              '<h1>' + esc(route.routeTitle || 'Flight booking') + '</h1>' +
+              '<div class="ty-bd-meta"><em>📅 ' + esc(route.depDate || '') + '</em><em>' + esc(paxCount + ' Passenger' + (paxCount > 1 ? 's' : '')) + ' · ' + esc(route.tripType) + '</em></div>' +
+              '<div class="ty-bd-booking-id"><span>Booking ID: ' + esc(bookingId) + '</span>' + statusCopyIconButton(bookingId) + '</div>' +
+            '</div>' +
+          '</section>' +
+          alerts.join('') +
+          (showLive
+            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><div class="ty-bd-live-head"><h2 class="ty-bd-section-title" style="margin:0">Live flight updates</h2><button type="button" data-bd-live-refresh>↻ Refresh</button></div><div class="ty-bd-live-card"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></div></section>'
+            : '') +
+          '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Your booking details</h2>' +
+            '<div class="ty-bd-details-card" style="margin-top:10px">' + detailsBanner +
+              '<div class="ty-bd-flight-head"><div>' + segAirlineLogo(first, firstFlight) + '</div><div><b>' + esc(airlineName) + (flightNo || cabin ? (' · ' + esc([flightNo, cabin].filter(Boolean).join(' · '))) : '') + '</b></div></div>' +
+              (showAirlineRef ? '<div class="ty-bd-airline-ref">Airline Reference: ' + esc(airlineRefDisplay) + ' ' + statusCopyIconButton(airlineRefDisplay) + '</div>' : '') +
+              '<div class="ty-bd-route-grid">' +
+                '<div><strong>' + esc(depTime) + '</strong><b>' + esc(fromCityCode) + '</b>' + (fromAirportName ? '<span>' + esc(fromAirportName) + '</span>' : '') + '</div>' +
+                '<div class="ty-bd-route-mid">' + (stopsCount > 0 ? '<span class="stops">' + esc(String(stopsCount)) + '</span>' : '') + '<div class="line"></div><em>' + esc(duration) + '</em></div>' +
+                '<div style="text-align:right"><strong>' + esc(arrTime) + '</strong><b>' + esc(toCityCode) + '</b>' + (toAirportName ? '<span>' + esc(toAirportName) + '</span>' : '') + '</div>' +
+              '</div>' +
+              '<button type="button" class="ty-bd-details-link" data-bd-open-flight-details>View scheduled flight details</button>' +
+            '</div></div></section>' +
+          primaryActions +
+          (showPassengers
+            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><button type="button" class="ty-bd-section-title ty-bd-policy-row" data-bd-open-passengers style="padding:0"><span>Passengers</span><span class="ty-bd-chev">›</span></button>' +
+                '<div class="ty-bd-pax-route">✈ ' + esc(paxRouteLabel) + '</div>' +
+                (passengerCards || '<p class="ty-bd-muted">Passenger details are not available for this booking.</p>') +
+              '</div></section>'
+            : '') +
+          contactBlock +
+          (showPolicies
+            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Ticket policies</h2><button type="button" class="ty-bd-policy-row" data-bd-open-policies style="margin-top:8px"><span>Cancellation and change policies</span><span class="ty-bd-chev">›</span></button></div></section>'
+            : '') +
+          (showPayment
+            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad">' +
+                (paid ? '<div class="ty-bd-pay-badge">✓ Booking was paid</div>' : '') +
+                '<button type="button" class="ty-bd-pay-summary" data-bd-open-payment><span class="ty-bd-section-title" style="font-size:17px">Payment details</span><span class="ty-bd-chev">›</span></button>' +
+                (payment.total ? '<div class="ty-bd-pay-total"><span>Total amount</span><b>' + esc(payment.total) + '</b></div>' : '') +
+              '</div></section>'
+            : '') +
+          '<section class="ty-bd-block" id="tyBdManageSection"><div class="ty-bd-block-pad" style="padding-bottom:0"><h2 class="ty-bd-section-title">Manage my bookings</h2></div>' + manageRows + '</section>' +
+          '<section class="ty-bd-block"><div class="ty-bd-support-wrap"><h2 class="ty-bd-section-title">We\'re here to support</h2>' +
+            '<div class="ty-bd-help-card"><p>Need help or have questions about this booking?</p><a class="ty-bd-btn ghost" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a></div>' +
+            '<a class="ty-bd-airline-row" data-bd-airline-site href="#" target="_blank" rel="noopener">✈ Go to airline website</a>' +
+          '</div></section>' +
+          '<p id="tyFinalStatusMessage" class="ty-final-message" hidden style="margin:12px 16px 0"></p>' +
+        '</main></div>';
     bindConfirmedBookingDetailChrome(route);
-    bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, showAirlineRef ? airlineRefDisplay : '', ticketDisplay, contact, payment);
+    bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, showAirlineRef ? airlineRefDisplay : '', ticketDisplay, contact, payment, route);
   }
 
   function renderConfirmedBookingDetailView(status, bookingPayload, responseData){
