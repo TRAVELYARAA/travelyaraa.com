@@ -9094,12 +9094,60 @@ function mobileFareSheets(flights, fare, options){
       .ty-bd-bag-block .bag{margin:0 0 12px}
       .ty-bd-bag-block .bag b{display:block;font-size:13px;margin-bottom:4px}
       .ty-bd-bag-block ul{margin:0;padding-left:18px;font-size:13px;line-height:1.45;color:#374151;font-weight:600}
-      .ty-bd-seg-card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
-      .ty-bd-seg-card .top{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:800;color:#111827;margin-bottom:8px}
-      .ty-bd-seg-card .times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-      .ty-bd-seg-card strong{display:block;font-size:18px;font-weight:900}
-      .ty-bd-seg-card span{display:block;font-size:12px;color:#6b7280;font-weight:600;margin-top:2px}
-      @media(max-width:700px){.ty-bd-route-grid strong{font-size:20px}.ty-bd-status-body h1{font-size:22px}}
+      .ty-bd-route-extra{padding:0 12px 10px;display:grid;gap:6px}
+      .ty-bd-route-extra .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#eef5ff;color:#1e3a5f;font-size:12px;font-weight:800;width:fit-content}
+      .ty-bd-route-extra .meta{font-size:12px;color:#6b7280;font-weight:700;line-height:1.4}
+      .ty-bd-term{display:block;font-size:12px;color:#374151;font-weight:700;margin-top:2px}
+      .ty-bd-manage-note{margin:0;padding:12px 16px 16px;font-size:13px;line-height:1.45;font-weight:700;color:#0062e3;background:#f3f8ff}
+      .ty-bd-timeline{display:grid;gap:0;padding:4px 0 8px}
+      .ty-bd-tl-seg{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:stretch}
+      .ty-bd-tl-rail{position:relative;display:flex;flex-direction:column;align-items:center}
+      .ty-bd-tl-rail .dot{width:10px;height:10px;border-radius:999px;background:#0062e3;margin-top:6px;flex:0 0 auto;z-index:1}
+      .ty-bd-tl-rail .wire{flex:1;width:2px;background:#dbe7f5;min-height:28px}
+      .ty-bd-tl-body{padding:0 0 14px;min-width:0}
+      .ty-bd-tl-body .when{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}
+      .ty-bd-tl-body .when strong{font-size:20px;font-weight:900;color:#111827}
+      .ty-bd-tl-body .when em{font-style:normal;font-size:12px;color:#6b7280;font-weight:700}
+      .ty-bd-tl-body .place{margin-top:4px;font-size:14px;font-weight:800;color:#111827}
+      .ty-bd-tl-body .airport{margin-top:2px;font-size:12px;color:#6b7280;font-weight:600;line-height:1.35}
+      .ty-bd-tl-body .term{margin-top:2px;font-size:12px;color:#374151;font-weight:700}
+      .ty-bd-tl-flight{margin:8px 0 10px;padding:10px 12px;border-radius:10px;background:#f5f8fc;border:1px solid #e8eef6}
+      .ty-bd-tl-flight b{display:block;font-size:13px;font-weight:900;color:#111827}
+      .ty-bd-tl-flight span{display:block;margin-top:3px;font-size:12px;color:#6b7280;font-weight:700}
+      .ty-bd-tl-layover{margin:0 0 12px 28px;padding:8px 12px;border-radius:999px;background:#fff8e8;border:1px dashed #e6b325;color:#7a5b00;font-size:12px;font-weight:800;width:fit-content;max-width:calc(100% - 28px)}
+      .ty-bd-sheet-panel{max-width:560px;margin:0 auto;left:0;right:0}
+      @media(max-width:700px){
+        .ty-bd-route-grid strong{font-size:20px}
+        .ty-bd-status-body h1{font-size:22px}
+        .ty-bd-shell{max-width:100%}
+        .ty-bd-sheet-panel{max-width:100%;border-radius:18px 18px 0 0}
+      }
+      @media(min-width:860px){
+        .ty-bd-page{padding:0 0 48px}
+        .ty-bd-header,.ty-bd-sticky-bar{max-width:1080px;margin-left:auto;margin-right:auto;border-left:1px solid #e5e9f0;border-right:1px solid #e5e9f0}
+        .ty-bd-hero{max-width:1080px;margin:0 auto;height:220px;border-radius:0 0 16px 16px}
+        .ty-bd-hero-city{font-size:36px;left:28px;bottom:56px}
+        .ty-bd-shell{max-width:1080px;margin:-28px auto 0;padding:0 18px 24px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.9fr);gap:14px 16px;align-items:start}
+        .ty-bd-status-card{grid-column:1 / -1;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(7,29,73,.08)}
+        .ty-bd-alert{margin:0;grid-column:1 / -1}
+        .ty-bd-block{margin-top:0;border-radius:16px;overflow:hidden;box-shadow:0 6px 18px rgba(7,29,73,.06)}
+        .ty-bd-block.ty-bd-main-col{grid-column:1}
+        .ty-bd-block.ty-bd-side-col{grid-column:2}
+        .ty-bd-primary-actions{grid-column:1 / -1;border-radius:16px;padding:16px 18px;gap:12px;max-width:520px}
+        .ty-bd-status-body{padding:22px 24px}
+        .ty-bd-status-body h1{font-size:30px}
+        .ty-bd-block-pad{padding:18px 20px}
+        .ty-bd-route-grid{padding:8px 16px 14px;gap:16px}
+        .ty-bd-route-grid strong{font-size:28px}
+        .ty-bd-route-mid{min-width:110px}
+        .ty-bd-route-mid .line{width:84px}
+        .ty-bd-sheet-panel{left:50%;right:auto;transform:translateX(-50%);width:min(560px,92vw);border-radius:18px 18px 0 0}
+        .ty-bd-manage-row{padding:15px 20px}
+        .ty-bd-support-wrap{padding:18px 20px 22px}
+      }
+      @media(min-width:1100px){
+        .ty-bd-shell{grid-template-columns:minmax(0,1.6fr) minmax(340px,.85fr);gap:16px 20px;padding:0 24px 32px}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -9603,25 +9651,139 @@ function mobileFareSheets(flights, fare, options){
     });
   }
 
-  function renderFlightDetailsTimelineHtml(flights, airlineReference){
+  function statusCabinLabel(value){
+    return normalizeCabin(value || 'ECONOMY').replace(/_/g, ' ').replace(/\w\S*/g, function(word){
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+  }
+
+  function statusSegmentEndpoint(seg, flight, side){
+    const code = String((side === 'arr' ? (seg.arrCode || flight.arrivalCity) : (seg.depCode || flight.departureCity)) || '').toUpperCase();
+    const terminalRaw = side === 'arr' ? seg.arrTerminal : seg.depTerminal;
+    return {
+      code: code,
+      city: cityNameFromCode(code),
+      cityCode: statusCityCodeLabel(code),
+      airport: statusAirportNameOnly(code),
+      terminal: terminalRaw ? cleanTerminal(terminalRaw) : '',
+      time: cardSegmentTime(seg, flight, side),
+      date: compactDateForSegment(side === 'arr' ? seg.arrDate : seg.depDate)
+    };
+  }
+
+  function statusItineraryMeta(flights, booking){
+    const segments = collectFlightSegmentsForCard(flights || []);
+    const firstItem = segments[0] || {seg:{}, flight:{}};
+    const lastItem = segments[segments.length - 1] || firstItem;
+    const first = firstItem.seg || {};
+    const last = lastItem.seg || {};
+    const firstFlight = firstItem.flight || {};
+    const lastFlight = lastItem.flight || {};
+    const cabin = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || state.search.cabinClass || firstFlight.cabinClass || firstFlight.cabin || 'ECONOMY');
+    const airlineName = first.airlineName || firstFlight.airlineName || 'Airline';
+    const flightNo = first.flightCode || firstFlight.flightCode || [first.airlineCode || firstFlight.airlineCode, first.flightNumber].filter(Boolean).join(' ');
+    const duration = firstFlight.totalDuration || firstFlight.duration || first.duration || last.duration || lastFlight.duration || '';
+    const stopsCount = Math.max(0, segments.length - 1);
+    const layovers = [];
+    for(let i = 0; i < segments.length - 1; i++){
+      const cur = segments[i];
+      const next = segments[i + 1];
+      const mins = computedLayoverMinutes(cur, next);
+      const stopCode = String((cur.seg && (cur.seg.arrCode || cur.seg.arrivalCity)) || '').toUpperCase();
+      const label = cleanLayoverLabel(mins, stopCode);
+      if(label) layovers.push({code:stopCode, minutes:mins, label:label});
+    }
+    return {
+      segments: segments,
+      firstItem: firstItem,
+      lastItem: lastItem,
+      first: first,
+      last: last,
+      firstFlight: firstFlight,
+      lastFlight: lastFlight,
+      dep: statusSegmentEndpoint(first, firstFlight, 'dep'),
+      arr: statusSegmentEndpoint(last, lastFlight, 'arr'),
+      airlineName: airlineName,
+      flightNo: flightNo,
+      cabin: cabin,
+      duration: duration,
+      stopsCount: stopsCount,
+      layovers: layovers
+    };
+  }
+
+  function renderBookingItineraryCardBodyHtml(itin, airlineRefDisplay, showAirlineRef, detailsBanner){
+    const stopLabel = itin.stopsCount <= 0
+      ? 'Non-stop'
+      : (itin.stopsCount + ' stop' + (itin.stopsCount > 1 ? 's' : ''));
+    const layoverTextLine = itin.layovers.map(function(l){ return l.label; }).filter(Boolean).join(' · ');
+    return '<div class="ty-bd-details-card" style="margin-top:10px">' + (detailsBanner || '') +
+      '<div class="ty-bd-flight-head"><div>' + segAirlineLogo(itin.first, itin.firstFlight) + '</div><div><b>' + esc(itin.airlineName) + (itin.flightNo || itin.cabin ? (' · ' + esc([itin.flightNo, itin.cabin].filter(Boolean).join(' · '))) : '') + '</b></div></div>' +
+      (showAirlineRef ? '<div class="ty-bd-airline-ref">Airline Reference: ' + esc(airlineRefDisplay) + ' ' + statusCopyIconButton(airlineRefDisplay) + '</div>' : '') +
+      '<div class="ty-bd-route-grid">' +
+        '<div><strong>' + esc(itin.dep.time) + '</strong><b>' + esc(itin.dep.cityCode) + '</b>' +
+          (itin.dep.airport ? '<span>' + esc(itin.dep.airport) + '</span>' : '') +
+          (itin.dep.terminal ? '<span class="ty-bd-term">' + esc(itin.dep.terminal) + '</span>' : '') +
+          (itin.dep.date ? '<span>' + esc(itin.dep.date) + '</span>' : '') +
+        '</div>' +
+        '<div class="ty-bd-route-mid"><span class="stops">' + esc(stopLabel) + '</span><div class="line"></div><em>' + esc(itin.duration || '') + '</em></div>' +
+        '<div style="text-align:right"><strong>' + esc(itin.arr.time) + '</strong><b>' + esc(itin.arr.cityCode) + '</b>' +
+          (itin.arr.airport ? '<span>' + esc(itin.arr.airport) + '</span>' : '') +
+          (itin.arr.terminal ? '<span class="ty-bd-term">' + esc(itin.arr.terminal) + '</span>' : '') +
+          (itin.arr.date ? '<span>' + esc(itin.arr.date) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      ((itin.stopsCount > 0 || layoverTextLine)
+        ? '<div class="ty-bd-route-extra">' +
+            (itin.stopsCount > 0 ? '<span class="chip">' + esc(stopLabel) + '</span>' : '') +
+            (layoverTextLine ? '<div class="meta">' + esc(layoverTextLine) + '</div>' : '') +
+          '</div>'
+        : '') +
+      '<button type="button" class="ty-bd-details-link" data-bd-open-flight-details>View scheduled flight details</button>' +
+    '</div>';
+  }
+
+  function renderFlightDetailsTimelineHtml(flights, airlineReference, booking){
     const segments = collectFlightSegmentsForCard(flights);
     if(!segments.length) return '<p class="ty-bd-muted">Flight details are not available for this booking.</p>';
-    return segments.map(function(item){
+    const cabinFallback = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || state.search.cabinClass || 'ECONOMY');
+    let html = '<div class="ty-bd-timeline">';
+    segments.forEach(function(item, idx){
       const seg = item.seg || {};
       const flight = item.flight || {};
       const airlineName = seg.airlineName || flight.airlineName || 'Airline';
       const flightNo = seg.flightCode || flight.flightCode || [seg.airlineCode || flight.airlineCode, seg.flightNumber].filter(Boolean).join(' ');
-      const cabin = normalizeCabin(state.search.cabinClass || flight.cabinClass || flight.cabin || 'ECONOMY').replace(/_/g, ' ');
-      const depTime = cardSegmentTime(seg, flight, 'dep');
-      const arrTime = cardSegmentTime(seg, flight, 'arr');
-      const depDate = compactDateForSegment(seg.depDate);
-      const arrDate = compactDateForSegment(seg.arrDate);
-      const depAirportLabel = statusAirportLabel(String(seg.depCode || flight.departureCity || '').toUpperCase());
-      const arrAirportLabel = statusAirportLabel(String(seg.arrCode || flight.arrivalCity || '').toUpperCase());
-      const depTerminal = seg.depTerminal ? cleanTerminal(seg.depTerminal) : '';
-      const arrTerminal = seg.arrTerminal ? cleanTerminal(seg.arrTerminal) : '';
-      return '<div class="ty-bd-seg-card"><div class="top"><span>' + esc(airlineName) + (flightNo ? (' · ' + esc(flightNo)) : '') + '</span><span>' + esc(cabin) + '</span></div><div class="times"><div><strong>' + esc(depTime) + '</strong><span>' + esc(depAirportLabel) + '</span><span>' + esc(depDate) + (depTerminal ? (' · ' + esc(depTerminal)) : '') + '</span></div><div><strong>' + esc(arrTime) + '</strong><span>' + esc(arrAirportLabel) + '</span><span>' + esc(arrDate) + (arrTerminal ? (' · ' + esc(arrTerminal)) : '') + '</span></div></div>' + (airlineReference ? '<div class="ty-bd-airline-ref" style="padding:10px 0 0">Airline Reference: ' + esc(airlineReference) + '</div>' : '') + '<span style="display:block;margin-top:8px;font-size:12px;color:#6b7280;font-weight:700">Duration: ' + esc(seg.duration || flight.duration || '') + '</span></div>';
-    }).join('');
+      const cabin = statusCabinLabel(flight.cabinClass || flight.cabin || cabinFallback);
+      const dep = statusSegmentEndpoint(seg, flight, 'dep');
+      const arr = statusSegmentEndpoint(seg, flight, 'arr');
+      const duration = seg.duration || flight.duration || '';
+      const isLast = idx === segments.length - 1;
+      html += '<div class="ty-bd-tl-seg"><div class="ty-bd-tl-rail"><span class="dot"></span><span class="wire"></span></div><div class="ty-bd-tl-body">' +
+        '<div class="when"><strong>' + esc(dep.time) + '</strong>' + (dep.date ? '<em>' + esc(dep.date) + '</em>' : '') + '</div>' +
+        '<div class="place">' + esc(dep.cityCode || dep.city || dep.code) + '</div>' +
+        (dep.airport ? '<div class="airport">' + esc(dep.airport) + '</div>' : '') +
+        (dep.terminal ? '<div class="term">' + esc(dep.terminal) + '</div>' : '') +
+        '<div class="ty-bd-tl-flight"><b>' + esc([airlineName, flightNo].filter(Boolean).join(' · ')) + '</b><span>' + esc([cabin, duration ? ('Duration ' + duration) : ''].filter(Boolean).join(' · ')) + '</span>' +
+          (airlineReference ? '<span>Airline Reference: ' + esc(airlineReference) + '</span>' : '') +
+        '</div></div></div>';
+      html += '<div class="ty-bd-tl-seg"><div class="ty-bd-tl-rail"><span class="dot"></span>' + (isLast ? '' : '<span class="wire"></span>') + '</div><div class="ty-bd-tl-body">' +
+        '<div class="when"><strong>' + esc(arr.time) + '</strong>' + (arr.date ? '<em>' + esc(arr.date) + '</em>' : '') + '</div>' +
+        '<div class="place">' + esc(arr.cityCode || arr.city || arr.code) + '</div>' +
+        (arr.airport ? '<div class="airport">' + esc(arr.airport) + '</div>' : '') +
+        (arr.terminal ? '<div class="term">' + esc(arr.terminal) + '</div>' : '') +
+      '</div></div>';
+      if(!isLast){
+        const mins = computedLayoverMinutes(item, segments[idx + 1]);
+        const stopCode = String(seg.arrCode || '').toUpperCase();
+        const label = cleanLayoverLabel(mins, stopCode);
+        if(label) html += '<div class="ty-bd-tl-layover">' + esc(label) + '</div>';
+      }
+    });
+    html += '</div>';
+    if(segments.length > 1){
+      html = '<p class="ty-bd-sheet-sub" style="text-align:left;margin-bottom:10px">' + esc(segments.length - 1) + ' stop' + (segments.length - 1 > 1 ? 's' : '') + ' · ' + esc(segments.length) + ' flights</p>' + html;
+    }
+    return html;
   }
 
   function renderPassengersSheetHtml(travellers, flights, airlineReference, ticketNumber){
@@ -9710,7 +9872,7 @@ function mobileFareSheets(flights, fare, options){
       if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
     });
     ROOT.querySelector('[data-bd-open-flight-details]')?.addEventListener('click', function(){
-      openBookingDetailSheet('Flight details', renderFlightDetailsTimelineHtml(flights, airlineReference));
+      openBookingDetailSheet('Flight details', renderFlightDetailsTimelineHtml(flights, airlineReference, statusBookingObject(responseData, bookingPayload)));
     });
     function openPassengersSheet(){
       openBookingDetailSheet('Passengers', renderPassengersSheetHtml(travellers, flights, airlineReference, ticketNumber));
@@ -9865,26 +10027,15 @@ function mobileFareSheets(flights, fare, options){
     const refund = statusRefundInfo(booking, responseData);
     const route = statusRouteContext(flights, booking, bookingPayload);
     const paxCount = statusPassengerCount(travellers, booking);
-    const firstItem = route.segments[0] || {seg:{}, flight:{}};
-    const first = firstItem.seg || {};
-    const lastItem = route.segments[route.segments.length - 1] || firstItem;
-    const last = lastItem.seg || {};
-    const firstFlight = firstItem.flight || {};
-    const lastFlight = lastItem.flight || {};
-    const airlineName = first.airlineName || firstFlight.airlineName || 'Airline';
-    const flightNo = first.flightCode || firstFlight.flightCode || [first.airlineCode || firstFlight.airlineCode, first.flightNumber].filter(Boolean).join(' ');
-    const cabin = normalizeCabin((booking.search && booking.search.cabinClass) || state.search.cabinClass || firstFlight.cabinClass || firstFlight.cabin || 'ECONOMY').replace(/_/g, ' ').replace(/\w\S*/g, function(word){ return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); });
-    const depTime = cardSegmentTime(first, firstFlight, 'dep');
-    const arrTime = cardSegmentTime(last, lastFlight, 'arr');
-    const duration = first.duration || firstFlight.duration || last.duration || lastFlight.duration || '';
-    const stopsCount = Math.max(0, (route.segments || []).length - 1);
+    const itin = statusItineraryMeta(flights, booking);
     const showAirlineRef = Boolean(airlineRefDisplay) && mode !== 'failed';
     const showLive = mode === 'confirmed' || mode === 'completed';
     const showPassengers = mode !== 'failed' || travellers.length > 0;
     const showContact = mode !== 'failed' && Boolean([contact.name, contact.email, contact.phone].filter(Boolean).length);
     const showPolicies = mode === 'confirmed' || mode === 'completed' || mode === 'cancelled';
     const showPayment = mode === 'confirmed' || mode === 'completed' || (mode === 'cancelled' && paid) || (mode === 'failed' && paid);
-    const showReceipt = ((mode === 'confirmed' || mode === 'completed') && hasTicketEvidence) || (mode === 'cancelled' && paid && hasTicketEvidence) || (mode === 'failed' && paid && hasTicketEvidence);
+    const showTicket = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
+    const showReceipt = ((mode === 'confirmed' || mode === 'completed') && hasTicketEvidence) || ((mode === 'cancelled' || mode === 'failed') && paid);
     const showResend = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
     const showChangeCancel = mode === 'confirmed' || mode === 'completed';
     const statusBand = mode === 'completed' ? 'Booking completed'
@@ -9899,10 +10050,8 @@ function mobileFareSheets(flights, fare, options){
            refund.charge ? ('Cancellation charge: ' + esc(refund.charge) + '.') : '',
            refund.refundStatus ? ('Refund status: ' + esc(refund.refundStatus) + '.') : '',
            refund.note ? esc(refund.note) : '',
-           (!refund.refundAmount && !refund.note) ? 'If you have not received your refund yet, please contact your bank or card company.' : ''
+           (refund.refundAmount && !refund.note) ? 'If you have not received it yet, please contact your bank or card company.' : ''
           ].filter(Boolean).join(' ') + '</div>');
-      }else{
-        alerts.push('<div class="ty-bd-alert info"><b>Refund details</b>Refund details are not available right now. TravelYaraa support can help if you need an update.</div>');
       }
       alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></div>');
     }else if(mode === 'completed'){
@@ -9921,29 +10070,23 @@ function mobileFareSheets(flights, fare, options){
       '</button>';
     }).join('');
     const paxRouteLabel = [route.fromAirportLabel, route.toAirportLabel].filter(Boolean).join(' - ') || route.routeTitle || '';
-    const fromCityCode = route.fromAirportLabel || statusCityCodeLabel(route.fromCode);
-    const toCityCode = route.toAirportLabel || statusCityCodeLabel(route.toCode);
-    const fromAirportName = route.fromAirportName || statusAirportNameOnly(route.fromCode);
-    const toAirportName = route.toAirportName || statusAirportNameOnly(route.toCode);
-    const contactBlock = showContact
-      ? ('<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Contact details</h2>' +
-          (contact.name ? '<div class="ty-bd-contact-name">' + esc(contact.name) + '</div>' : '') +
-          (contact.phone ? '<div class="ty-bd-contact-row">📞 ' + esc(contact.phone) + '</div>' : '') +
-          (contact.email ? '<div class="ty-bd-contact-row">✉ ' + esc(contact.email) + '</div>' : '') +
-        '</div></section>')
-      : '';
     const primaryActions = mode === 'failed'
       ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-new-booking>New booking</button><button type="button" class="ty-bd-btn ghost" data-my-bookings>My Bookings</button></div>'
       : (mode === 'cancelled'
         ? '<div class="ty-bd-primary-actions single"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button></div>'
         : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn ghost" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn ghost" data-contact-support>Flight Help Center</button>') + '</div>');
     const manageRows = [
+      showTicket ? '<button type="button" class="ty-bd-manage-row" data-download-ticket><span class="ico">▤</span><span>Download e-ticket</span></button>' : '',
       showResend ? '<button type="button" class="ty-bd-manage-row" data-bd-manage-resend><span class="ico">✉</span><span>Resend confirmation email</span></button>' : '',
       showReceipt ? '<button type="button" class="ty-bd-manage-row" data-download-receipt><span class="ico">▤</span><span>Request e-receipt</span></button>' : '',
       showChangeCancel ? '<button type="button" class="ty-bd-manage-row" data-change-request><span class="ico">↻</span><span>Request flight changes</span></button>' : '',
-      showChangeCancel ? '<button type="button" class="ty-bd-manage-row" data-cancel-booking><span class="ico">⊘</span><span>Request cancellation &amp; refund</span></button>' : '',
-      mode === 'failed' ? '<button type="button" class="ty-bd-manage-row" data-new-booking><span class="ico">＋</span><span>Try again / New booking</span></button>' : ''
+      showChangeCancel ? '<button type="button" class="ty-bd-manage-row" data-cancel-booking><span class="ico">⊘</span><span>Request cancellation &amp; refund</span></button>' : ''
     ].join('');
+    const manageBody = manageRows
+      ? manageRows
+      : ('<p class="ty-bd-manage-note">' + (mode === 'failed'
+          ? 'You can start a new booking anytime.'
+          : 'No booking management actions are available for this booking right now.') + '</p>');
     const detailsBanner = mode === 'completed'
       ? '<div class="ty-bd-details-banner">✈ This flight has completed</div>'
       : '';
@@ -9964,39 +10107,37 @@ function mobileFareSheets(flights, fare, options){
           '</section>' +
           alerts.join('') +
           (showLive
-            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><div class="ty-bd-live-head"><h2 class="ty-bd-section-title" style="margin:0">Live flight updates</h2><button type="button" data-bd-live-refresh>↻ Refresh</button></div><div class="ty-bd-live-card"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></div></section>'
+            ? '<section class="ty-bd-block ty-bd-main-col"><div class="ty-bd-block-pad"><div class="ty-bd-live-head"><h2 class="ty-bd-section-title" style="margin:0">Live flight updates</h2><button type="button" data-bd-live-refresh>↻ Refresh</button></div><div class="ty-bd-live-card"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></div></section>'
             : '') +
-          '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Your booking details</h2>' +
-            '<div class="ty-bd-details-card" style="margin-top:10px">' + detailsBanner +
-              '<div class="ty-bd-flight-head"><div>' + segAirlineLogo(first, firstFlight) + '</div><div><b>' + esc(airlineName) + (flightNo || cabin ? (' · ' + esc([flightNo, cabin].filter(Boolean).join(' · '))) : '') + '</b></div></div>' +
-              (showAirlineRef ? '<div class="ty-bd-airline-ref">Airline Reference: ' + esc(airlineRefDisplay) + ' ' + statusCopyIconButton(airlineRefDisplay) + '</div>' : '') +
-              '<div class="ty-bd-route-grid">' +
-                '<div><strong>' + esc(depTime) + '</strong><b>' + esc(fromCityCode) + '</b>' + (fromAirportName ? '<span>' + esc(fromAirportName) + '</span>' : '') + '</div>' +
-                '<div class="ty-bd-route-mid">' + (stopsCount > 0 ? '<span class="stops">' + esc(String(stopsCount)) + '</span>' : '') + '<div class="line"></div><em>' + esc(duration) + '</em></div>' +
-                '<div style="text-align:right"><strong>' + esc(arrTime) + '</strong><b>' + esc(toCityCode) + '</b>' + (toAirportName ? '<span>' + esc(toAirportName) + '</span>' : '') + '</div>' +
-              '</div>' +
-              '<button type="button" class="ty-bd-details-link" data-bd-open-flight-details>View scheduled flight details</button>' +
-            '</div></div></section>' +
+          '<section class="ty-bd-block ty-bd-main-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Your booking details</h2>' +
+            renderBookingItineraryCardBodyHtml(itin, airlineRefDisplay, showAirlineRef, detailsBanner) +
+          '</div></section>' +
           primaryActions +
           (showPassengers
-            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><button type="button" class="ty-bd-section-title ty-bd-policy-row" data-bd-open-passengers style="padding:0"><span>Passengers</span><span class="ty-bd-chev">›</span></button>' +
+            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><button type="button" class="ty-bd-section-title ty-bd-policy-row" data-bd-open-passengers style="padding:0"><span>Passengers</span><span class="ty-bd-chev">›</span></button>' +
                 '<div class="ty-bd-pax-route">✈ ' + esc(paxRouteLabel) + '</div>' +
                 (passengerCards || '<p class="ty-bd-muted">Passenger details are not available for this booking.</p>') +
               '</div></section>'
             : '') +
-          contactBlock +
+          (showContact
+            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Contact details</h2>' +
+                (contact.name ? '<div class="ty-bd-contact-name">' + esc(contact.name) + '</div>' : '') +
+                (contact.phone ? '<div class="ty-bd-contact-row">📞 ' + esc(contact.phone) + '</div>' : '') +
+                (contact.email ? '<div class="ty-bd-contact-row">✉ ' + esc(contact.email) + '</div>' : '') +
+              '</div></section>'
+            : '') +
           (showPolicies
-            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Ticket policies</h2><button type="button" class="ty-bd-policy-row" data-bd-open-policies style="margin-top:8px"><span>Cancellation and change policies</span><span class="ty-bd-chev">›</span></button></div></section>'
+            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Ticket policies</h2><button type="button" class="ty-bd-policy-row" data-bd-open-policies style="margin-top:8px"><span>Cancellation and change policies</span><span class="ty-bd-chev">›</span></button></div></section>'
             : '') +
           (showPayment
-            ? '<section class="ty-bd-block"><div class="ty-bd-block-pad">' +
+            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad">' +
                 (paid ? '<div class="ty-bd-pay-badge">✓ Booking was paid</div>' : '') +
                 '<button type="button" class="ty-bd-pay-summary" data-bd-open-payment><span class="ty-bd-section-title" style="font-size:17px">Payment details</span><span class="ty-bd-chev">›</span></button>' +
                 (payment.total ? '<div class="ty-bd-pay-total"><span>Total amount</span><b>' + esc(payment.total) + '</b></div>' : '') +
               '</div></section>'
             : '') +
-          '<section class="ty-bd-block" id="tyBdManageSection"><div class="ty-bd-block-pad" style="padding-bottom:0"><h2 class="ty-bd-section-title">Manage my bookings</h2></div>' + manageRows + '</section>' +
-          '<section class="ty-bd-block"><div class="ty-bd-support-wrap"><h2 class="ty-bd-section-title">We\'re here to support</h2>' +
+          '<section class="ty-bd-block ty-bd-side-col" id="tyBdManageSection"><div class="ty-bd-block-pad" style="padding-bottom:0"><h2 class="ty-bd-section-title">Manage my bookings</h2></div>' + manageBody + '</section>' +
+          '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-support-wrap"><h2 class="ty-bd-section-title">We\'re here to support</h2>' +
             '<div class="ty-bd-help-card"><p>Need help or have questions about this booking?</p><a class="ty-bd-btn ghost" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a></div>' +
             '<a class="ty-bd-airline-row" data-bd-airline-site href="#" target="_blank" rel="noopener">✈ Go to airline website</a>' +
           '</div></section>' +
