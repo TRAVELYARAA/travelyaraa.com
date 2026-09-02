@@ -8988,6 +8988,14 @@ function mobileFareSheets(flights, fare, options){
       .ty-bd-shell{max-width:720px;margin:0 auto;padding:12px 12px 0;display:grid;gap:12px}
       .ty-bd-card{background:#fff;border-radius:14px;box-shadow:0 4px 16px rgba(7,29,73,.07);overflow:hidden}
       .ty-bd-status-band{background:#e8f8ed;color:#137333;padding:10px 14px;font-size:13px;font-weight:950}
+      .ty-bd-status-band.completed{background:#eef6ff;color:#0b4f93}
+      .ty-bd-status-band.cancelled{background:#fff1f0;color:#b42318}
+      .ty-bd-status-band.failed{background:#fff1f0;color:#b42318}
+      .ty-bd-page.cancelled .ty-bd-hero,.ty-bd-page.failed .ty-bd-hero{background:linear-gradient(135deg,#3f1d1d 0%,#b42318 55%,#f97066 100%)}
+      .ty-bd-page.completed .ty-bd-hero{background:linear-gradient(135deg,#071d49 0%,#0b4f93 55%,#3b9bff 100%)}
+      .ty-bd-note{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px;font-weight:800;line-height:1.45}
+      .ty-bd-note.completed{background:#eef6ff;color:#0b4f93}
+      .ty-bd-note.cancelled,.ty-bd-note.failed{background:#fff1f0;color:#b42318}
       .ty-bd-status-body{padding:14px}
       .ty-bd-status-body h1{margin:0 0 8px;font-size:20px;font-weight:950;color:#071d49}
       .ty-bd-meta{display:flex;flex-wrap:wrap;gap:8px 14px;color:#64748b;font-size:12px;font-weight:800;margin-bottom:10px}
@@ -9390,6 +9398,105 @@ function mobileFareSheets(flights, fare, options){
     };
   }
 
+  function statusPaymentLooksPaid(booking, responseData){
+    const raw = String(
+      (responseData && (responseData.paymentStatus || (responseData.payment && responseData.payment.status))) ||
+      (booking && (booking.paymentStatus || (booking.payment && booking.payment.status))) ||
+      ''
+    ).toUpperCase();
+    if(/SUCCESS|PAID|CAPTURED/.test(raw)) return true;
+    if(/FAILED|DECLINED|ABORTED|UNPAID|PAYMENT_CANCELLED|PAYMENT_PENDING|PENDING/.test(raw)) return false;
+    return Boolean(paidAmountDisplay(booking, responseData));
+  }
+
+  function statusTravelEndTimeMs(booking, flights){
+    const list = (flights && flights.length ? flights : []).concat((booking && booking.selectedFlights) || [], booking && booking.selectedResult ? [booking.selectedResult] : []);
+    const candidates = [];
+    function pushCandidate(value){
+      const raw = String(value == null ? '' : value).trim();
+      if(!raw) return;
+      // Ignore bare clock times like "08:15" without a date.
+      if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return;
+      candidates.push(raw);
+    }
+    list.filter(Boolean).forEach(function(flight){
+      const segs = Array.isArray(flight.segments) && flight.segments.length ? flight.segments : [firstSegment(flight) || flight || {}];
+      const last = segs[segs.length - 1] || {};
+      const arrDate = last.arrDate || last.arrivalDate || last.date || flight.arrivalDate || flight.arrDate;
+      const arrTime = last.arrTime || last.arrivalTime || flight.arrivalTime || flight.arr;
+      if(arrDate && arrTime && !/T/.test(String(arrDate)) && /^\d{4}-\d{2}-\d{2}$/.test(String(arrDate))){
+        pushCandidate(String(arrDate) + 'T' + String(arrTime).slice(0, 8));
+      }
+      pushCandidate(last.arrivalDateTime || last.arrDateTime);
+      pushCandidate(arrDate);
+      pushCandidate(flight.arrivalTime);
+      pushCandidate(flight.arr);
+    });
+    pushCandidate(booking && (booking.arrivalTime || booking.returnDate || booking.travelDate || booking.departureDate));
+    pushCandidate(booking && booking.details && (booking.details.arrivalTime || booking.details.returnDate || booking.details.departureDate));
+    pushCandidate(booking && booking.search && (booking.search.returnDate || booking.search.departureDate));
+    let best = 0;
+    candidates.forEach(function(raw){
+      const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+      const parsed = new Date(dateOnly ? (raw + 'T23:59:59') : raw);
+      const ms = parsed.getTime();
+      if(!Number.isNaN(ms)) best = Math.max(best, ms);
+    });
+    return best;
+  }
+
+  function statusIsTravelCompleted(booking, flights){
+    const end = statusTravelEndTimeMs(booking, flights);
+    return end > 0 && end < Date.now();
+  }
+
+  function statusRefundInfo(booking, responseData){
+    const source = responseData || booking || {};
+    const currency = statusPresentText((booking && booking.price && booking.price.currency) || (booking && booking.currency)) || 'INR';
+    const refundRaw = statusDeepValue(source, ['refundAmount','refundableAmount','netRefund']) ||
+      statusDeepValue(booking, ['refundAmount','refundableAmount','netRefund']) ||
+      (booking && booking.refund && (booking.refund.amount || booking.refund.refundAmount));
+    const chargeRaw = statusDeepValue(source, ['cancellationCharge','cancellationCharges','cancelCharge']) ||
+      statusDeepValue(booking, ['cancellationCharge','cancellationCharges','cancelCharge']);
+    const refundStatus = statusPresentText(
+      (responseData && (responseData.refundStatus || responseData.cancellationStatus)) ||
+      (booking && (booking.refundStatus || booking.cancellationStatus || (booking.refund && booking.refund.status)))
+    );
+    const refundDate = statusPresentText(
+      (responseData && (responseData.refundDate || responseData.refundedAt)) ||
+      (booking && (booking.refundDate || booking.refundedAt || (booking.refund && (booking.refund.date || booking.refund.refundedAt))))
+    );
+    const note = statusPresentText(
+      (responseData && (responseData.refundMessage || responseData.cancellationMessage)) ||
+      (booking && (booking.refundMessage || booking.cancellationMessage))
+    );
+    const chargeText = (chargeRaw !== '' && chargeRaw != null && typeof chargeRaw !== 'object')
+      ? (statusStoredMoney(chargeRaw, currency) || String(chargeRaw))
+      : '';
+    const refundText = (refundRaw !== '' && refundRaw != null && typeof refundRaw !== 'object')
+      ? (statusStoredMoney(refundRaw, currency) || String(refundRaw))
+      : '';
+    return {
+      refundStatus: refundStatus
+        ? (/REFUNDED|REFUND_PROCESSED|REFUND_COMPLETED/i.test(refundStatus) ? 'Refunded' : customerStatusLabel(refundStatus))
+        : '',
+      charge: chargeText,
+      refundAmount: refundText,
+      refundDate: refundDate,
+      note: note && !tyLooksTechnicalCustomerError(note) ? note : '',
+      hasAny: Boolean(refundStatus || chargeText || refundText || refundDate || (note && !tyLooksTechnicalCustomerError(note)))
+    };
+  }
+
+  function statusDetailMode(meta, booking, flights, hasTicketEvidence){
+    if(meta.kind === 'cancelled') return 'cancelled';
+    if(meta.kind === 'failed') return 'failed';
+    if(meta.kind === 'ok' && hasTicketEvidence){
+      return statusIsTravelCompleted(booking, flights) ? 'completed' : 'confirmed';
+    }
+    return 'hold';
+  }
+
   function closeBookingDetailSheet(){
     const sheet = document.getElementById('tyBdSheet');
     if(sheet) sheet.remove();
@@ -9477,8 +9584,9 @@ function mobileFareSheets(flights, fare, options){
     ROOT.querySelector('[data-bd-back-my-bookings]')?.addEventListener('click', function(){ location.href = '/my-bookings.html'; });
   }
 
-  function bindConfirmedBookingDetailUi(bookingId, bookingPayload, responseData, flights, travellers, airlineReference, ticketNumber, contact, payment){
+  function bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, airlineReference, ticketNumber, contact, payment){
     const safeId = encodeURIComponent(String(bookingId || ''));
+    const canTicketActions = mode === 'confirmed' || mode === 'completed';
     ROOT.querySelectorAll('[data-copy]').forEach(function(button){
       button.addEventListener('click', async function(){
         try{
@@ -9509,6 +9617,10 @@ function mobileFareSheets(flights, fare, options){
       openPolicyModal(flights || [], hasCancel ? 'cancel' : (hasChange ? 'change' : 'baggage'));
     });
     ROOT.querySelector('[data-bd-open-payment]')?.addEventListener('click', function(){
+      if(mode === 'failed' && !statusPaymentLooksPaid(statusBookingObject(responseData, bookingPayload), responseData)){
+        openBookingDetailSheet('Payment details', '<p class="ty-bd-muted">Payment was not completed for this booking.</p>');
+        return;
+      }
       openBookingDetailSheet('Payment details', renderPaymentSheetHtml(payment));
     });
     ROOT.querySelector('[data-bd-live-refresh]')?.addEventListener('click', async function(){
@@ -9521,30 +9633,46 @@ function mobileFareSheets(flights, fare, options){
         if(node) node.textContent = tyCustomerFacingActionError(error && error.message, 'Could not refresh this booking right now.');
       }
     });
-    function openResendSheet(triggerBtn){
+    function openResendSheet(){
       const current = contact.email || '';
       openBookingDetailSheet('Resend email', '<div class="ty-bd-form-field"><label for="tyBdResendEmail">Email address</label><input id="tyBdResendEmail" type="email" value="' + esc(current.split(',')[0].trim()) + '"></div><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-submit-resend>Send email</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Cancel</button></div>');
-      const submit = document.querySelector('[data-bd-submit-resend]');
-      if(submit){
-        submit.addEventListener('click', async function(){
-          const email = String(document.getElementById('tyBdResendEmail')?.value || '').trim();
-          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setFinalStatusMessage('Please enter a valid email address.', true);
-          try{
-            const data = await statusPost('/api/bookings/' + safeId + '/resend-email', {email:email});
-            closeBookingDetailSheet();
-            setFinalStatusMessage(data.message && !tyLooksTechnicalCustomerError(data.message) ? data.message : 'Email sent.');
-          }catch(error){
-            setFinalStatusMessage(error.message || 'Email could not be sent.', true);
-          }
-        });
-      }
+      document.querySelector('[data-bd-submit-resend]')?.addEventListener('click', async function(){
+        const email = String(document.getElementById('tyBdResendEmail')?.value || '').trim();
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setFinalStatusMessage('Please enter a valid email address.', true);
+        try{
+          const data = await statusPost('/api/bookings/' + safeId + '/resend-email', {email:email});
+          closeBookingDetailSheet();
+          setFinalStatusMessage(data.message && !tyLooksTechnicalCustomerError(data.message) ? data.message : 'Email sent.');
+        }catch(error){
+          setFinalStatusMessage(error.message || 'Email could not be sent.', true);
+        }
+      });
+    }
+    function openCompletedUnavailableSheet(){
+      openBookingDetailSheet('Not available', '<p class="ty-bd-muted">This flight has already departed, so cancellations or changes are no longer available for this booking.</p><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-sheet-close>Back to booking</button></div>');
     }
     ROOT.querySelector('[data-bd-resend-primary]')?.addEventListener('click', function(){ openResendSheet(); });
-    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData, true, 'ok', flights);
+    ROOT.querySelector('[data-bd-manage-resend]')?.addEventListener('click', function(){ openResendSheet(); });
+    ROOT.querySelector('[data-new-booking]')?.addEventListener('click', function(){ location.href='/index.html?service=flight'; });
+    ROOT.querySelector('[data-my-bookings]')?.addEventListener('click', function(){ location.href='/my-bookings.html'; });
+    ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(bookingId); });
+
+    if(canTicketActions){
+      bindFinalBookingStatusActions(bookingId, bookingPayload, responseData, true, 'ok', flights);
+    }else{
+      ROOT.querySelector('[data-download-ticket]')?.addEventListener('click', async function(){
+        try{ setFinalStatusMessage('Preparing e-ticket...'); await downloadBookingFile('/api/bookings/' + safeId + '/ticket', 'TravelYaraa-E-Ticket-' + bookingId + '.pdf'); setFinalStatusMessage('E-ticket download started.'); }catch(error){ setFinalStatusMessage(error.message || 'Ticket download failed.', true); }
+      });
+      ROOT.querySelector('[data-download-receipt]')?.addEventListener('click', async function(){
+        try{ setFinalStatusMessage('Preparing receipt...'); await downloadBookingFile('/api/bookings/' + safeId + '/receipt', 'TravelYaraa-Receipt-' + bookingId + '.pdf'); setFinalStatusMessage('Receipt download started.'); }catch(error){ setFinalStatusMessage(error.message || 'Receipt download failed.', true); }
+      });
+    }
+
     const changeBtn = ROOT.querySelector('[data-change-request]');
     if(changeBtn){
       changeBtn.replaceWith(changeBtn.cloneNode(true));
       ROOT.querySelector('[data-change-request]')?.addEventListener('click', async function(){
+        if(mode === 'completed') return openCompletedUnavailableSheet();
         openBookingDetailSheet('Request flight changes', '<div class="ty-bd-form-field"><label for="tyBdChangeDate">Preferred new travel date</label><input id="tyBdChangeDate" type="date"></div><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-submit-change>Submit request</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Cancel</button></div>');
         document.querySelector('[data-bd-submit-change]')?.addEventListener('click', async function(){
           const requestedDate = String(document.getElementById('tyBdChangeDate')?.value || '').trim();
@@ -9559,12 +9687,11 @@ function mobileFareSheets(flights, fare, options){
         });
       });
     }
-    const resendManage = ROOT.querySelector('[data-bd-manage-resend]');
-    if(resendManage) resendManage.addEventListener('click', function(){ openResendSheet(); });
     const cancelBtn = ROOT.querySelector('[data-cancel-booking]');
     if(cancelBtn){
       cancelBtn.replaceWith(cancelBtn.cloneNode(true));
       ROOT.querySelector('[data-cancel-booking]')?.addEventListener('click', async function(){
+        if(mode === 'completed') return openCompletedUnavailableSheet();
         openBookingDetailSheet('Request cancellation & refund', '<p class="ty-bd-muted">Review airline cancellation charges for this booking before submitting a request.</p><div class="ty-bd-form-actions"><button type="button" class="ty-bd-btn primary" data-bd-review-cancel>Review charges</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Close</button></div><div id="tyBdCancelSummary" hidden style="margin-top:12px"></div><div class="ty-bd-form-actions" id="tyBdCancelConfirmActions" hidden><button type="button" class="ty-bd-btn primary" data-bd-submit-cancel>Submit cancellation</button><button type="button" class="ty-bd-btn" data-bd-sheet-close>Keep booking</button></div>');
         document.querySelector('[data-bd-review-cancel]')?.addEventListener('click', async function(){
           try{
@@ -9606,7 +9733,7 @@ function mobileFareSheets(flights, fare, options){
     }
   }
 
-  function renderConfirmedBookingDetailView(status, bookingPayload, responseData){
+  function renderBookingDetailView(mode, status, bookingPayload, responseData){
     const booking = statusBookingObject(responseData, bookingPayload);
     const flights = statusFlightsFromBooking(booking, bookingPayload);
     const travellers = uniqueTravellersForStatus((booking.details && booking.details.passengers) || booking.travellers || (bookingPayload && bookingPayload.travellers) || []);
@@ -9615,8 +9742,11 @@ function mobileFareSheets(flights, fare, options){
     const airlineRefDisplay = airlineReference !== 'Pending' ? airlineReference : '';
     const ticketNumber = ticketValue(booking);
     const ticketDisplay = ticketNumber !== 'Pending' ? ticketNumber : '';
+    const hasTicketEvidence = Boolean(airlineRefDisplay || ticketDisplay);
     const contact = statusContact(booking, bookingPayload || {});
     const payment = statusStoredPaymentBreakdown(booking, responseData);
+    const paid = statusPaymentLooksPaid(booking, responseData);
+    const refund = statusRefundInfo(booking, responseData);
     const route = statusRouteContext(flights, booking, bookingPayload);
     const paxCount = statusPassengerCount(travellers, booking);
     const firstItem = route.segments[0] || {seg:{}, flight:{}};
@@ -9631,22 +9761,81 @@ function mobileFareSheets(flights, fare, options){
     const depTime = cardSegmentTime(first, firstFlight, 'dep');
     const arrTime = cardSegmentTime(last, lastFlight, 'arr');
     const duration = first.duration || firstFlight.duration || last.duration || lastFlight.duration || '';
+    const showAirlineRef = Boolean(airlineRefDisplay) && mode !== 'failed';
+    const showLive = mode === 'confirmed' || mode === 'completed';
+    const showPassengers = mode !== 'failed' || travellers.length > 0;
+    const showContact = mode !== 'failed' && Boolean([contact.name, contact.email, contact.phone].filter(Boolean).length);
+    const showPolicies = mode === 'confirmed' || mode === 'completed' || mode === 'cancelled';
+    const showPayment = mode === 'confirmed' || mode === 'completed' || (mode === 'cancelled' && paid) || (mode === 'failed' && paid);
+    const showTicket = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
+    const showReceipt = ((mode === 'confirmed' || mode === 'completed') && hasTicketEvidence) || (mode === 'cancelled' && paid && hasTicketEvidence) || (mode === 'failed' && paid && hasTicketEvidence);
+    const showResend = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
+    const showChangeCancel = mode === 'confirmed' || mode === 'completed';
+    const statusBand = mode === 'completed' ? 'Booking completed'
+      : (mode === 'cancelled' ? 'Booking cancelled'
+      : (mode === 'failed' ? (/UNSUCCESS|SUPPLIER_BOOKING_FAILED|TICKET_FAILED|REFUND_REQUIRED|UNCONFIRMED/i.test(String(statusValueFrom(booking, responseData, status) || '')) ? 'Booking unsuccessful' : 'Booking failed')
+      : 'Booking confirmed'));
+    const detailsNote = mode === 'completed'
+      ? '<p class="ty-bd-note completed">This flight has completed</p>'
+      : (mode === 'cancelled'
+        ? (refund.hasAny
+          ? '<div class="ty-bd-note cancelled">' +
+              [refund.refundStatus ? ('Refund status: ' + esc(refund.refundStatus)) : '',
+               refund.charge ? ('Cancellation charge: ' + esc(refund.charge)) : '',
+               refund.refundAmount ? ('Refund amount: ' + esc(refund.refundAmount)) : '',
+               refund.refundDate ? ('Refund date: ' + esc(refund.refundDate)) : '',
+               refund.note ? esc(refund.note) : ''].filter(Boolean).join('<br>') +
+            '</div>'
+          : '<p class="ty-bd-note cancelled">Refund details are not available right now.</p>')
+        : (mode === 'failed'
+          ? '<p class="ty-bd-note failed">' + esc(paid ? 'Payment was recorded, but this booking could not be completed.' : 'Payment was not completed for this booking.') + '</p>'
+          : ''));
     const passengerCards = travellers.map(function(traveller){
       const baggage = statusTravellerBaggageText(traveller, flights);
       const doc = statusTravellerDocumentLabel(traveller);
-      const meta = [statusPassengerTypeLabel(traveller), statusTravellerGenderTitle(traveller)].filter(Boolean).join(' · ');
+      const metaLine = [statusPassengerTypeLabel(traveller), statusTravellerGenderTitle(traveller)].filter(Boolean).join(' · ');
       const ticket = statusPresentText(traveller.ticketNumber || traveller.ticketNo || ticketDisplay);
-      const refLine = ticket ? ('Ticket: ' + ticket) : (airlineRefDisplay ? ('Airline Reference: ' + airlineRefDisplay) : '');
+      const refLine = ticket ? ('Ticket: ' + ticket) : (showAirlineRef ? ('Airline Reference: ' + airlineRefDisplay) : '');
       const extra = [refLine, baggage ? ('Baggage: ' + baggage) : '', doc].filter(Boolean).join(' · ');
-      return '<button type="button" class="ty-bd-passenger-card" data-bd-open-passengers><b>' + esc(travellerName(traveller)) + '</b><span>' + esc(meta) + '</span>' + (extra ? '<span>' + esc(extra) + '</span>' : '') + '</button>';
+      return '<button type="button" class="ty-bd-passenger-card" data-bd-open-passengers><b>' + esc(travellerName(traveller)) + '</b><span>' + esc(metaLine) + '</span>' + (extra ? '<span>' + esc(extra) + '</span>' : '') + '</button>';
     }).join('');
     const contactRows = [statusKvIf('Name', contact.name), statusKvIf('Email', contact.email), statusKvIf('Phone', contact.phone)].join('');
-    const paymentRowLabel = [payment.payStatus || 'Paid', payment.total].filter(Boolean).join(' · ');
+    const paymentRowLabel = mode === 'failed' && !paid
+      ? 'Payment was not completed'
+      : [payment.payStatus || (paid ? 'Paid' : ''), payment.total].filter(Boolean).join(' · ');
+    const primaryActions = mode === 'failed'
+      ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-new-booking>New booking</button><button type="button" class="ty-bd-btn" data-my-bookings>My Bookings</button></div>'
+      : (mode === 'cancelled'
+        ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button><button type="button" class="ty-bd-btn" data-contact-support>Flight Help Center</button></div>'
+        : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn" data-contact-support>Flight Help Center</button>') + '</div>');
+    const manageRows = [
+      showResend ? '<button type="button" class="ty-bd-list-row" data-bd-manage-resend>Resend confirmation email</button>' : '',
+      showReceipt ? '<button type="button" class="ty-bd-list-row" data-download-receipt>' + (mode === 'cancelled' || mode === 'failed' ? 'Request payment receipt' : 'Request e-receipt') + '</button>' : '',
+      showChangeCancel ? '<button type="button" class="ty-bd-list-row" data-change-request>Request flight changes</button>' : '',
+      showChangeCancel ? '<button type="button" class="ty-bd-list-row" data-cancel-booking>Request cancellation &amp; refund</button>' : '',
+      showTicket ? '<button type="button" class="ty-bd-list-row" data-download-ticket>Download e-ticket</button>' : '',
+      mode === 'failed' ? '<button type="button" class="ty-bd-list-row" data-new-booking>Try again / New booking</button>' : '',
+      '<button type="button" class="ty-bd-list-row" data-my-bookings>My Bookings</button>'
+    ].join('');
     try{ history.replaceState({step:'booking-status', bookingId:bookingId}, '', '/pages/results/flights.html?service=flight&step=booking-status&bookingId=' + encodeURIComponent(bookingId)); }catch(_e){}
-    ROOT.innerHTML = '<div class="ty-final-status ty-bd-page"><header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header><div class="ty-bd-sticky-bar" id="tyBdStickyBar"></div><div class="ty-bd-hero"><span class="ty-bd-hero-city">' + esc(route.toCity) + '</span></div><main class="ty-bd-shell"><section class="ty-bd-card"><div class="ty-bd-status-band">Booking confirmed</div><div class="ty-bd-status-body"><h1>' + esc(route.routeTitle) + '</h1><div class="ty-bd-meta"><em>📅 ' + esc(route.depDate) + '</em><em>' + esc(paxCount + ' Passenger' + (paxCount > 1 ? 's' : '')) + ' · ' + esc(route.tripType) + '</em></div><div class="ty-bd-booking-id"><span>Booking ID: <b>' + esc(bookingId) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(bookingId) + '">Copy</button></div>' + (airlineRefDisplay ? '<div class="ty-bd-booking-id"><span>Airline Reference: <b>' + esc(airlineRefDisplay) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(airlineRefDisplay) + '">Copy</button></div>' : '') + '</div></section><section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Live flight updates</h2><button type="button" data-bd-live-refresh>Refresh</button></div><div class="ty-bd-section-body"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></section><section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Your booking details</h2></div><div class="ty-bd-section-body"><div class="ty-bd-flight-row"><div>' + segAirlineLogo(first, firstFlight) + '</div><div><b>' + esc(airlineName) + '</b><span>' + esc(flightNo) + ' · ' + esc(cabin) + '</span>' + (airlineRefDisplay ? '<span>Airline Reference: ' + esc(airlineRefDisplay) + '</span>' : '') + '</div></div><div class="ty-bd-route-grid"><div><small>Departure</small><strong>' + esc(depTime) + '</strong><span>' + esc(route.fromAirportLabel) + '</span></div><div><small>Arrival</small><strong>' + esc(arrTime) + '</strong><span>' + esc(route.toAirportLabel) + '</span></div></div><span style="display:block;margin-top:8px;font-size:12px;color:#64748b;font-weight:800">Duration: ' + esc(duration) + '</span><button type="button" class="ty-bd-link" data-bd-open-flight-details>View scheduled flight details</button></div></section><div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button><button type="button" class="ty-bd-btn" data-bd-resend-primary>Resend email</button></div><section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Passengers</h2></div><div class="ty-bd-section-body" style="padding:0"><p style="padding:12px 14px 0;margin:0;font-size:12px;color:#64748b;font-weight:800">' + esc(route.routeTitle) + '</p>' + (passengerCards || '<p class="ty-bd-muted" style="padding:12px 14px">Passenger details are not available for this booking.</p>') + '</div></section>' + (contactRows ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Contact details</h2></div><div class="ty-bd-section-body ty-final-reference-grid" style="padding-top:0">' + contactRows + '</div></section>' : '') + '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Ticket policies</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-policies>Cancellation and change policies</button></section><section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Payment details</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-payment>' + esc(paymentRowLabel || 'View payment details') + '</button></section><section class="ty-bd-card" id="tyBdManageSection"><div class="ty-bd-section-head"><h2>Manage my bookings</h2></div><div style="padding:0"><button type="button" class="ty-bd-list-row" data-bd-manage-resend>Resend confirmation email</button><button type="button" class="ty-bd-list-row" data-download-receipt>Request e-receipt</button><button type="button" class="ty-bd-list-row" data-change-request>Request flight changes</button><button type="button" class="ty-bd-list-row" data-cancel-booking>Request cancellation &amp; refund</button><button type="button" class="ty-bd-list-row" data-download-ticket>Download e-ticket</button></div></section><section class="ty-bd-card ty-bd-support"><p>Need help or have questions about this booking?</p><a class="primary" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a><a class="ghost" data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></section><p id="tyFinalStatusMessage" class="ty-final-message" hidden style="margin:12px 0 0"></p></main></div>';
+    ROOT.innerHTML = '<div class="ty-final-status ty-bd-page ' + esc(mode) + '"><header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header><div class="ty-bd-sticky-bar" id="tyBdStickyBar"></div><div class="ty-bd-hero"><span class="ty-bd-hero-city">' + esc(route.toCity || 'TravelYaraa') + '</span></div><main class="ty-bd-shell"><section class="ty-bd-card"><div class="ty-bd-status-band ' + esc(mode) + '">' + esc(statusBand) + '</div><div class="ty-bd-status-body"><h1>' + esc(route.routeTitle || 'Flight booking') + '</h1><div class="ty-bd-meta"><em>📅 ' + esc(route.depDate || '') + '</em><em>' + esc(paxCount + ' Passenger' + (paxCount > 1 ? 's' : '')) + ' · ' + esc(route.tripType) + '</em></div><div class="ty-bd-booking-id"><span>Booking ID: <b>' + esc(bookingId) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(bookingId) + '">Copy</button></div>' + (showAirlineRef ? '<div class="ty-bd-booking-id"><span>Airline Reference: <b>' + esc(airlineRefDisplay) + '</b></span><button type="button" class="ty-bd-copy" data-copy="' + esc(airlineRefDisplay) + '">Copy</button></div>' : '') + detailsNote + '</div></section>' +
+      (showLive ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Live flight updates</h2><button type="button" data-bd-live-refresh>Refresh</button></div><div class="ty-bd-section-body"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></section>' : '') +
+      '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Your booking details</h2></div><div class="ty-bd-section-body"><div class="ty-bd-flight-row"><div>' + segAirlineLogo(first, firstFlight) + '</div><div><b>' + esc(airlineName) + '</b><span>' + esc([flightNo, cabin].filter(Boolean).join(' · ')) + '</span>' + (showAirlineRef ? '<span>Airline Reference: ' + esc(airlineRefDisplay) + '</span>' : '') + '</div></div><div class="ty-bd-route-grid"><div><small>Departure</small><strong>' + esc(depTime) + '</strong><span>' + esc(route.fromAirportLabel) + '</span></div><div><small>Arrival</small><strong>' + esc(arrTime) + '</strong><span>' + esc(route.toAirportLabel) + '</span></div></div><span style="display:block;margin-top:8px;font-size:12px;color:#64748b;font-weight:800">Duration: ' + esc(duration) + '</span><button type="button" class="ty-bd-link" data-bd-open-flight-details>View scheduled flight details</button></div></section>' +
+      primaryActions +
+      (showPassengers ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Passengers</h2></div><div class="ty-bd-section-body" style="padding:0"><p style="padding:12px 14px 0;margin:0;font-size:12px;color:#64748b;font-weight:800">' + esc(route.routeTitle) + '</p>' + (passengerCards || '<p class="ty-bd-muted" style="padding:12px 14px">Passenger details are not available for this booking.</p>') + '</div></section>' : '') +
+      (showContact ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Contact details</h2></div><div class="ty-bd-section-body ty-final-reference-grid" style="padding-top:0">' + contactRows + '</div></section>' : '') +
+      (showPolicies ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Ticket policies</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-policies>Cancellation and change policies</button></section>' : '') +
+      (showPayment ? '<section class="ty-bd-card"><div class="ty-bd-section-head"><h2>Payment details</h2></div><button type="button" class="ty-bd-list-row" data-bd-open-payment>' + esc(paymentRowLabel || 'View payment details') + '</button></section>' : '') +
+      '<section class="ty-bd-card" id="tyBdManageSection"><div class="ty-bd-section-head"><h2>Manage my bookings</h2></div><div style="padding:0">' + manageRows + '</div></section>' +
+      '<section class="ty-bd-card ty-bd-support"><p>Need help or have questions about this booking?</p><a class="primary" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a><a class="ghost" data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></section><p id="tyFinalStatusMessage" class="ty-final-message" hidden style="margin:12px 0 0"></p></main></div>';
     bindConfirmedBookingDetailChrome(route);
-    bindConfirmedBookingDetailUi(bookingId, bookingPayload, responseData, flights, travellers, airlineRefDisplay, ticketDisplay, contact, payment);
+    bindBookingDetailUi(mode, bookingId, bookingPayload, responseData, flights, travellers, showAirlineRef ? airlineRefDisplay : '', ticketDisplay, contact, payment);
   }
+
+  function renderConfirmedBookingDetailView(status, bookingPayload, responseData){
+    renderBookingDetailView('confirmed', status, bookingPayload, responseData);
+  }
+
 
   function renderBookingStatusView(status, bookingPayload, responseData){
     ensureBookingStatusStyles();
@@ -9661,17 +9850,18 @@ function mobileFareSheets(flights, fare, options){
     const bookingId = statusBookingId(booking, responseData);
     const airlineReference = pnrValue(booking);
     const ticketNumber = ticketValue(booking);
-    const bookingRef = bookingReferenceValue(booking, responseData);
     const contact = statusContact(booking, bookingPayload || {});
     const payStatus = paymentStatusValue(booking, responseData);
     const payId = paymentIdValue(booking, responseData);
     const paidAmt = paidAmountDisplay(booking, responseData);
-    const confirmed = meta.kind === 'ok' && (airlineReference !== 'Pending' || ticketNumber !== 'Pending');
+    const hasTicketEvidence = airlineReference !== 'Pending' || ticketNumber !== 'Pending';
+    const confirmed = meta.kind === 'ok' && hasTicketEvidence;
     if(meta.kind === 'ok' && !confirmed){
       meta = {kind:'hold', title:'Booking confirmation pending', badge:'Pending', note:'Payment has been processed. Airline reference and ticket actions will appear only after confirmed ticketing.'};
     }
-    if(confirmed){
-      renderConfirmedBookingDetailView(status, bookingPayload, responseData);
+    const detailMode = statusDetailMode(meta, booking, flights, hasTicketEvidence);
+    if(detailMode === 'confirmed' || detailMode === 'completed' || detailMode === 'cancelled' || detailMode === 'failed'){
+      renderBookingDetailView(detailMode, status, bookingPayload, responseData);
       return;
     }
 
@@ -9679,52 +9869,10 @@ function mobileFareSheets(flights, fare, options){
       return `<div class="ty-final-passenger"><span>${esc(traveller.passengerType || traveller.type || traveller.pt || 'Traveller')} ${index + 1}</span><b>${esc(travellerName(traveller))}</b></div>`;
     }).join('');
 
-    const contactRows = [
-      statusKvIf('Name', contact.name),
-      statusKvIf('Email', contact.email),
-      statusKvIf('Phone', contact.phone)
-    ].join('');
+    let detailCards = `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount paid', paidAmt)}</div></article>`;
+    if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
 
-    const paymentRows = [
-      statusKvIf('Payment status', payStatus),
-      statusKvIf('Payment ID', payId, true),
-      statusKvIf('Amount paid', paidAmt)
-    ].join('');
-
-    let detailCards = '';
-    if(confirmed){
-      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking references</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Airline Reference', airlineReference !== 'Pending' ? airlineReference : '', true)}${statusKvIf('Ticket number', ticketNumber !== 'Pending' ? ticketNumber : '', true)}${statusKvIf('Booking Reference', bookingRef, true)}</div></article>`;
-      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
-      if(contactRows) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Contact details</h2><div class="ty-final-card-body ty-final-reference-grid">${contactRows}</div></article>`;
-      if(paymentRows) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Payment</h2><div class="ty-final-card-body ty-final-reference-grid">${paymentRows}</div></article>`;
-      detailCards += statusBaggageSummaryHtml(flights);
-    }else if(meta.kind === 'cancelled'){
-      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Status', meta.badge)}</div></article>`;
-      detailCards += statusRefundDetailsHtml(booking, responseData);
-      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
-    }else if(meta.kind === 'failed'){
-      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount', paidAmt)}</div></article>`;
-    }else{
-      detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount paid', paidAmt)}</div></article>`;
-      if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
-    }
-
-    let actions = '';
-    if(confirmed){
-      actions = statusAction('Download e-ticket','data-download-ticket','primary') +
-        statusAction('Download receipt','data-download-receipt','') +
-        statusAction('Resend confirmation email','data-resend-email','') +
-        statusAction('Change flight request','data-change-request','') +
-        statusAction('Cancel / refund options','data-cancel-booking','') +
-        statusAction('My Bookings','data-my-bookings','') +
-        statusAction('TravelYaraa support','data-contact-support','') +
-        statusAction('New booking','data-new-booking','orange full');
-    }else if(meta.kind === 'hold'){
-      actions = statusSafeNavActions(true);
-    }else{
-      actions = statusSafeNavActions(false);
-    }
-
+    const actions = statusSafeNavActions(true);
     try{ history.replaceState({step:'booking-status', bookingId},'', '/pages/results/flights.html?service=flight&step=booking-status&bookingId=' + encodeURIComponent(bookingId)); }catch(_e){}
     ROOT.innerHTML = `<div class="ty-final-status"><main class="ty-final-status-shell">
       <section class="ty-final-status-hero ${esc(meta.kind)}"><div><small>TravelYaraa booking status</small><h1>${esc(meta.title)}</h1><p>${esc(meta.note)}</p></div><b class="ty-final-status-badge">${esc(meta.badge)}</b></section>
@@ -9732,7 +9880,7 @@ function mobileFareSheets(flights, fare, options){
       ${detailCards}
       <article class="ty-final-card"><div class="ty-final-actions">${actions}</div><p id="tyFinalStatusMessage" class="ty-final-message" hidden></p></article>
     </main></div>`;
-    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData || {}, confirmed, meta.kind, flights);
+    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData || {}, false, meta.kind, flights);
     if(meta.kind === 'hold') startPendingStatusPoll(bookingId, bookingPayload);
   }
 
