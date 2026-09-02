@@ -61,9 +61,9 @@ body.ty-flight-loader-active{
   touch-action:none!important;
 }
 .ty-passport-scan-loader{
-  position:fixed;inset:0;z-index:2147482990;display:none;align-items:flex-start;justify-content:center;
-  padding:clamp(86px,24vh,190px) 18px 18px;background:rgba(7,29,73,.08);
-  -webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);pointer-events:auto;text-align:center;
+  position:fixed;inset:0;z-index:2147482990;display:none;align-items:center;justify-content:center;
+  padding:18px;background:rgba(7,29,73,.12);
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);pointer-events:auto;text-align:center;
 }
 .ty-passport-scan-loader.is-active{display:flex}
 .ty-passport-scan-loader__box{
