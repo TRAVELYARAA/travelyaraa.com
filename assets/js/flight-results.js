@@ -4718,8 +4718,82 @@ function renderShell(content, opts){
     return v;
   }
 
-  function tyFillPassengerFromTraveller(form, index, t){
+  const TY_PASSPORT_LABEL_WORDS = /^(GIVEN|NAME|NAMES|SURNAME|DATE|BIRTH|PLACE|ISSUE|EXPIRY|SEX|PASSPORT|NUMBER|INDIAN|REPUBLIC|INDIA|NATIONALITY|TYPE|CODE)$/i;
+
+  function tyIsRealisticPassportName(value){
+    const text = tyPassportNameForDisplay(value);
+    if(!text || text.length < 2 || text.length > 40) return false;
+    const parts = text.split(/\s+/).filter(Boolean);
+    if(!parts.length) return false;
+    return parts.every(function(part){
+      if(TY_PASSPORT_LABEL_WORDS.test(part)) return false;
+      if(part.length < 2) return false;
+      if(/^([A-Z])\1{2,}$/.test(part)) return false;
+      return /^[A-Z]+$/.test(part);
+    });
+  }
+
+  function tyIsPassportLikeNumber(value){
+    const p = tyPassportNumberForDisplay(value);
+    if(p.length < 6 || p.length > 15) return false;
+    return /^[A-Z][A-Z0-9]{5,14}$/.test(p) && /\d/.test(p) && /[A-Z]/.test(p);
+  }
+
+  function tyPassportScanReliableFields(data){
+    const t = data && data.traveller;
+    if(!t) return [];
+    const reliable = [];
+    if(tyIsRealisticPassportName(t.firstName || t.first_name || t.givenName || t.fN)) reliable.push('firstName');
+    if(tyIsRealisticPassportName(t.lastName || t.last_name || t.surname || t.lN)) reliable.push('lastName');
+    if(tyIsPassportLikeNumber(t.passportNumber || t.pNum)) reliable.push('passportNumber');
+    if(normalizePassportDateToYmd(t.dob || t.dateOfBirth || t.date_of_birth || '', 'dob')) reliable.push('dob');
+    if(normalizePassportDateToYmd(t.passportExpiry || t.passport_expiry || t.eD || '', 'expiry')) reliable.push('passportExpiry');
+    if(tyKnownNationalityCode(t.nationality || t.pNat || '')) reliable.push('nationality');
+    else if(tyKnownNationalityCode(t.passportIssueCountry || t.passportIssuingCountry || t.issuingCountry || '')) reliable.push('passportIssueCountry');
+    if(normalizePassportDateToYmd(t.passportIssueDate || t.passport_issue_date || '', 'issue')) reliable.push('passportIssueDate');
+    if(String(t.gender || t.sex || '').trim()) reliable.push('gender');
+    if(String(t.title || t.ti || '').trim()) reliable.push('title');
+    return reliable;
+  }
+
+  function tyPassportScanHasCoreReliableFields(reliable){
+    const list = reliable || [];
+    const required = ['firstName', 'lastName', 'passportNumber', 'dob', 'passportExpiry'];
+    const hasCountry = list.includes('nationality') || list.includes('passportIssueCountry');
+    return required.every(function(field){ return list.includes(field); }) && hasCountry;
+  }
+
+  function tyPassportScanOutcome(data){
+    const reliable = tyPassportScanReliableFields(data);
+    if(!tyPassportScanHasCoreReliableFields(reliable)){
+      return {
+        canFill:false,
+        tone:'bad',
+        message:'We could not read all passport details clearly. Please enter the details manually.'
+      };
+    }
+    const issueReliable = reliable.includes('passportIssueDate');
+    if(!issueReliable){
+      return {
+        canFill:true,
+        tone:'warn',
+        message:'Passport details scanned successfully. Please enter the issue date manually.'
+      };
+    }
+    return {
+      canFill:true,
+      tone:'ok',
+      message:'Passport details scanned successfully. Please review before continuing.'
+    };
+  }
+
+  function tyFillPassengerFromTraveller(form, index, t, opts){
     if(!form || !t) return;
+    const options = opts || {};
+    const reliable = Array.isArray(options.reliableFields) ? options.reliableFields : null;
+    const canUse = function(field){
+      return !reliable || reliable.includes(field);
+    };
     const i = Number(index || 0);
     if(typeof setPassengerPanelActive === 'function') setPassengerPanelActive(form, i);
     const selectedTravellerId = String(t.travellerId || t.id || '').trim();
@@ -4737,15 +4811,15 @@ function renderShell(content, opts){
     const gender = String(t.gender || t.sex || '').trim().toUpperCase();
     const titleFromGender = gender === 'M' || gender === 'MALE' ? 'Mr' : (gender === 'F' || gender === 'FEMALE' ? 'Ms' : '');
 
-    if(t.title || t.ti || titleFromGender) tySetInput(form, `title_${i}`, t.title || t.ti || titleFromGender);
-    if(first || middle) tySetInput(form, `firstName_${i}`, [first, middle].filter(Boolean).join(' '));
-    if(last) tySetInput(form, `lastName_${i}`, last);
-    if(dob) tySetDate3(form, `dob_${i}`, dob);
-    if(nationality) tySetInput(form, `nationality_${i}`, nationality);
-    if(passportNumber) tySetInput(form, `passportNumber_${i}`, passportNumber);
-    if(issueCountry) tySetInput(form, `passportIssueCountry_${i}`, issueCountry);
-    if(issueDate) tySetDate3(form, `passportIssue_${i}`, issueDate);
-    if(expiryDate) tySetDate3(form, `passportExpiry_${i}`, expiryDate);
+    if((t.title || t.ti || titleFromGender) && canUse('title')) tySetInput(form, `title_${i}`, t.title || t.ti || titleFromGender);
+    if((first || middle) && canUse('firstName')) tySetInput(form, `firstName_${i}`, [first, middle].filter(Boolean).join(' '));
+    if(last && canUse('lastName')) tySetInput(form, `lastName_${i}`, last);
+    if(dob && canUse('dob')) tySetDate3(form, `dob_${i}`, dob);
+    if(nationality && canUse('nationality')) tySetInput(form, `nationality_${i}`, nationality);
+    if(passportNumber && canUse('passportNumber')) tySetInput(form, `passportNumber_${i}`, passportNumber);
+    if(issueCountry && canUse('passportIssueCountry')) tySetInput(form, `passportIssueCountry_${i}`, issueCountry);
+    if(issueDate && canUse('passportIssueDate')) tySetDate3(form, `passportIssue_${i}`, issueDate);
+    if(expiryDate && canUse('passportExpiry')) tySetDate3(form, `passportExpiry_${i}`, expiryDate);
     try{ form.dispatchEvent(new Event('change', {bubbles:true})); }catch(e){}
     try{ tyRenderSelectedTravellerUpdate(form, i); }catch(e){}
     try{
@@ -4809,7 +4883,6 @@ function renderShell(content, opts){
       <div class="ty-upload-main">
         <span class="ty-upload-icon" aria-hidden="true">▧</span>
         <div class="ty-upload-copy"><b>Upload Passport</b><small>PNG, JPG, JPEG, WEBP & PDF | Max 8 MB</small></div>
-        <div class="ty-passport-inline-scan" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
         <button type="button" class="ty-passport-upload-button" data-passport-upload aria-controls="tyPassportUploadInput">Upload</button>
         <input id="tyPassportUploadInput" class="ty-passport-file-input" type="file" accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf" aria-label="Upload passport file">
       </div>
@@ -5334,7 +5407,7 @@ function renderShell(content, opts){
       }
     }
     const text = loader.querySelector('.ty-passport-scan-loader__text');
-    if(text) text.textContent = message || 'Uploading passport...';
+    if(text) text.textContent = message || 'Reading passport details...';
     loader.hidden = false;
     requestAnimationFrame(function(){ loader.classList.add('is-active'); });
     Promise.resolve(cssReady).catch(function(){});
@@ -5359,22 +5432,12 @@ function renderShell(content, opts){
     if(tyLooksTechnicalCustomerError(raw) || !raw.trim()){
       return 'We could not read this passport. Please upload a clearer photo or enter details manually.';
     }
-    if(/clearer|manually|could not read|not clear|unsupported|too large/i.test(raw)){
-      return raw.length > 160
+    if(/could not read all passport details clearly|enter the details manually|clearer photo|manually|could not read|not clear|unsupported|too large/i.test(raw)){
+      return raw.length > 200
         ? 'We could not read this passport. Please upload a clearer photo or enter details manually.'
         : raw;
     }
     return 'We could not read this passport. Please upload a clearer photo or enter details manually.';
-  }
-
-  function tyTravellerScanUsable(t){
-    if(!t) return false;
-    const first = String(t.firstName || t.first_name || t.givenName || t.fN || '').trim();
-    const last = String(t.lastName || t.last_name || t.surname || t.lN || '').trim();
-    const pass = String(t.passportNumber || t.pNum || '').trim();
-    const dob = normalizePassportDateToYmd(t.dob || t.dateOfBirth || t.date_of_birth || '', 'dob');
-    const exp = normalizePassportDateToYmd(t.passportExpiry || t.passport_expiry || t.eD || '', 'expiry');
-    return Boolean((first || last) && pass && (dob || exp));
   }
 
   async function tyPostPassportScanPayload(payload){
@@ -5392,12 +5455,10 @@ function renderShell(content, opts){
   }
 
   async function tyRunPassportVisualOcr(canvas){
-    /* Fast printed-field OCR. One pass per targeted zone keeps passport upload fast
-       and avoids running many duplicate OCR variants on the customer phone. */
     const visualJobs = [
-      {label:'full printed fields', canvas:canvas, psm:11, scale:1.7},
-      {label:'name and date block', canvas:tyPassportCropBoxCanvas(canvas, 0.00, 0.22, 0.78, 0.56), psm:6, scale:2.05},
-      {label:'passport number and dates block', canvas:tyPassportCropBoxCanvas(canvas, 0.38, 0.12, 0.60, 0.76), psm:11, scale:2.05}
+      {canvas:canvas, psm:11, scale:1.7},
+      {canvas:tyPassportCropBoxCanvas(canvas, 0.00, 0.22, 0.78, 0.56), psm:6, scale:2.05},
+      {canvas:tyPassportCropBoxCanvas(canvas, 0.38, 0.12, 0.60, 0.76), psm:11, scale:2.05}
     ].filter(function(job){ return job.canvas; });
 
     const texts = [];
@@ -5410,7 +5471,7 @@ function renderShell(content, opts){
         tessedit_pageseg_mode:String(job.psm || 11)
       });
       const outText = result && result.data && result.data.text || '';
-      if(outText) texts.push('[' + job.label + ']\n' + outText);
+      if(outText) texts.push(outText);
       confidence = Math.max(confidence, Number(result && result.data && result.data.confidence || 0));
     }
     return { text:texts.join('\n'), confidence:confidence };
@@ -5418,18 +5479,19 @@ function renderShell(content, opts){
 
   async function tyScanPassportFile(file, form){
     const status = ROOT.querySelector('#tyPassportScanStatus');
-    const set = function(msg, bad){
-      if(status){
-        status.textContent = bad ? (msg || '') : '';
-        status.classList.toggle('bad', !!bad);
-      }
-      if(!bad && msg) tySetPassportScanOverlayText(msg);
+    const setStatus = function(msg, tone){
+      if(!status) return;
+      const text = String(msg || '').trim();
+      status.textContent = text;
+      status.classList.toggle('bad', tone === 'bad');
+      status.classList.toggle('ok', tone === 'ok');
+      status.classList.toggle('warn', tone === 'warn');
     };
     if(!file) return;
     const type = String(file.type || '').toLowerCase();
     const name = String(file.name || '').toLowerCase();
     const rejectEarly = function(msg){
-      set(msg, true);
+      setStatus(msg, 'bad');
       tyHidePassportScanLoader();
       tySetPassportInlineScanning(false);
       tyClearPassportScanLock();
@@ -5454,87 +5516,72 @@ function renderShell(content, opts){
     tySetPassportInlineScanning(true);
 
     try{
-      tyShowPassportScanLoader('Uploading passport...');
+      tyShowPassportScanLoader('Reading passport details...');
       await tyLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract');
-      tySetPassportScanOverlayText('Reading passport details...');
       const source = await tyPassportOcrSource(file);
-
-      let visualOut = {text:'', confidence:0};
-      try{
-        tySetPassportScanOverlayText('Reading passport details...');
-        visualOut = await tyRunPassportVisualOcr(source);
-      }catch(_visualError){ visualOut = {text:'', confidence:0}; }
-
       const idx = Number(ROOT.querySelector('#tyTravellerSlot')?.value || tyActivePassengerIndex(form));
-      if(visualOut.text && visualOut.text.replace(/\s+/g,'').length >= 12){
-        try{
-          tySetPassportScanOverlayText('Reading passport details...');
-          const visualData = await tyPostPassportScanPayload({
-            ocrText: visualOut.text,
-            text: visualOut.text,
-            mrzText: '',
-            mrzLines: [],
-            visualText: visualOut.text,
-            passportVisualText: visualOut.text,
-            confidence: Number(visualOut.confidence || 0),
-            scanMode: 'printed-fields-fast'
-          });
-          if(tyTravellerScanUsable(visualData.traveller)){
-            tyFillPassengerFromTraveller(form, idx, visualData.traveller);
-            state.passportScanByPassenger[String(idx)] = Object.assign({}, visualData.traveller, {scannedAt:Date.now()});
-            set('', false);
-            return;
-          }
-        }catch(_fastParseError){ /* fall back to MRZ scan below */ }
-      }
 
-      tySetPassportScanOverlayText('Reading passport details...');
+      let mrzLines = [];
+      let mrzConfidence = 0;
       const variants = tyPassportOcrVariants(source);
-      let best = { text:'', lines:[], confidence:0, label:'' };
-      const allTexts = [];
-      let allLines = [];
-
       for(let i = 0; i < variants.length; i++){
         const v = variants[i];
         const out = await tyRunPassportOcr(v.canvas, v.psm);
-        out.label = v.label;
-        allTexts.push(out.text || '');
-        allLines = allLines.concat(out.lines || []);
-        if((out.lines || []).length > (best.lines || []).length || String(out.text || '').replace(/\s+/g,'').length > String(best.text || '').replace(/\s+/g,'').length){
-          best = out;
-        }
+        mrzLines = mrzLines.concat(out.lines || []);
+        mrzConfidence = Math.max(mrzConfidence, Number(out.confidence || 0));
         const joined = (out.lines || []).join('\n');
-        if((out.lines || []).length >= 2 && /^P[A-Z0-9<]/.test(joined)){
-          best = out;
-          break;
-        }
+        if((out.lines || []).length >= 2 && /^P[A-Z0-9<]/.test(joined)) break;
+      }
+      mrzLines = tyUniqueLines(mrzLines);
+      const mrzText = mrzLines.join('\n');
+
+      let visualText = '';
+      try{
+        const visualOut = await tyRunPassportVisualOcr(source);
+        visualText = String(visualOut.text || '').trim();
+      }catch(_visualError){ visualText = ''; }
+
+      let data = null;
+      if(mrzText.replace(/\s+/g,'').length >= 6){
+        data = await tyPostPassportScanPayload({
+          mrzText: mrzText,
+          mrzLines: mrzLines,
+          ocrText: mrzText,
+          visualText: visualText,
+          confidence: mrzConfidence,
+          scanMode: 'mrz-first'
+        });
       }
 
-      allLines = tyUniqueLines(allLines);
-      const combinedText = [visualOut.text || '', best.text || '', allLines.join('\n'), allTexts.join('\n')].filter(Boolean).join('\n');
-      if(!combinedText || combinedText.replace(/\s+/g,'').length < 6){
-        throw new Error('We could not read this passport. Please upload a clearer photo or enter details manually.');
+      let outcome = data ? tyPassportScanOutcome(data) : {canFill:false};
+      if(!outcome.canFill && !mrzLines.length && visualText.replace(/\s+/g,'').length >= 12){
+        data = await tyPostPassportScanPayload({
+          ocrText: visualText,
+          text: visualText,
+          visualText: visualText,
+          mrzText: '',
+          mrzLines: [],
+          confidence: 0,
+          scanMode: 'visual-fallback'
+        });
+        outcome = tyPassportScanOutcome(data);
       }
 
-      tySetPassportScanOverlayText('Reading passport details...');
-      const data = await tyPostPassportScanPayload({
-        ocrText: combinedText,
-        text: combinedText,
-        mrzText: allLines.join('\n') || best.text || combinedText,
-        mrzLines: allLines,
-        visualText: visualOut.text || '',
-        passportVisualText: visualOut.text || '',
-        confidence: Math.max(Number(best.confidence || 0), Number(visualOut.confidence || 0)),
-        scanMode: best.label || 'mrz-fallback'
+      if(!data || !outcome.canFill){
+        throw new Error(outcome.message || 'We could not read all passport details clearly. Please enter the details manually.');
+      }
+
+      const reliable = tyPassportScanReliableFields(data);
+      tyFillPassengerFromTraveller(form, idx, data.traveller, {reliableFields: reliable});
+      state.passportScanByPassenger[String(idx)] = Object.assign({}, data.traveller, {
+        scannedAt: Date.now(),
+        reliableFields: reliable,
+        source: data.source || '',
+        mrzVerified: !!data.mrzVerified
       });
-      if(!tyTravellerScanUsable(data.traveller)){
-        throw new Error('We could not read this passport. Please upload a clearer photo or enter details manually.');
-      }
-      tyFillPassengerFromTraveller(form, idx, data.traveller);
-      state.passportScanByPassenger[String(idx)] = Object.assign({}, data.traveller, {scannedAt:Date.now()});
-      set('', false);
+      setStatus(outcome.message, outcome.tone);
     }catch(e){
-      set(tyPassportFriendlyScanError(e && e.message), true);
+      setStatus(tyPassportFriendlyScanError(e && e.message), 'bad');
     }finally{
       tyHidePassportScanLoader();
       try{ hideBookingLoader(); }catch(e){}
@@ -5550,12 +5597,7 @@ function renderShell(content, opts){
   function tySetPassportInlineScanning(active){
     try{
       const wrap = ROOT.querySelector('.ty-passport-upload-mini');
-      const dots = ROOT.querySelector('.ty-passport-inline-scan');
       if(wrap) wrap.classList.toggle('is-scanning', !!active);
-      if(dots){
-        dots.style.display = active ? 'flex' : '';
-        dots.setAttribute('aria-hidden', active ? 'false' : 'true');
-      }
     }catch(_e){}
   }
 
@@ -5613,8 +5655,7 @@ function renderShell(content, opts){
         tySetPassportScanLock(180000);
         try{ hideBookingLoader(); }catch(_e){}
         tySetPassportInlineScanning(true);
-        /* Show overlay immediately so upload never looks silent. */
-        tyShowPassportScanLoader('Uploading passport...');
+        tyShowPassportScanLoader('Reading passport details...');
         requestAnimationFrame(function(){ tyScanPassportFile(selectedFile, form); });
         input.value='';
       }, true);
@@ -6999,10 +7040,10 @@ function mobileFareSheets(flights, fare, options){
       .ty-passport-inline-scan{position:absolute!important;right:102px!important;top:50%!important;transform:translateY(-50%)!important;display:none!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:20px!important;z-index:2!important;}
       .ty-passport-inline-scan i{width:6px!important;height:6px!important;border-radius:999px!important;background:#0062e3!important;display:block!important;opacity:.35!important;animation:tyPassportInlineDot .9s ease-in-out infinite!important;}
       .ty-passport-inline-scan i:nth-child(2){animation-delay:.1s!important}.ty-passport-inline-scan i:nth-child(3){animation-delay:.2s!important}.ty-passport-inline-scan i:nth-child(4){animation-delay:.3s!important}.ty-passport-inline-scan i:nth-child(5){animation-delay:.4s!important}
-      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:flex!important;}
+      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:none!important;}
       @keyframes tyPassportInlineDot{0%,100%{opacity:.28;transform:translateY(0) scale(.82)}50%{opacity:1;transform:translateY(-5px) scale(1.08)}}
       .ty-scan-review{margin:2px 2px 0!important;color:#64748b!important;font-size:10.5px!important;line-height:1.25!important;font-weight:750!important;}
-      .ty-scan-status:empty{display:none!important;}.ty-scan-status{margin:2px 2px 0!important;color:#047857!important;font-size:11px!important;line-height:1.3!important;font-weight:850!important;}.ty-scan-status.bad{color:#d93025!important;}
+      .ty-scan-status:empty{display:none!important;}.ty-scan-status{margin:2px 2px 0!important;color:#047857!important;font-size:11px!important;line-height:1.3!important;font-weight:850!important;}.ty-scan-status.bad{color:#d93025!important;}.ty-scan-status.ok{color:#047857!important;}.ty-scan-status.warn{color:#b45309!important;}
       .ty-passport-upload-mini.is-scanning [data-passport-upload]{opacity:.62!important;cursor:wait!important;}
     `;
     document.head.appendChild(style);
@@ -9477,12 +9518,12 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       .ty-passport-inline-scan{position:absolute;right:102px;top:50%;transform:translateY(-50%);display:none;align-items:center;justify-content:center;gap:4px;height:20px;z-index:2}
       .ty-passport-inline-scan i{width:6px;height:6px;border-radius:999px;background:#0062e3;display:block;opacity:.35;animation:tyPassportInlineDot .9s ease-in-out infinite}
       .ty-passport-inline-scan i:nth-child(2){animation-delay:.1s}.ty-passport-inline-scan i:nth-child(3){animation-delay:.2s}.ty-passport-inline-scan i:nth-child(4){animation-delay:.3s}.ty-passport-inline-scan i:nth-child(5){animation-delay:.4s}
-      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:flex}
+      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:none}
       @keyframes tyPassportInlineDot{0%,100%{opacity:.28;transform:translateY(0) scale(.82)}50%{opacity:1;transform:translateY(-5px) scale(1.08)}}
       .ty-upload-main .ty-passport-file-input{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:100px;height:42px;opacity:0;z-index:4;cursor:pointer}
       .ty-upload-main .ty-passport-upload-button{z-index:3;pointer-events:none}
       .ty-scan-review{margin:2px 2px 0;color:#64748b;font-size:10.5px;line-height:1.25;font-weight:750}
-      .ty-scan-status:empty{display:none}.ty-scan-status{margin:2px 2px 0;color:#047857;font-size:11px;line-height:1.3;font-weight:850}.ty-scan-status.bad{color:#d93025}.ty-passport-upload-mini.is-scanning [data-passport-upload]{opacity:.62;cursor:wait}
+      .ty-scan-status:empty{display:none}.ty-scan-status{margin:2px 2px 0;color:#047857;font-size:11px;line-height:1.3;font-weight:850}.ty-scan-status.bad{color:#d93025}.ty-scan-status.ok{color:#047857}.ty-scan-status.warn{color:#b45309}
       .ty-scan-status{margin:0 2px;color:#0f9f6e;font-size:11px;font-weight:850;line-height:1.25}
       .ty-scan-status.bad{color:#dc2626}
       
