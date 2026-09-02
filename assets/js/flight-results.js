@@ -4542,7 +4542,7 @@ function renderShell(content, opts){
       ${previousSummary}
       <h3 class="ty-pax-panel-title">${esc(personLabel)}</h3>
       <div class="ty-form-grid ty-name-grid"><label class="ty-form-field ty-title-field"><span>${requiredLabel('Title')}</span><select name="title_${i}" required><option value="">Title</option><option>Mr</option><option>Ms</option><option>Mrs</option></select></label><label class="ty-form-field ty-first-field"><span>${requiredLabel('First & Middle Name')}</span><input name="firstName_${i}" required autocomplete="given-name"></label><label class="ty-form-field ty-last-field"><span>${requiredLabel('Last Name')}</span><input name="lastName_${i}" required autocomplete="family-name"></label>${desktopPanel && passReq ? '' : dobFieldHtml}</div>
-      ${passReq ? `<div class="ty-passport-box"><h3>Passport Details <em class="ty-required-star" aria-label="required">*</em></h3><div class="ty-field-note">Required for this selected flight as per airline rules.</div><div class="ty-form-grid two ty-passport-grid">${passportDobHtml}<label class="ty-form-field"><span>${requiredLabel('Passport Number')}</span><input name="passportNumber_${i}" required minlength="6" maxlength="15" pattern="[A-Za-z0-9]{6,15}" autocomplete="off"></label><label class="ty-form-field"><span>${requiredLabel('Passport Issuing Country')}</span><select name="passportIssueCountry_${i}" required data-doc-country="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Nationality')}</span><select name="nationality_${i}" required data-doc-nationality="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field"><span>${requiredLabel('Passport Issue Date')}</span>${renderDateSelects('passportIssue_'+i, true, 'passportIssue')}</label><label class="ty-form-field"><span>${requiredLabel('Passport Expiry Date')}</span>${renderDateSelects('passportExpiry_'+i, true, 'passportExpiry')}</label></div></div>` : ''}
+      ${passReq ? `<div class="ty-passport-box"><h3>Passport Details <em class="ty-required-star" aria-label="required">*</em></h3><div class="ty-field-note">Required for this selected flight as per airline rules.</div><div class="ty-form-grid two ty-passport-grid">${passportDobHtml}<label class="ty-form-field ty-passport-number-field"><span>${requiredLabel('Passport Number')}</span><input name="passportNumber_${i}" required minlength="6" maxlength="15" pattern="[A-Za-z0-9]{6,15}" autocomplete="off"></label><label class="ty-form-field ty-passport-country-field"><span>${requiredLabel('Passport Issuing Country')}</span><select name="passportIssueCountry_${i}" required data-doc-country="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field ty-passport-nationality-field"><span>${requiredLabel('Nationality')}</span><select name="nationality_${i}" required data-doc-nationality="${i}">${nationalityOptions("IN")}</select></label><label class="ty-form-field ty-passport-issue-field"><span>${requiredLabel('Passport Issue Date')}</span>${renderDateSelects('passportIssue_'+i, true, 'passportIssue')}</label><label class="ty-form-field ty-passport-expiry-field"><span>${requiredLabel('Passport Expiry Date')}</span>${renderDateSelects('passportExpiry_'+i, true, 'passportExpiry')}</label></div></div>` : ''}
       ${panReq ? `<div class="ty-pan-wrap" data-pan-wrap="${i}" style="margin-top:10px"><div class="ty-form-grid two"><label class="ty-form-field"><span>${requiredLabel('PAN')}</span><input name="pan_${i}" maxlength="10" minlength="10" pattern="[A-Z]{5}[0-9]{4}[A-Z]" autocomplete="off" inputmode="text" autocapitalize="characters" spellcheck="false" data-pan-input="${i}" style="text-transform:uppercase"></label></div></div>` : ''}
     </div>`;
   }
@@ -4777,7 +4777,7 @@ function renderShell(content, opts){
       return {
         canFill:true,
         tone:'warn',
-        message:'Passport details scanned successfully. Please enter the issue date manually.'
+        message:'Passport details scanned. Please review the details and enter the issue date if it is missing.'
       };
     }
     return {
@@ -5493,7 +5493,6 @@ function renderShell(content, opts){
     const rejectEarly = function(msg){
       setStatus(msg, 'bad');
       tyHidePassportScanLoader();
-      tySetPassportInlineScanning(false);
       tyClearPassportScanLock();
     };
     if(!(/^(image\/(jpeg|jpg|png|webp)|application\/pdf)$/i.test(type) || /\.(jpg|jpeg|png|webp|pdf)$/i.test(name))){
@@ -5513,7 +5512,6 @@ function renderShell(content, opts){
     if(uploadBtn) uploadBtn.disabled = true;
     if(uploadInput) uploadInput.disabled = true;
     if(uploadWrap) uploadWrap.classList.add('is-scanning');
-    tySetPassportInlineScanning(true);
 
     try{
       tyShowPassportScanLoader('Reading passport details...');
@@ -5589,16 +5587,7 @@ function renderShell(content, opts){
       if(uploadBtn) uploadBtn.disabled = false;
       if(uploadInput) uploadInput.disabled = false;
       if(uploadWrap) uploadWrap.classList.remove('is-scanning');
-      tySetPassportInlineScanning(false);
     }
-  }
-
-
-  function tySetPassportInlineScanning(active){
-    try{
-      const wrap = ROOT.querySelector('.ty-passport-upload-mini');
-      if(wrap) wrap.classList.toggle('is-scanning', !!active);
-    }catch(_e){}
   }
 
   function bindSavedTravellerAssist(flights, form){
@@ -5648,14 +5637,11 @@ function renderShell(content, opts){
         const selectedFile = input.files && input.files[0];
         if(!selectedFile){
           tyClearPassportScanLock();
-          tySetPassportInlineScanning(false);
           return;
         }
         tySetPassportUploadIntent(180000);
         tySetPassportScanLock(180000);
         try{ hideBookingLoader(); }catch(_e){}
-        tySetPassportInlineScanning(true);
-        tyShowPassportScanLoader('Reading passport details...');
         requestAnimationFrame(function(){ tyScanPassportFile(selectedFile, form); });
         input.value='';
       }, true);
@@ -7037,11 +7023,6 @@ function mobileFareSheets(flights, fare, options){
       .ty-upload-main small{display:block!important;margin-top:2px!important;color:#8b95a1!important;font-size:10.5px!important;line-height:1.22!important;font-weight:850!important;}
       .ty-upload-main [data-passport-upload]{position:absolute!important;right:8px!important;top:50%!important;transform:translateY(-50%)!important;border:1px solid rgba(235,129,75,.24)!important;background:#fff6ef!important;color:#eb814b!important;border-radius:12px!important;min-height:36px!important;min-width:82px!important;padding:0 12px!important;font-size:13px!important;font-weight:950!important;font-family:inherit!important;z-index:3!important;pointer-events:none!important;}
       .ty-upload-main .ty-passport-file-input{position:absolute!important;right:8px!important;top:50%!important;transform:translateY(-50%)!important;width:96px!important;height:42px!important;opacity:0!important;z-index:4!important;cursor:pointer!important;}
-      .ty-passport-inline-scan{position:absolute!important;right:102px!important;top:50%!important;transform:translateY(-50%)!important;display:none!important;align-items:center!important;justify-content:center!important;gap:4px!important;height:20px!important;z-index:2!important;}
-      .ty-passport-inline-scan i{width:6px!important;height:6px!important;border-radius:999px!important;background:#0062e3!important;display:block!important;opacity:.35!important;animation:tyPassportInlineDot .9s ease-in-out infinite!important;}
-      .ty-passport-inline-scan i:nth-child(2){animation-delay:.1s!important}.ty-passport-inline-scan i:nth-child(3){animation-delay:.2s!important}.ty-passport-inline-scan i:nth-child(4){animation-delay:.3s!important}.ty-passport-inline-scan i:nth-child(5){animation-delay:.4s!important}
-      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:none!important;}
-      @keyframes tyPassportInlineDot{0%,100%{opacity:.28;transform:translateY(0) scale(.82)}50%{opacity:1;transform:translateY(-5px) scale(1.08)}}
       .ty-scan-review{margin:2px 2px 0!important;color:#64748b!important;font-size:10.5px!important;line-height:1.25!important;font-weight:750!important;}
       .ty-scan-status:empty{display:none!important;}.ty-scan-status{margin:2px 2px 0!important;color:#047857!important;font-size:11px!important;line-height:1.3!important;font-weight:850!important;}.ty-scan-status.bad{color:#d93025!important;}.ty-scan-status.ok{color:#047857!important;}.ty-scan-status.warn{color:#b45309!important;}
       .ty-passport-upload-mini.is-scanning [data-passport-upload]{opacity:.62!important;cursor:wait!important;}
@@ -7135,6 +7116,7 @@ function mobileFareSheets(flights, fare, options){
     tyInjectSaveTravellerBottomCss();
     tyInjectForceUiPatchCss();
     tyInjectCheckoutFinalPatchCss();
+    tyInjectPassportBookingPatchCss();
     await loadFlightOffers();
     const fare = computeFare(flights);
     const passReq = requiredPassport(flights);
@@ -7189,6 +7171,75 @@ function mobileFareSheets(flights, fare, options){
   }
 
 
+
+  function tyInjectPassportBookingPatchCss(){
+    if(document.getElementById('ty-passport-booking-patch-css')) return;
+    const style = document.createElement('style');
+    style.id = 'ty-passport-booking-patch-css';
+    style.textContent = `
+      .ty-review-page.ty-booking-page .ty-payment-btn,
+      .ty-review-page.ty-addon-page .ty-payment-btn,
+      .ty-review-page .ty-desktop-continue,
+      .ty-review-page .ty-left-continue,
+      .ty-mobile-sticky .ty-continue,
+      .ty-continue-box button{
+        background:linear-gradient(90deg,#0062e3,#0550b8)!important;
+        color:#fff!important;
+        box-shadow:0 10px 22px rgba(0,98,227,.22)!important;
+      }
+      .ty-review-page.ty-booking-page .ty-payment-btn:hover,
+      .ty-review-page.ty-addon-page .ty-payment-btn:hover,
+      .ty-mobile-sticky .ty-continue:hover,
+      .ty-continue-box button:hover{
+        background:linear-gradient(90deg,#0550b8,#071d49)!important;
+      }
+      .ty-passport-box{overflow:hidden;max-width:100%;box-sizing:border-box;}
+      .ty-passport-box .ty-passport-grid{
+        display:grid!important;
+        grid-template-columns:1fr!important;
+        gap:12px!important;
+        width:100%!important;
+        max-width:100%!important;
+      }
+      .ty-passport-box .ty-form-field{min-width:0!important;max-width:100%!important;overflow:hidden;}
+      .ty-passport-box .ty-date3{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr)!important;
+        gap:6px!important;
+        width:100%!important;
+        max-width:100%!important;
+      }
+      .ty-passport-box .ty-date3 select{
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        padding:7px 6px!important;
+        font-size:12px!important;
+      }
+      .ty-passport-box select[name*="passportIssueCountry"],
+      .ty-passport-box select[name*="nationality"]{
+        max-width:100%!important;
+      }
+      @media(min-width:768px){
+        .ty-passport-box .ty-passport-grid{
+          grid-template-columns:repeat(2,minmax(220px,1fr))!important;
+        }
+        .ty-passport-box .ty-passport-dob-field,
+        .ty-passport-box .ty-passport-number-field{grid-column:1/-1!important;}
+        .ty-passport-box .ty-passport-country-field,
+        .ty-passport-box .ty-passport-nationality-field,
+        .ty-passport-box .ty-passport-issue-field,
+        .ty-passport-box .ty-passport-expiry-field{grid-column:span 1!important;min-width:0!important;}
+      }
+      @media(max-width:767px){
+        .ty-passport-box .ty-passport-grid,
+        .ty-passport-box .ty-passport-dob-field{grid-column:1/-1!important;max-width:100%!important;}
+        .ty-review-page.ty-booking-page{padding-bottom:136px!important;}
+        .ty-review-page.ty-addon-page{padding-bottom:120px!important;}
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   function tyInjectCheckoutFinalPatchCss(){
     if(document.getElementById('ty-checkout-final-patch-css')) return;
@@ -7627,6 +7678,7 @@ function mobileFareSheets(flights, fare, options){
     injectItineraryCardCss();
     tyInjectForceUiPatchCss();
     tyInjectCheckoutFinalPatchCss();
+    tyInjectPassportBookingPatchCss();
     stopBookingHoldTimer();
     saveReviewFormSnapshot(form);
     const travellers=collectTravellers(form);
@@ -9515,11 +9567,6 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       .ty-upload-main b{display:block;color:#071d49;font-size:14px;line-height:1.15;font-weight:950}
       .ty-upload-main small{display:block;margin-top:2px;color:#8b95a1;font-size:10.5px;line-height:1.22;font-weight:850}
       .ty-upload-main [data-passport-upload]{position:absolute;right:9px;top:50%;transform:translateY(-50%);border:1px solid rgba(235,129,75,.24);background:#fff6ef;color:#eb814b;border-radius:12px;min-height:36px;min-width:82px;padding:0 13px;font-size:13px;font-weight:950;font-family:inherit}
-      .ty-passport-inline-scan{position:absolute;right:102px;top:50%;transform:translateY(-50%);display:none;align-items:center;justify-content:center;gap:4px;height:20px;z-index:2}
-      .ty-passport-inline-scan i{width:6px;height:6px;border-radius:999px;background:#0062e3;display:block;opacity:.35;animation:tyPassportInlineDot .9s ease-in-out infinite}
-      .ty-passport-inline-scan i:nth-child(2){animation-delay:.1s}.ty-passport-inline-scan i:nth-child(3){animation-delay:.2s}.ty-passport-inline-scan i:nth-child(4){animation-delay:.3s}.ty-passport-inline-scan i:nth-child(5){animation-delay:.4s}
-      .ty-passport-upload-mini.is-scanning .ty-passport-inline-scan{display:none}
-      @keyframes tyPassportInlineDot{0%,100%{opacity:.28;transform:translateY(0) scale(.82)}50%{opacity:1;transform:translateY(-5px) scale(1.08)}}
       .ty-upload-main .ty-passport-file-input{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:100px;height:42px;opacity:0;z-index:4;cursor:pointer}
       .ty-upload-main .ty-passport-upload-button{z-index:3;pointer-events:none}
       .ty-scan-review{margin:2px 2px 0;color:#64748b;font-size:10.5px;line-height:1.25;font-weight:750}
@@ -9532,7 +9579,6 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
         body .ty-upload-main{padding-right:104px!important}
         body .ty-upload-main [data-passport-upload]{right:8px!important;padding:0 11px!important}
         body .ty-upload-main .ty-passport-file-input{right:8px!important;width:92px!important;height:42px!important}
-        body .ty-passport-inline-scan{right:94px!important}
       }
 
 
