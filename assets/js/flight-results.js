@@ -8642,9 +8642,22 @@ function mobileFareSheets(flights, fare, options){
     });
   }
 
+  function tyLooksLikeFlightReviewRaw(raw){
+    if(!raw || typeof raw !== 'object') return false;
+    const tf = Number(
+      raw && raw.totalPriceInfo && raw.totalPriceInfo.totalFareDetail && raw.totalPriceInfo.totalFareDetail.fC && raw.totalPriceInfo.totalFareDetail.fC.TF
+      || raw && raw.totalFareDetail && raw.totalFareDetail.fC && raw.totalFareDetail.fC.TF
+      || 0
+    );
+    const bookingId = firstTextFromDeep(raw, ['bookingId']);
+    return (Number.isFinite(tf) && tf > 0) || !!bookingId;
+  }
+
   function tyPaymentReviewRawFromPayload(payload){
     payload = payload || {};
     const selected = payload.selectedFlight || (Array.isArray(payload.selectedFlights) ? payload.selectedFlights[0] : null) || payload.selectedResult || {};
+    /* Only accept a real air-review payload. Never fall back to search trip raw —
+       that caused create-payment-order to treat customer display fare as supplier TF. */
     const sources = [
       payload.tripjackReviewRaw,
       payload.reviewRaw,
@@ -8652,11 +8665,10 @@ function mobileFareSheets(flights, fare, options){
       selected.reviewRaw,
       selected._reviewRaw,
       selected.reviewData && (selected.reviewData.raw || selected.reviewData.data && selected.reviewData.data.raw || selected.reviewData.response || selected.reviewData.result || selected.reviewData),
-      selected._reviewData && (selected._reviewData.raw || selected._reviewData.data && selected._reviewData.data.raw || selected._reviewData.response || selected._reviewData.result || selected._reviewData),
-      selected.raw && (selected.raw.reviewRaw || selected.raw.rawReview || selected.raw.reviewData || selected.raw)
+      selected._reviewData && (selected._reviewData.raw || selected._reviewData.data && selected._reviewData.data.raw || selected._reviewData.response || selected._reviewData.result || selected._reviewData)
     ];
     for(const src of sources){
-      if(src && typeof src === 'object') return src;
+      if(tyLooksLikeFlightReviewRaw(src)) return src;
     }
     return null;
   }
@@ -8681,6 +8693,8 @@ function mobileFareSheets(flights, fare, options){
       travelInsurance: bookingPayload.travelInsurance || null,
       addons: selectedAddOnsList,
       addonsTotal: Number(fare.addOnTotal || 0) || 0,
+      displayedCustomerPayable: Math.max(0, Math.round(Number(fare.total || 0) || 0)),
+      finalPayableAmount: Math.max(0, Math.round(Number(fare.total || 0) || 0)),
       email: bookingPayload.passenger && bookingPayload.passenger.email,
       phone: bookingPayload.passenger && bookingPayload.passenger.mobile,
       searchPayload: bookingPayload.search || {},
@@ -9237,11 +9251,19 @@ function mobileFareSheets(flights, fare, options){
     return data;
   }
 
+  function tyCustomerFacingDownloadError(message, fallback){
+    const raw = String(message || '');
+    if(/payment receipt is available only after payment|ticket is available only after|receipt is available only after/i.test(raw)){
+      return fallback || 'This download is not available for this booking right now.';
+    }
+    return tyCustomerFacingActionError(message, fallback || 'Download failed. Please try again.');
+  }
+
   async function downloadBookingFile(route, filename){
     const response = await fetch(API_BASE + route, {headers:tyGuestAuthHeaders(), cache:'no-store'});
     if(!response.ok){
       const data = await response.json().catch(()=>({}));
-      throw new Error(tyCustomerFacingActionError(data.message || data.error || ('HTTP ' + response.status), 'Download failed. Please try again.'));
+      throw new Error(tyCustomerFacingDownloadError(data.message || data.error || ('HTTP ' + response.status), 'Download failed. Please try again.'));
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -9257,7 +9279,9 @@ function mobileFareSheets(flights, fare, options){
   function setFinalStatusMessage(message, bad){
     const node = ROOT.querySelector('#tyFinalStatusMessage');
     if(!node) return;
-    const text = bad ? tyCustomerFacingActionError(message, message || 'Something went wrong. Please try again.') : String(message || '');
+    const text = bad
+      ? tyCustomerFacingDownloadError(message, tyCustomerFacingActionError(message, 'Something went wrong. Please try again.'))
+      : String(message || '');
     node.textContent = text;
     node.hidden = !text;
     node.classList.toggle('bad', !!bad);
@@ -10180,7 +10204,9 @@ function mobileFareSheets(flights, fare, options){
     }else if(mode === 'completed' && airlineUrl){
       alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="' + esc(airlineUrl) + '" target="_blank" rel="noopener">Go to airline website</a></div>');
     }else if(mode === 'failed'){
-      alerts.push('<div class="ty-bd-alert fail">' + esc(paid ? 'Payment was recorded, but this booking could not be completed. TravelYaraa support can help with next steps.' : 'Payment was not completed for this booking. You can start a new booking anytime.') + '</div>');
+      alerts.push(paid
+        ? '<div class="ty-bd-alert fail"><p>Payment was recorded, but this booking could not be completed.</p><p>Your payment receipt is available below. TravelYaraa support can help with next steps.</p></div>'
+        : '<div class="ty-bd-alert fail"><p>Payment was not completed for this booking.</p><p>No amount has been charged. You can try booking again whenever you are ready.</p><p>If money was deducted, it is usually reversed by your bank or card company automatically.</p></div>');
     }else if(mode === 'pending'){
       alerts.push('<div class="ty-bd-alert info">We are confirming this booking. Ticket and manage actions appear after confirmation.</div>');
     }
