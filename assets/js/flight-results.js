@@ -8991,14 +8991,19 @@ function mobileFareSheets(flights, fare, options){
       .ty-bd-hero:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 78% 28%,rgba(255,255,255,.28),transparent 42%),linear-gradient(180deg,rgba(7,29,73,.05),rgba(7,29,73,.42))}
       .ty-bd-page.cancelled .ty-bd-hero,.ty-bd-page.failed .ty-bd-hero{background:linear-gradient(135deg,#3f1d1d 0%,#b42318 55%,#f97066 100%)}
       .ty-bd-page.completed .ty-bd-hero{background:linear-gradient(135deg,#071d49 0%,#0b4f93 55%,#3b9bff 100%)}
+      .ty-bd-hero.has-photo{background:#1a2744}
+      .ty-bd-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+      .ty-bd-hero.has-photo:after{background:linear-gradient(180deg,rgba(7,29,73,.08),rgba(7,29,73,.52))}
       .ty-bd-hero-city{position:absolute;left:16px;bottom:44px;z-index:1;color:#fff;font-size:28px;font-weight:900;letter-spacing:-.03em;text-shadow:0 2px 10px rgba(0,0,0,.25)}
       .ty-bd-shell{max-width:720px;margin:-18px auto 0;padding:0;position:relative;z-index:2;display:grid;gap:0}
+      .ty-bd-cols,.ty-bd-col-main,.ty-bd-col-side{display:contents}
       .ty-bd-status-card{background:#fff;overflow:hidden;box-shadow:0 1px 0 rgba(15,23,42,.04)}
       .ty-bd-status-band{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:14px;font-weight:900}
       .ty-bd-status-band.confirmed{background:#d9f5e1;color:#0f7a3a}
       .ty-bd-status-band.completed{background:#1f2a44;color:#fff}
       .ty-bd-status-band.cancelled{background:#fde2e4;color:#c62828}
       .ty-bd-status-band.failed{background:#fff3cd;color:#8a6d1d}
+      .ty-bd-status-band.pending{background:#fff3cd;color:#8a6d1d}
       .ty-bd-status-body{padding:16px 16px 18px;background:#fff}
       .ty-bd-status-body h1{margin:0 0 10px;font-size:24px;line-height:1.2;font-weight:900;color:#111827;letter-spacing:-.02em}
       .ty-bd-meta{display:grid;gap:6px;margin:0 0 10px}
@@ -9114,39 +9119,46 @@ function mobileFareSheets(flights, fare, options){
       .ty-bd-tl-flight{margin:8px 0 10px;padding:10px 12px;border-radius:10px;background:#f5f8fc;border:1px solid #e8eef6}
       .ty-bd-tl-flight b{display:block;font-size:13px;font-weight:900;color:#111827}
       .ty-bd-tl-flight span{display:block;margin-top:3px;font-size:12px;color:#6b7280;font-weight:700}
-      .ty-bd-tl-layover{margin:0 0 12px 28px;padding:8px 12px;border-radius:999px;background:#fff8e8;border:1px dashed #e6b325;color:#7a5b00;font-size:12px;font-weight:800;width:fit-content;max-width:calc(100% - 28px)}
+      .ty-bd-tl-stop{display:flex;flex-direction:column;align-items:center;text-align:center;margin:2px 0 14px;padding:12px 14px;background:#fbf6e8;border-top:1px dashed #e0c36a;border-bottom:1px dashed #e0c36a}
+      .ty-bd-tl-stop b{display:block;font-size:13px;font-weight:900;color:#111827}
+      .ty-bd-tl-stop span{display:block;margin-top:3px;font-size:12px;font-weight:800;color:#7a5b00}
       .ty-bd-sheet-panel{max-width:560px;margin:0 auto;left:0;right:0}
-      @media(max-width:700px){
+      .ty-bd-error-copy{margin:0;font-size:14px;line-height:1.5;color:#4b5563;font-weight:600}
+      @media(max-width:859px){
         .ty-bd-route-grid strong{font-size:20px}
         .ty-bd-status-body h1{font-size:22px}
         .ty-bd-shell{max-width:100%}
         .ty-bd-sheet-panel{max-width:100%;border-radius:18px 18px 0 0}
       }
       @media(min-width:860px){
-        .ty-bd-page{padding:0 0 48px}
-        .ty-bd-header,.ty-bd-sticky-bar{max-width:1080px;margin-left:auto;margin-right:auto;border-left:1px solid #e5e9f0;border-right:1px solid #e5e9f0}
-        .ty-bd-hero{max-width:1080px;margin:0 auto;height:220px;border-radius:0 0 16px 16px}
-        .ty-bd-hero-city{font-size:36px;left:28px;bottom:56px}
-        .ty-bd-shell{max-width:1080px;margin:-28px auto 0;padding:0 18px 24px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.9fr);gap:14px 16px;align-items:start}
-        .ty-bd-status-card{grid-column:1 / -1;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(7,29,73,.08)}
-        .ty-bd-alert{margin:0;grid-column:1 / -1}
-        .ty-bd-block{margin-top:0;border-radius:16px;overflow:hidden;box-shadow:0 6px 18px rgba(7,29,73,.06)}
-        .ty-bd-block.ty-bd-main-col{grid-column:1}
-        .ty-bd-block.ty-bd-side-col{grid-column:2}
-        .ty-bd-primary-actions{grid-column:1 / -1;border-radius:16px;padding:16px 18px;gap:12px;max-width:520px}
-        .ty-bd-status-body{padding:22px 24px}
-        .ty-bd-status-body h1{font-size:30px}
-        .ty-bd-block-pad{padding:18px 20px}
-        .ty-bd-route-grid{padding:8px 16px 14px;gap:16px}
-        .ty-bd-route-grid strong{font-size:28px}
-        .ty-bd-route-mid{min-width:110px}
-        .ty-bd-route-mid .line{width:84px}
-        .ty-bd-sheet-panel{left:50%;right:auto;transform:translateX(-50%);width:min(560px,92vw);border-radius:18px 18px 0 0}
+        .ty-bd-page{padding:0 0 56px;background:#e6ebf2}
+        .ty-bd-header{padding:12px 28px}
+        .ty-bd-sticky-bar{padding:10px 28px}
+        .ty-bd-hero{height:280px}
+        .ty-bd-hero-city{font-size:42px;left:max(28px, calc((100% - 1180px) / 2 + 28px));bottom:72px}
+        .ty-bd-shell{max-width:1180px;margin:-56px auto 0;padding:0 24px 40px;display:block}
+        .ty-bd-cols{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(320px,380px);gap:16px 20px;align-items:start;margin-top:16px}
+        .ty-bd-col-main,.ty-bd-col-side{display:grid;gap:14px;align-content:start}
+        .ty-bd-col-side{position:sticky;top:72px}
+        .ty-bd-status-card{border-radius:16px;overflow:hidden;box-shadow:0 10px 28px rgba(7,29,73,.1)}
+        .ty-bd-alert{margin:16px 0 0;border-radius:14px}
+        .ty-bd-block{margin-top:0;border-radius:16px;overflow:hidden;box-shadow:0 8px 22px rgba(7,29,73,.07)}
+        .ty-bd-primary-actions{border-radius:16px;padding:16px 18px;gap:12px;max-width:none}
+        .ty-bd-status-body{padding:24px 28px}
+        .ty-bd-status-body h1{font-size:32px}
+        .ty-bd-block-pad{padding:20px 22px}
+        .ty-bd-route-grid{padding:8px 18px 16px;gap:18px}
+        .ty-bd-route-grid strong{font-size:30px}
+        .ty-bd-route-mid{min-width:120px}
+        .ty-bd-route-mid .line{width:96px}
+        .ty-bd-sheet-panel{top:50%;left:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);width:min(640px,90vw);max-height:86vh;border-radius:16px;box-shadow:0 24px 64px rgba(15,23,42,.28)}
         .ty-bd-manage-row{padding:15px 20px}
         .ty-bd-support-wrap{padding:18px 20px 22px}
+        .ty-bd-col-side .ty-bd-block{box-shadow:0 10px 24px rgba(7,29,73,.08)}
       }
       @media(min-width:1100px){
-        .ty-bd-shell{grid-template-columns:minmax(0,1.6fr) minmax(340px,.85fr);gap:16px 20px;padding:0 24px 32px}
+        .ty-bd-hero-city{left:calc((100% - 1180px) / 2 + 28px)}
+        .ty-bd-cols{grid-template-columns:minmax(0,1.8fr) 380px;gap:20px}
       }
     `;
     document.head.appendChild(style);
@@ -9631,7 +9643,7 @@ function mobileFareSheets(flights, fare, options){
     if(meta.kind === 'ok' && hasTicketEvidence){
       return statusIsTravelCompleted(booking, flights) ? 'completed' : 'confirmed';
     }
-    return 'hold';
+    return 'pending';
   }
 
   function closeBookingDetailSheet(){
@@ -9652,20 +9664,90 @@ function mobileFareSheets(flights, fare, options){
   }
 
   function statusCabinLabel(value){
-    return normalizeCabin(value || 'ECONOMY').replace(/_/g, ' ').replace(/\w\S*/g, function(word){
+    const raw = String(value == null ? '' : value).trim();
+    if(!raw) return '';
+    return normalizeCabin(raw).replace(/_/g, ' ').replace(/\w\S*/g, function(word){
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     });
   }
 
+  function statusSegmentTerminal(seg, flight, side){
+    const raw = (seg && seg.raw) || {};
+    const airportObj = side === 'arr'
+      ? (raw.aa || raw.arrivalAirport || raw.arrival || raw.to || {})
+      : (raw.da || raw.departureAirport || raw.departure || raw.from || {});
+    const direct = side === 'arr'
+      ? (seg.arrTerminal || (flight && flight.arrTerminal) || raw.atT || raw.arrTerminal)
+      : (seg.depTerminal || (flight && flight.depTerminal) || raw.dtT || raw.depTerminal);
+    return cleanTerminal(direct || terminalText(airportObj) || terminalText({terminal:direct}));
+  }
+
+  function tyCitySlug(value){
+    return String(value || '').toLowerCase().replace(/[^a-z]/g, '');
+  }
+
+  function tyDestinationCityFromItinerary(booking, route){
+    const search = (booking && booking.search) || {};
+    const code = String(
+      (route && route.toCode) ||
+      search.destination || search.to || search.arrivalCity ||
+      (booking && (booking.arrivalCity || booking.destination)) ||
+      ''
+    ).toUpperCase();
+    const info = airportInfo(code) || {};
+    const curatedByIata = {
+      DEL:{city:'New Delhi', slug:'delhi'},
+      BOM:{city:'Mumbai', slug:'mumbai'},
+      CTS:{city:'Sapporo', slug:'sapporo'},
+      SIN:{city:'Singapore', slug:'singapore'},
+      TYO:{city:'Tokyo', slug:'tokyo'},
+      HND:{city:'Tokyo', slug:'tokyo'},
+      NRT:{city:'Tokyo', slug:'tokyo'},
+      BLR:{city:'Bengaluru', slug:'bengaluru'}
+    };
+    const slugAliases = {
+      delhi:'delhi', newdelhi:'delhi',
+      mumbai:'mumbai', bombay:'mumbai',
+      sapporo:'sapporo',
+      singapore:'singapore',
+      tokyo:'tokyo', tokyohonshu:'tokyo',
+      bengaluru:'bengaluru', bangalore:'bengaluru'
+    };
+    const localHeroFiles = {
+      delhi:'/assets/images/cities/delhi.jpg',
+      mumbai:'/assets/images/cities/mumbai.jpg',
+      sapporo:'/assets/images/cities/sapporo.jpg',
+      singapore:'/assets/images/cities/singapore.jpg',
+      tokyo:'/assets/images/cities/tokyo.jpg',
+      bengaluru:'/assets/images/cities/bengaluru.jpg'
+    };
+    const curated = curatedByIata[code] || null;
+    const catalogCity = String((route && route.toCity) || info.city || '').trim();
+    const city = (curated && curated.city) || catalogCity;
+    const slug = (curated && curated.slug) || slugAliases[tyCitySlug(city)] || '';
+    const imageUrl = slug && localHeroFiles[slug] ? localHeroFiles[slug] : '';
+    return {
+      iata: code,
+      city: city,
+      airport: (route && route.toAirportName) || info.name || '',
+      country: info.country || '',
+      slug: slug,
+      imageUrl: imageUrl
+    };
+  }
+
+  function statusDestinationHeroUrl(booking, route){
+    return tyDestinationCityFromItinerary(booking, route).imageUrl;
+  }
+
   function statusSegmentEndpoint(seg, flight, side){
     const code = String((side === 'arr' ? (seg.arrCode || flight.arrivalCity) : (seg.depCode || flight.departureCity)) || '').toUpperCase();
-    const terminalRaw = side === 'arr' ? seg.arrTerminal : seg.depTerminal;
     return {
       code: code,
       city: cityNameFromCode(code),
       cityCode: statusCityCodeLabel(code),
       airport: statusAirportNameOnly(code),
-      terminal: terminalRaw ? cleanTerminal(terminalRaw) : '',
+      terminal: statusSegmentTerminal(seg, flight, side),
       time: cardSegmentTime(seg, flight, side),
       date: compactDateForSegment(side === 'arr' ? seg.arrDate : seg.depDate)
     };
@@ -9679,8 +9761,8 @@ function mobileFareSheets(flights, fare, options){
     const last = lastItem.seg || {};
     const firstFlight = firstItem.flight || {};
     const lastFlight = lastItem.flight || {};
-    const cabin = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || state.search.cabinClass || firstFlight.cabinClass || firstFlight.cabin || 'ECONOMY');
-    const airlineName = first.airlineName || firstFlight.airlineName || 'Airline';
+    const cabin = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || (firstFlight.cabinClass || firstFlight.cabin || first.cabinClass || first.cabin));
+    const airlineName = first.airlineName || firstFlight.airlineName || '';
     const flightNo = first.flightCode || firstFlight.flightCode || [first.airlineCode || firstFlight.airlineCode, first.flightNumber].filter(Boolean).join(' ');
     const duration = firstFlight.totalDuration || firstFlight.duration || first.duration || last.duration || lastFlight.duration || '';
     const stopsCount = Math.max(0, segments.length - 1);
@@ -9718,7 +9800,7 @@ function mobileFareSheets(flights, fare, options){
       : (itin.stopsCount + ' stop' + (itin.stopsCount > 1 ? 's' : ''));
     const layoverTextLine = itin.layovers.map(function(l){ return l.label; }).filter(Boolean).join(' · ');
     return '<div class="ty-bd-details-card" style="margin-top:10px">' + (detailsBanner || '') +
-      '<div class="ty-bd-flight-head"><div>' + segAirlineLogo(itin.first, itin.firstFlight) + '</div><div><b>' + esc(itin.airlineName) + (itin.flightNo || itin.cabin ? (' · ' + esc([itin.flightNo, itin.cabin].filter(Boolean).join(' · '))) : '') + '</b></div></div>' +
+      '<div class="ty-bd-flight-head"><div>' + segAirlineLogo(itin.first, itin.firstFlight) + '</div><div><b>' + esc([itin.airlineName, itin.flightNo, itin.cabin].filter(Boolean).join(' · ')) + '</b></div></div>' +
       (showAirlineRef ? '<div class="ty-bd-airline-ref">Airline Reference: ' + esc(airlineRefDisplay) + ' ' + statusCopyIconButton(airlineRefDisplay) + '</div>' : '') +
       '<div class="ty-bd-route-grid">' +
         '<div><strong>' + esc(itin.dep.time) + '</strong><b>' + esc(itin.dep.cityCode) + '</b>' +
@@ -9746,14 +9828,15 @@ function mobileFareSheets(flights, fare, options){
   function renderFlightDetailsTimelineHtml(flights, airlineReference, booking){
     const segments = collectFlightSegmentsForCard(flights);
     if(!segments.length) return '<p class="ty-bd-muted">Flight details are not available for this booking.</p>';
-    const cabinFallback = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || state.search.cabinClass || 'ECONOMY');
+    const cabinFallback = statusCabinLabel((booking && booking.search && booking.search.cabinClass) || '');
     let html = '<div class="ty-bd-timeline">';
+    if(airlineReference) html = '<p class="ty-bd-sheet-sub" style="text-align:left;margin-bottom:10px">Airline Reference: ' + esc(airlineReference) + '</p>' + html;
     segments.forEach(function(item, idx){
       const seg = item.seg || {};
       const flight = item.flight || {};
-      const airlineName = seg.airlineName || flight.airlineName || 'Airline';
+      const airlineName = seg.airlineName || flight.airlineName || '';
       const flightNo = seg.flightCode || flight.flightCode || [seg.airlineCode || flight.airlineCode, seg.flightNumber].filter(Boolean).join(' ');
-      const cabin = statusCabinLabel(flight.cabinClass || flight.cabin || cabinFallback);
+      const cabin = statusCabinLabel(seg.cabinClass || seg.cabin || flight.cabinClass || flight.cabin || cabinFallback);
       const dep = statusSegmentEndpoint(seg, flight, 'dep');
       const arr = statusSegmentEndpoint(seg, flight, 'arr');
       const duration = seg.duration || flight.duration || '';
@@ -9763,8 +9846,8 @@ function mobileFareSheets(flights, fare, options){
         '<div class="place">' + esc(dep.cityCode || dep.city || dep.code) + '</div>' +
         (dep.airport ? '<div class="airport">' + esc(dep.airport) + '</div>' : '') +
         (dep.terminal ? '<div class="term">' + esc(dep.terminal) + '</div>' : '') +
-        '<div class="ty-bd-tl-flight"><b>' + esc([airlineName, flightNo].filter(Boolean).join(' · ')) + '</b><span>' + esc([cabin, duration ? ('Duration ' + duration) : ''].filter(Boolean).join(' · ')) + '</span>' +
-          (airlineReference ? '<span>Airline Reference: ' + esc(airlineReference) + '</span>' : '') +
+        '<div class="ty-bd-tl-flight">' + ([airlineName, flightNo].filter(Boolean).length ? '<b>' + esc([airlineName, flightNo].filter(Boolean).join(' · ')) + '</b>' : '') +
+          ([cabin, duration ? ('Duration ' + duration) : ''].filter(Boolean).length ? '<span>' + esc([cabin, duration ? ('Duration ' + duration) : ''].filter(Boolean).join(' · ')) + '</span>' : '') +
         '</div></div></div>';
       html += '<div class="ty-bd-tl-seg"><div class="ty-bd-tl-rail"><span class="dot"></span>' + (isLast ? '' : '<span class="wire"></span>') + '</div><div class="ty-bd-tl-body">' +
         '<div class="when"><strong>' + esc(arr.time) + '</strong>' + (arr.date ? '<em>' + esc(arr.date) + '</em>' : '') + '</div>' +
@@ -9774,9 +9857,15 @@ function mobileFareSheets(flights, fare, options){
       '</div></div>';
       if(!isLast){
         const mins = computedLayoverMinutes(item, segments[idx + 1]);
-        const stopCode = String(seg.arrCode || '').toUpperCase();
-        const label = cleanLayoverLabel(mins, stopCode);
-        if(label) html += '<div class="ty-bd-tl-layover">' + esc(label) + '</div>';
+        const stopCode = String(seg.arrCode || arr.code || '').toUpperCase();
+        const stopCity = cityNameFromCode(stopCode) || stopCode;
+        const layoverDur = layoverText(mins);
+        if(stopCity || layoverDur){
+          html += '<div class="ty-bd-tl-stop">' +
+            (stopCity ? '<b>Stop in ' + esc(stopCity) + (stopCode ? (' (' + esc(stopCode) + ')') : '') + '</b>' : '') +
+            (layoverDur ? '<span>Layover ' + esc(layoverDur) + '</span>' : '') +
+          '</div>';
+        }
       }
     });
     html += '</div>';
@@ -9928,6 +10017,15 @@ function mobileFareSheets(flights, fare, options){
     ROOT.querySelector('[data-new-booking]')?.addEventListener('click', function(){ location.href='/index.html?service=flight'; });
     ROOT.querySelector('[data-my-bookings]')?.addEventListener('click', function(){ location.href='/my-bookings.html'; });
     ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(bookingId); });
+    ROOT.querySelector('[data-refresh-status]')?.addEventListener('click', async function(){
+      try{
+        setFinalStatusMessage('Refreshing booking status...');
+        const data = await statusGet('/api/bookings/' + safeId + '/status');
+        renderBookingStatusView(data.bookingStatus || data.status || data.booking && data.booking.bookingStatus || 'PENDING', bookingPayload, data);
+      }catch(error){
+        setFinalStatusMessage(error.message || 'Could not refresh status.', true);
+      }
+    });
 
     if(canTicketActions){
       bindFinalBookingStatusActions(bookingId, bookingPayload, responseData, true, 'ok', flights);
@@ -10028,12 +10126,15 @@ function mobileFareSheets(flights, fare, options){
     const route = statusRouteContext(flights, booking, bookingPayload);
     const paxCount = statusPassengerCount(travellers, booking);
     const itin = statusItineraryMeta(flights, booking);
+    const airlineUrl = airlineWebsiteFromStatus(booking, flights);
+    const destCity = tyDestinationCityFromItinerary(booking, route);
+    const heroUrl = destCity.imageUrl;
     const showAirlineRef = Boolean(airlineRefDisplay) && mode !== 'failed';
     const showLive = mode === 'confirmed' || mode === 'completed';
     const showPassengers = mode !== 'failed' || travellers.length > 0;
     const showContact = mode !== 'failed' && Boolean([contact.name, contact.email, contact.phone].filter(Boolean).length);
     const showPolicies = mode === 'confirmed' || mode === 'completed' || mode === 'cancelled';
-    const showPayment = mode === 'confirmed' || mode === 'completed' || (mode === 'cancelled' && paid) || (mode === 'failed' && paid);
+    const showPayment = mode === 'confirmed' || mode === 'completed' || (mode === 'pending' && paid) || (mode === 'cancelled' && paid) || (mode === 'failed' && paid);
     const showTicket = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
     const showReceipt = ((mode === 'confirmed' || mode === 'completed') && hasTicketEvidence) || ((mode === 'cancelled' || mode === 'failed') && paid);
     const showResend = (mode === 'confirmed' || mode === 'completed') && hasTicketEvidence;
@@ -10041,7 +10142,7 @@ function mobileFareSheets(flights, fare, options){
     const statusBand = mode === 'completed' ? 'Booking completed'
       : (mode === 'cancelled' ? 'Booking cancelled'
       : (mode === 'failed' ? (/UNSUCCESS|SUPPLIER_BOOKING_FAILED|TICKET_FAILED|REFUND_REQUIRED|UNCONFIRMED/i.test(String(statusValueFrom(booking, responseData, status) || '')) ? 'Booking unsuccessful' : 'Booking failed')
-      : 'Booking confirmed'));
+      : (mode === 'pending' ? 'Booking pending' : 'Booking confirmed')));
     const alerts = [];
     if(mode === 'cancelled'){
       if(refund.hasAny){
@@ -10052,12 +10153,18 @@ function mobileFareSheets(flights, fare, options){
            refund.note ? esc(refund.note) : '',
            (refund.refundAmount && !refund.note) ? 'If you have not received it yet, please contact your bank or card company.' : ''
           ].filter(Boolean).join(' ') + '</div>');
+      }else{
+        alerts.push('<div class="ty-bd-alert info"><b>Refund details</b>Refund details are not available yet.</div>');
       }
-      alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></div>');
-    }else if(mode === 'completed'){
-      alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="#" target="_blank" rel="noopener">Go to airline website</a></div>');
+      if(airlineUrl){
+        alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="' + esc(airlineUrl) + '" target="_blank" rel="noopener">Go to airline website</a></div>');
+      }
+    }else if(mode === 'completed' && airlineUrl){
+      alerts.push('<div class="ty-bd-alert warn">Your flight details may have been updated. Please check the airline website for the most up-to-date flight details. <a data-bd-airline-site href="' + esc(airlineUrl) + '" target="_blank" rel="noopener">Go to airline website</a></div>');
     }else if(mode === 'failed'){
       alerts.push('<div class="ty-bd-alert fail">' + esc(paid ? 'Payment was recorded, but this booking could not be completed. TravelYaraa support can help with next steps.' : 'Payment was not completed for this booking. You can start a new booking anytime.') + '</div>');
+    }else if(mode === 'pending'){
+      alerts.push('<div class="ty-bd-alert info">We are confirming this booking. Ticket and manage actions appear after confirmation.</div>');
     }
     const passengerCards = travellers.map(function(traveller){
       const bags = statusTravellerBaggageParts(traveller, flights);
@@ -10074,7 +10181,9 @@ function mobileFareSheets(flights, fare, options){
       ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-new-booking>New booking</button><button type="button" class="ty-bd-btn ghost" data-my-bookings>My Bookings</button></div>'
       : (mode === 'cancelled'
         ? '<div class="ty-bd-primary-actions single"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button></div>'
-        : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn ghost" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn ghost" data-contact-support>Flight Help Center</button>') + '</div>');
+        : (mode === 'pending'
+          ? '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-refresh-status>Refresh status</button><button type="button" class="ty-bd-btn ghost" data-my-bookings>My Bookings</button></div>'
+          : '<div class="ty-bd-primary-actions"><button type="button" class="ty-bd-btn primary" data-bd-manage-scroll>Manage booking</button>' + (showResend ? '<button type="button" class="ty-bd-btn ghost" data-bd-resend-primary>Resend email</button>' : '<button type="button" class="ty-bd-btn ghost" data-contact-support>Flight Help Center</button>') + '</div>'));
     const manageRows = [
       showTicket ? '<button type="button" class="ty-bd-manage-row" data-download-ticket><span class="ico">▤</span><span>Download e-ticket</span></button>' : '',
       showResend ? '<button type="button" class="ty-bd-manage-row" data-bd-manage-resend><span class="ico">✉</span><span>Resend confirmation email</span></button>' : '',
@@ -10086,7 +10195,9 @@ function mobileFareSheets(flights, fare, options){
       ? manageRows
       : ('<p class="ty-bd-manage-note">' + (mode === 'failed'
           ? 'You can start a new booking anytime.'
-          : 'No booking management actions are available for this booking right now.') + '</p>');
+          : (mode === 'pending'
+            ? 'Ticket actions will appear after this booking is confirmed.'
+            : 'No booking management actions are available for this booking right now.')) + '</p>');
     const detailsBanner = mode === 'completed'
       ? '<div class="ty-bd-details-banner">✈ This flight has completed</div>'
       : '';
@@ -10095,7 +10206,9 @@ function mobileFareSheets(flights, fare, options){
       '<div class="ty-final-status ty-bd-page ' + esc(mode) + '">' +
         '<header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header>' +
         '<div class="ty-bd-sticky-bar" id="tyBdStickyBar"></div>' +
-        '<div class="ty-bd-hero"><span class="ty-bd-hero-city">' + esc(route.toCity || 'TravelYaraa') + '</span></div>' +
+        '<div class="ty-bd-hero' + (heroUrl ? ' has-photo' : '') + '"' + (heroUrl && destCity.slug ? ' data-hero-city="' + esc(destCity.slug) + '"' : '') + '>' +
+          (heroUrl ? '<img class="ty-bd-hero-img" alt="' + esc(destCity.city || route.toCity || '') + '" src="' + esc(heroUrl) + '" onerror="this.remove();this.parentNode.classList.remove(\'has-photo\');this.parentNode.removeAttribute(\'data-hero-city\');">' : '') +
+          '<span class="ty-bd-hero-city">' + esc(destCity.city || route.toCity || 'TravelYaraa') + '</span></div>' +
         '<main class="ty-bd-shell">' +
           '<section class="ty-bd-status-card">' +
             '<div class="ty-bd-status-band ' + esc(mode) + '">' + esc(statusBand) + '</div>' +
@@ -10106,41 +10219,47 @@ function mobileFareSheets(flights, fare, options){
             '</div>' +
           '</section>' +
           alerts.join('') +
-          (showLive
-            ? '<section class="ty-bd-block ty-bd-main-col"><div class="ty-bd-block-pad"><div class="ty-bd-live-head"><h2 class="ty-bd-section-title" style="margin:0">Live flight updates</h2><button type="button" data-bd-live-refresh>↻ Refresh</button></div><div class="ty-bd-live-card"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></div></section>'
-            : '') +
-          '<section class="ty-bd-block ty-bd-main-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Your booking details</h2>' +
-            renderBookingItineraryCardBodyHtml(itin, airlineRefDisplay, showAirlineRef, detailsBanner) +
-          '</div></section>' +
-          primaryActions +
-          (showPassengers
-            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><button type="button" class="ty-bd-section-title ty-bd-policy-row" data-bd-open-passengers style="padding:0"><span>Passengers</span><span class="ty-bd-chev">›</span></button>' +
-                '<div class="ty-bd-pax-route">✈ ' + esc(paxRouteLabel) + '</div>' +
-                (passengerCards || '<p class="ty-bd-muted">Passenger details are not available for this booking.</p>') +
-              '</div></section>'
-            : '') +
-          (showContact
-            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Contact details</h2>' +
-                (contact.name ? '<div class="ty-bd-contact-name">' + esc(contact.name) + '</div>' : '') +
-                (contact.phone ? '<div class="ty-bd-contact-row">📞 ' + esc(contact.phone) + '</div>' : '') +
-                (contact.email ? '<div class="ty-bd-contact-row">✉ ' + esc(contact.email) + '</div>' : '') +
-              '</div></section>'
-            : '') +
-          (showPolicies
-            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Ticket policies</h2><button type="button" class="ty-bd-policy-row" data-bd-open-policies style="margin-top:8px"><span>Cancellation and change policies</span><span class="ty-bd-chev">›</span></button></div></section>'
-            : '') +
-          (showPayment
-            ? '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-block-pad">' +
-                (paid ? '<div class="ty-bd-pay-badge">✓ Booking was paid</div>' : '') +
-                '<button type="button" class="ty-bd-pay-summary" data-bd-open-payment><span class="ty-bd-section-title" style="font-size:17px">Payment details</span><span class="ty-bd-chev">›</span></button>' +
-                (payment.total ? '<div class="ty-bd-pay-total"><span>Total amount</span><b>' + esc(payment.total) + '</b></div>' : '') +
-              '</div></section>'
-            : '') +
-          '<section class="ty-bd-block ty-bd-side-col" id="tyBdManageSection"><div class="ty-bd-block-pad" style="padding-bottom:0"><h2 class="ty-bd-section-title">Manage my bookings</h2></div>' + manageBody + '</section>' +
-          '<section class="ty-bd-block ty-bd-side-col"><div class="ty-bd-support-wrap"><h2 class="ty-bd-section-title">We\'re here to support</h2>' +
-            '<div class="ty-bd-help-card"><p>Need help or have questions about this booking?</p><a class="ty-bd-btn ghost" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a></div>' +
-            '<a class="ty-bd-airline-row" data-bd-airline-site href="#" target="_blank" rel="noopener">✈ Go to airline website</a>' +
-          '</div></section>' +
+          '<div class="ty-bd-cols">' +
+            '<div class="ty-bd-col-main">' +
+              (showLive
+                ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><div class="ty-bd-live-head"><h2 class="ty-bd-section-title" style="margin:0">Live flight updates</h2><button type="button" data-bd-live-refresh>↻ Refresh</button></div><div class="ty-bd-live-card"><p class="ty-bd-muted" id="tyBdLiveMessage">Live flight updates are not available right now.</p></div></div></section>'
+                : '') +
+              '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Your booking details</h2>' +
+                renderBookingItineraryCardBodyHtml(itin, airlineRefDisplay, showAirlineRef, detailsBanner) +
+              '</div></section>' +
+              primaryActions +
+              (showPassengers
+                ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><button type="button" class="ty-bd-section-title ty-bd-policy-row" data-bd-open-passengers style="padding:0"><span>Passengers</span><span class="ty-bd-chev">›</span></button>' +
+                    '<div class="ty-bd-pax-route">✈ ' + esc(paxRouteLabel) + '</div>' +
+                    (passengerCards || '<p class="ty-bd-muted">Passenger details are not available for this booking.</p>') +
+                  '</div></section>'
+                : '') +
+              (showContact
+                ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Contact details</h2>' +
+                    (contact.name ? '<div class="ty-bd-contact-name">' + esc(contact.name) + '</div>' : '') +
+                    (contact.phone ? '<div class="ty-bd-contact-row">📞 ' + esc(contact.phone) + '</div>' : '') +
+                    (contact.email ? '<div class="ty-bd-contact-row">✉ ' + esc(contact.email) + '</div>' : '') +
+                  '</div></section>'
+                : '') +
+              (showPolicies
+                ? '<section class="ty-bd-block"><div class="ty-bd-block-pad"><h2 class="ty-bd-section-title">Ticket policies</h2><button type="button" class="ty-bd-policy-row" data-bd-open-policies style="margin-top:8px"><span>Cancellation and change policies</span><span class="ty-bd-chev">›</span></button></div></section>'
+                : '') +
+              (showPayment
+                ? '<section class="ty-bd-block"><div class="ty-bd-block-pad">' +
+                    (paid ? '<div class="ty-bd-pay-badge">✓ Booking was paid</div>' : '') +
+                    '<button type="button" class="ty-bd-pay-summary" data-bd-open-payment><span class="ty-bd-section-title" style="font-size:17px">Payment details</span><span class="ty-bd-chev">›</span></button>' +
+                    (payment.total ? '<div class="ty-bd-pay-total"><span>Total amount</span><b>' + esc(payment.total) + '</b></div>' : '') +
+                  '</div></section>'
+                : '') +
+            '</div>' +
+            '<div class="ty-bd-col-side">' +
+              '<section class="ty-bd-block" id="tyBdManageSection"><div class="ty-bd-block-pad" style="padding-bottom:0"><h2 class="ty-bd-section-title">Manage my bookings</h2></div>' + manageBody + '</section>' +
+              '<section class="ty-bd-block"><div class="ty-bd-support-wrap"><h2 class="ty-bd-section-title">We\'re here to support</h2>' +
+                '<div class="ty-bd-help-card"><p>Need help or have questions about this booking?</p><a class="ty-bd-btn ghost" href="' + esc(tySupportPageUrlForBooking(bookingId)) + '">Flight Help Center</a></div>' +
+                (airlineUrl ? '<a class="ty-bd-airline-row" data-bd-airline-site href="' + esc(airlineUrl) + '" target="_blank" rel="noopener">✈ Go to airline website</a>' : '') +
+              '</div></section>' +
+            '</div>' +
+          '</div>' +
           '<p id="tyFinalStatusMessage" class="ty-final-message" hidden style="margin:12px 16px 0"></p>' +
         '</main></div>';
     bindConfirmedBookingDetailChrome(route);
@@ -10156,47 +10275,20 @@ function mobileFareSheets(flights, fare, options){
     ensureBookingStatusStyles();
     stopPendingStatusPoll();
     const booking = statusBookingObject(responseData, bookingPayload);
-    const flights = (booking.selectedFlights || (booking.selectedResult ? [booking.selectedResult] : []) || []).filter(Boolean).length
-      ? (booking.selectedFlights || [booking.selectedResult]).filter(Boolean)
-      : ((bookingPayload && (bookingPayload.selectedFlights || [bookingPayload.selectedFlight]).filter(Boolean)) || []);
-    const travellers = uniqueTravellersForStatus((booking.details && booking.details.passengers) || booking.travellers || bookingPayload && bookingPayload.travellers || []);
+    const flights = statusFlightsFromBooking(booking, bookingPayload);
     const rawStatus = statusValueFrom(booking, responseData, status);
     let meta = statusMeta(rawStatus);
-    const bookingId = statusBookingId(booking, responseData);
     const airlineReference = pnrValue(booking);
     const ticketNumber = ticketValue(booking);
-    const contact = statusContact(booking, bookingPayload || {});
-    const payStatus = paymentStatusValue(booking, responseData);
-    const payId = paymentIdValue(booking, responseData);
-    const paidAmt = paidAmountDisplay(booking, responseData);
     const hasTicketEvidence = airlineReference !== 'Pending' || ticketNumber !== 'Pending';
-    const confirmed = meta.kind === 'ok' && hasTicketEvidence;
-    if(meta.kind === 'ok' && !confirmed){
+    if(meta.kind === 'ok' && !hasTicketEvidence){
       meta = {kind:'hold', title:'Booking confirmation pending', badge:'Pending', note:'Payment has been processed. Airline reference and ticket actions will appear only after confirmed ticketing.'};
     }
     const detailMode = statusDetailMode(meta, booking, flights, hasTicketEvidence);
-    if(detailMode === 'confirmed' || detailMode === 'completed' || detailMode === 'cancelled' || detailMode === 'failed'){
-      renderBookingDetailView(detailMode, status, bookingPayload, responseData);
-      return;
+    renderBookingDetailView(detailMode, status, bookingPayload, responseData);
+    if(detailMode === 'pending'){
+      startPendingStatusPoll(statusBookingId(booking, responseData), bookingPayload);
     }
-
-    const passengerHtml = travellers.map(function(traveller, index){
-      return `<div class="ty-final-passenger"><span>${esc(traveller.passengerType || traveller.type || traveller.pt || 'Traveller')} ${index + 1}</span><b>${esc(travellerName(traveller))}</b></div>`;
-    }).join('');
-
-    let detailCards = `<article class="ty-final-card"><h2 class="ty-final-card-title">Booking details</h2><div class="ty-final-card-body ty-final-reference-grid">${statusKv('Booking ID', bookingId, true)}${statusKvIf('Payment status', payStatus)}${statusKvIf('Amount paid', paidAmt)}</div></article>`;
-    if(passengerHtml) detailCards += `<article class="ty-final-card"><h2 class="ty-final-card-title">Traveller details</h2><div class="ty-final-card-body ty-final-passengers">${passengerHtml}</div></article>`;
-
-    const actions = statusSafeNavActions(true);
-    try{ history.replaceState({step:'booking-status', bookingId},'', '/pages/results/flights.html?service=flight&step=booking-status&bookingId=' + encodeURIComponent(bookingId)); }catch(_e){}
-    ROOT.innerHTML = `<div class="ty-final-status"><main class="ty-final-status-shell">
-      <section class="ty-final-status-hero ${esc(meta.kind)}"><div><small>TravelYaraa booking status</small><h1>${esc(meta.title)}</h1><p>${esc(meta.note)}</p></div><b class="ty-final-status-badge">${esc(meta.badge)}</b></section>
-      ${renderItineraryCard(flights, {compact:true})}
-      ${detailCards}
-      <article class="ty-final-card"><div class="ty-final-actions">${actions}</div><p id="tyFinalStatusMessage" class="ty-final-message" hidden></p></article>
-    </main></div>`;
-    bindFinalBookingStatusActions(bookingId, bookingPayload, responseData || {}, false, meta.kind, flights);
-    if(meta.kind === 'hold') startPendingStatusPoll(bookingId, bookingPayload);
   }
 
 
@@ -10366,20 +10458,38 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     ensureBookingStatusStyles();
     stopPendingStatusPoll();
     const payload = cachedStatusPayloadForBooking(bookingId);
-    const safeId = String(bookingId || payload.bookingId || 'Pending');
+    const safeId = String(bookingId || payload.bookingId || '');
     const flights = (payload && (payload.selectedFlights || [payload.selectedFlight]).filter(Boolean)) || [];
+    if(flights.length && safeId){
+      renderBookingStatusView(payload.bookingStatus || payload.status || 'PENDING', payload, {booking: payload, bookingId: safeId, success:false});
+      setFinalStatusMessage(tyCustomerFacingActionError(message, 'Latest booking details could not be refreshed. Showing the last saved booking on this device.'), true);
+      return;
+    }
     const authMissing = /log in|login|auth/i.test(String(message || ''));
     const friendly = authMissing
       ? 'Please log in to the same TravelYaraa account used for this booking.'
-      : tyCustomerFacingActionError(message, 'Booking could not be loaded. Open it again from My Bookings or contact support.');
-    ROOT.innerHTML = `<div class="ty-final-status"><main class="ty-final-status-shell">
-      <section class="ty-final-status-hero failed"><div><small>TravelYaraa booking status</small><h1>${authMissing ? 'Login required' : 'Booking details unavailable'}</h1><p>${esc(friendly)}</p></div><b class="ty-final-status-badge">Action required</b></section>
-      ${flights.length ? renderItineraryCard(flights, {compact:true}) : ''}
-      <article class="ty-final-card"><div class="ty-final-actions">${authMissing ? statusAction('Login / Sign up','data-login-booking','primary full') : ''}${statusAction('My Bookings','data-my-bookings','')}${statusAction('TravelYaraa support','data-contact-support','')}${statusAction('New booking','data-new-booking','orange full')}</div></article>
-    </main></div>`;
+      : tyCustomerFacingActionError(message, 'This booking could not be loaded. Open it again from My Bookings or contact support.');
+    ROOT.innerHTML =
+      '<div class="ty-final-status ty-bd-page failed">' +
+        '<header class="ty-bd-header"><button type="button" data-bd-back-my-bookings aria-label="Back to My bookings">←</button><span>My bookings</span></header>' +
+        '<div class="ty-bd-hero"><span class="ty-bd-hero-city">TravelYaraa</span></div>' +
+        '<main class="ty-bd-shell">' +
+          '<section class="ty-bd-status-card">' +
+            '<div class="ty-bd-status-band failed">' + (authMissing ? 'Login required' : 'Booking unavailable') + '</div>' +
+            '<div class="ty-bd-status-body"><h1>' + (authMissing ? 'Please log in' : 'Booking details are not available') + '</h1>' +
+              '<p class="ty-bd-error-copy">' + esc(friendly) + '</p>' +
+              (safeId ? '<div class="ty-bd-booking-id"><span>Booking ID: ' + esc(safeId) + '</span>' + statusCopyIconButton(safeId) + '</div>' : '') +
+            '</div></section>' +
+          '<div class="ty-bd-primary-actions">' +
+            (authMissing ? '<button type="button" class="ty-bd-btn primary" data-login-booking>Login / Sign up</button>' : '') +
+            '<button type="button" class="ty-bd-btn ' + (authMissing ? 'ghost' : 'primary') + '" data-my-bookings>My Bookings</button>' +
+            '<button type="button" class="ty-bd-btn ghost" data-new-booking>New booking</button>' +
+          '</div>' +
+          '<p id="tyFinalStatusMessage" class="ty-final-message" hidden></p>' +
+        '</main></div>';
+    ROOT.querySelector('[data-bd-back-my-bookings]')?.addEventListener('click', function(){ location.href = '/my-bookings.html'; });
     ROOT.querySelector('[data-new-booking]')?.addEventListener('click', function(){ location.href='/index.html?service=flight'; });
     ROOT.querySelector('[data-my-bookings]')?.addEventListener('click', function(){ location.href='/my-bookings.html'; });
-    ROOT.querySelector('[data-contact-support]')?.addEventListener('click', function(){ location.href=tySupportPageUrlForBooking(safeId); });
     ROOT.querySelector('[data-login-booking]')?.addEventListener('click', function(){ location.href='/index.html?openLogin=1&redirect=' + encodeURIComponent(location.pathname + location.search); });
   }
 
