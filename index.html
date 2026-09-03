@@ -2686,6 +2686,7 @@ html.ty-ui-overlay-open-v69 .slide-page.active {
 (function(){
   function setFare(type){
     type=(type||"REGULAR").toUpperCase();
+    if(type==="SOTO"||type==="NDC") type="REGULAR";
     if(window.S && window.S.flight){ window.S.flight.fareType=type; }
     document.querySelectorAll('[data-ty-fare-v128]').forEach(function(btn){btn.classList.toggle('active',(btn.dataset.tyFareV128||'').toUpperCase()===type);});
     try{sessionStorage.setItem('ty_flight_fare_type_v128',type);}catch(e){}
@@ -2694,6 +2695,7 @@ html.ty-ui-overlay-open-v69 .slide-page.active {
   document.addEventListener('DOMContentLoaded',function(){
     var saved='REGULAR';
     try{saved=sessionStorage.getItem('ty_flight_fare_type_v128')||'REGULAR';}catch(e){}
+    if(saved==='SOTO'||saved==='NDC') saved='REGULAR';
     setFare(saved);
     document.querySelectorAll('[data-ty-fare-v128]').forEach(function(btn){
       btn.addEventListener('click',function(){setFare(btn.dataset.tyFareV128||'REGULAR');});
@@ -2733,11 +2735,12 @@ body #search-area #flightReturnBoxV5.ty-return-empty-v5 #flightReturnTextV5{font
 </style>
 <script id="ty-v192-search-fare-payload-js">
 (function(){
-  function currentFare(){try{return sessionStorage.getItem('ty_flight_fare_type_v128')||((window.S&&window.S.flight&&window.S.flight.fareType)||'REGULAR');}catch(e){return 'REGULAR';}}
+  function currentFare(){try{var t=sessionStorage.getItem('ty_flight_fare_type_v128')||((window.S&&window.S.flight&&window.S.flight.fareType)||'REGULAR');t=String(t||'REGULAR').toUpperCase();return (t==='SOTO'||t==='NDC')?'REGULAR':t;}catch(e){return 'REGULAR';}}
   document.addEventListener('click',function(e){
     var btn=e.target.closest&&e.target.closest('[data-ty-fare-v128]');
     if(!btn)return;
     var type=(btn.getAttribute('data-ty-fare-v128')||'REGULAR').toUpperCase();
+    if(type==='SOTO'||type==='NDC') type='REGULAR';
     if(window.S&&window.S.flight)window.S.flight.fareType=type;
     try{sessionStorage.setItem('ty_flight_fare_type_v128',type);}catch(err){}
     document.querySelectorAll('[data-ty-fare-v128]').forEach(function(x){x.classList.toggle('active',(x.getAttribute('data-ty-fare-v128')||'').toUpperCase()===type);});
@@ -2745,6 +2748,7 @@ body #search-area #flightReturnBoxV5.ty-return-empty-v5 #flightReturnTextV5{font
   document.addEventListener('DOMContentLoaded',function(){
     var type=currentFare();
     if(window.S&&window.S.flight)window.S.flight.fareType=type;
+    try{sessionStorage.setItem('ty_flight_fare_type_v128',type);}catch(err){}
     document.querySelectorAll('[data-ty-fare-v128]').forEach(function(x){x.classList.toggle('active',(x.getAttribute('data-ty-fare-v128')||'').toUpperCase()===type);});
   });
 })();
@@ -2972,8 +2976,6 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
           <button class="active" type="button" data-ty-fare-v128="REGULAR">Regular</button>
           <button type="button" data-ty-fare-v128="STUDENT">Student</button>
           <button type="button" data-ty-fare-v128="SENIOR_CITIZEN">Senior Citizen</button>
-          <button type="button" data-ty-fare-v128="SOTO">SOTO</button>
-          <button type="button" data-ty-fare-v128="NDC">NDC</button>
         </div>
       </div>
 

@@ -39,6 +39,7 @@
     bookingHoldTimer: null,
     bookingHoldDeadline: 0,
     paymentReviewInProgress: false,
+    paymentCheckoutInProgress: false,
     savedTravellers: [],
     savedTravellersLoaded: false,
     savedTravellersLoading: false,
@@ -7764,8 +7765,25 @@ function mobileFareSheets(flights, fare, options){
     ROOT.querySelectorAll('[data-open-fare-sheet]').forEach(function(btn){ btn.onclick = function(){ ROOT.querySelector('#tyFareSheet')?.classList.add('active'); }; });
     ROOT.querySelectorAll('[data-close-sheet]').forEach(function(btn){ btn.onclick = function(){ btn.closest('.ty-mobile-sheet')?.classList.remove('active'); }; });
     const msg=ROOT.querySelector('#tyPaymentMsg');
-    function payNow(){ proceedToPayment(flights, originalForm, null, msg, ()=>true); }
+    function payNow(){
+      if(state.paymentCheckoutInProgress) return;
+      proceedToPayment(flights, originalForm, null, msg, ()=>true);
+    }
     ROOT.querySelectorAll('#tyAddonPay,#tyAddonPayLeft,#tyMobileContinue').forEach(btn=>{ if(btn) btn.onclick=payNow; });
+  }
+
+  function setPaymentCtasBusy(busy){
+    ROOT.querySelectorAll('#tyAddonPay,#tyAddonPayLeft,#tyMobileContinue').forEach(function(btn){
+      if(!btn) return;
+      btn.disabled = !!busy;
+      if(busy) btn.setAttribute('aria-busy', 'true');
+      else btn.removeAttribute('aria-busy');
+    });
+  }
+
+  function releasePaymentCheckoutLock(){
+    state.paymentCheckoutInProgress = false;
+    setPaymentCtasBusy(false);
   }
 
   function getDate3(form, prefix){
@@ -10294,10 +10312,14 @@ function mobileFareSheets(flights, fare, options){
 
 
 async function proceedToPayment(flights, form, error, msg, validate, skipAirReview){
+    if(state.paymentCheckoutInProgress) return;
     if(!validate()){
       if(error) error.style.display = "block";
       return;
     }
+
+    state.paymentCheckoutInProgress = true;
+    setPaymentCtasBusy(true);
 
     if(!skipAirReview && !state.paymentReviewInProgress){
       state.paymentReviewInProgress = true;
@@ -10308,6 +10330,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
         const changes = detectReviewChanges(flights, review);
         state.paymentReviewInProgress = false;
         if(changes.length){
+          releasePaymentCheckoutLock();
           renderChangeConfirm(flights, changes, {onBack:openFlightSearchPage, onContinue:function(){ proceedToPayment(flights, form, error, msg, validate, true); }});
           return;
         }
@@ -10364,11 +10387,14 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       const key = orderRes.key || orderRes.razorpayKey || order.key || window.RAZORPAY_KEY_ID;
       const orderId = order.id || order.order_id || order.orderId || order.razorpay_order_id || orderRes.orderId || orderRes.razorpayOrderId;
       const rawAmount = Number(order.amount || orderRes.amount || 0);
-      /* Razorpay order amount from backend is already in paise.
-         Do not multiply it again, otherwise Checkout can fail with amount mismatch. */
-      const amount = rawAmount > 0 ? Math.round(rawAmount) : Math.round(Number(fare.total || 0) * 100);
+      /* Razorpay order amount from backend is already in paise and authoritative.
+         Never fall back to frontend fare.total — refuse Checkout if amount is missing. */
+      if(!(rawAmount > 0)){
+        throw new Error("Payment is temporarily unavailable. Please try again.");
+      }
+      const amount = Math.round(rawAmount);
       const currency = order.currency || orderRes.currency || "INR";
-      if(!key || !orderId) throw new Error("Payment order could not be created.");
+      if(!key || !orderId) throw new Error("Payment could not be started. Please try again.");
       await loadRazorpayScript();
       let tyRazorpayTerminalHandled = false;
       const rz = new window.Razorpay({
@@ -10377,22 +10403,24 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
         handler:async function(response){
           tyRazorpayTerminalHandled = true;
           showSecurePaymentOverlay();
-          if(msg) msg.textContent = "Verifying payment...";
+          if(msg){ msg.classList.remove("error"); msg.textContent = "Verifying payment..."; }
           try{
             const verify = await verifyPayment(response, bookingPayload);
             const verifiedStatus = statusFromPaymentVerifyResponse(verify, "PENDING");
             sessionStorage.setItem("ty_last_booking_success", JSON.stringify(verify));
             hideSecurePaymentOverlay();
+            releasePaymentCheckoutLock();
             if(msg){ msg.classList.remove("error"); msg.textContent = /FAIL|ERROR|REJECT|UNSUCCESS|REFUND_REQUIRED|SUPPLIER_BOOKING_FAILED/i.test(verifiedStatus) ? "Booking could not be completed." : "Payment processed."; }
             renderBookingStatusView(verifiedStatus, bookingPayload, verify);
           }catch(verifyErr){
             hideSecurePaymentOverlay();
+            releasePaymentCheckoutLock();
             renderBookingStatusView("PAYMENT_VERIFICATION_PENDING", bookingPayload, {
               success:false,
               bookingId:bookingPayload.bookingId,
               bookingStatus:"PAYMENT_VERIFICATION_PENDING",
               paymentStatus:"PENDING",
-              message:verifyErr && verifyErr.message || "Payment verification is pending. Refresh status before trying again."
+              message:tyCustomerFacingActionError(verifyErr && verifyErr.message, "Payment verification is pending. Refresh status before trying again.")
             });
           }
         },
@@ -10400,9 +10428,10 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
           hideSecurePaymentOverlay();
           if(tyRazorpayTerminalHandled) return;
           tyRazorpayTerminalHandled = true;
-          if(msg) msg.textContent = "Payment cancelled.";
+          if(msg){ msg.classList.remove("error"); msg.textContent = "Payment cancelled."; }
           let result = {bookingId:bookingPayload.bookingId, bookingStatus:"PAYMENT_CANCELLED", paymentStatus:"CANCELLED"};
           try{ result = await recordPaymentStatus(bookingPayload.bookingId, "PAYMENT_CANCELLED", {description:"Customer closed Razorpay checkout."}); }catch(_e){}
+          releasePaymentCheckoutLock();
           renderBookingStatusView("PAYMENT_CANCELLED", bookingPayload, result);
         }},
         theme:{color:"#0066cc"}
@@ -10415,6 +10444,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
           try{ sessionStorage.setItem("ty_last_payment_failed", JSON.stringify(resp || {})); }catch(_e){}
           let result = {bookingId:bookingPayload.bookingId, bookingStatus:"PAYMENT_FAILED", paymentStatus:"FAILED"};
           try{ result = await recordPaymentStatus(bookingPayload.bookingId, "PAYMENT_FAILED", resp && resp.error ? resp.error : resp); }catch(_e){}
+          releasePaymentCheckoutLock();
           renderBookingStatusView("PAYMENT_FAILED", bookingPayload, result);
         });
       }
@@ -10422,7 +10452,8 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       setTimeout(hideSecurePaymentOverlay, 450);
     }catch(e){
       hideSecurePaymentOverlay();
-      const text = (e && e.message) ? e.message : "Payment could not be started. Please try again.";
+      releasePaymentCheckoutLock();
+      const text = tyCustomerFacingActionError(e && e.message, "Payment could not be started. Please try again.");
       if(tyIsAuthRequiredError(e)){
         /* Stale or missing backend session: drop it so the next Continue
            Payment click reopens the existing TravelYaraa login panel. */
