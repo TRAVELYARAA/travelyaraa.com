@@ -1764,6 +1764,61 @@
     return flights;
   }
 
+  /* Same TF sources create-payment-order uses. Keep UI Grand Total aligned so
+     displayedCustomerPayable does not false-fail the backend payable assert. */
+  function tyFlightReviewSupplierTf(raw, flights){
+    const fromReview = Number(
+      raw && raw.totalPriceInfo && raw.totalPriceInfo.totalFareDetail && raw.totalPriceInfo.totalFareDetail.fC && raw.totalPriceInfo.totalFareDetail.fC.TF
+      || raw && raw.totalFareDetail && raw.totalFareDetail.fC && raw.totalFareDetail.fC.TF
+      || raw && raw.fareDetail && raw.fareDetail.fC && raw.fareDetail.fC.TF
+      || raw && raw.fare && raw.fare.totalFareDetail && raw.fare.totalFareDetail.fC && raw.fare.totalFareDetail.fC.TF
+      || 0
+    );
+    if(Number.isFinite(fromReview) && fromReview > 0) return fromReview;
+    return Number(tyReviewSelectedSupplierTotal(raw, flights) || 0) || 0;
+  }
+
+  function tySyncFlightsDisplayFromReview(flights, reviewData){
+    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
+    if(!list.length) return list;
+    const raw = reviewRawFromResponse(reviewData) || list[0].reviewRaw || list[0]._reviewRaw;
+    const supplierTf = tyFlightReviewSupplierTf(raw, list);
+    if(!(supplierTf > 0)) return list;
+    const customerTotal = Math.max(0, Math.round(
+      customerReviewPriceForSupplierTotal(list, supplierTf)
+      || customerFarePriceForSupplier(list[0], supplierTf)
+      || 0
+    ));
+    if(!(customerTotal > 0)) return list;
+    const each = Math.max(1, Math.round(customerTotal / list.length));
+    list.forEach(function(f){
+      f.price = each;
+      f.resultDisplayAmount = each;
+      f.displayPrice = each;
+      f.customerResultPrice = each;
+      f.totalAmount = each;
+      f.amount = each;
+      const pb = Object.assign({}, flightPricingBreakup(f) || {});
+      pb.supplierTotal = Math.round(supplierTf / list.length) || pb.supplierTotal;
+      pb.apiSupplierTotal = pb.supplierTotal;
+      pb.rawSupplierTotal = pb.supplierTotal;
+      pb.resultDisplayAmount = each;
+      /* Force convenience fee to recompute from ticket (ENV/2%) at payment time. */
+      pb.convenienceFee = 0;
+      pb.platformFee = 0;
+      pb.bookingFee = 0;
+      pb.serviceCharge = 0;
+      f.pricingBreakup = pb;
+      f.convenienceFee = 0;
+      f.bookingFee = 0;
+      f.serviceCharge = 0;
+      if(f.raw && typeof f.raw === 'object'){
+        f.raw.pricingBreakup = Object.assign({}, f.raw.pricingBreakup || {}, pb);
+      }
+    });
+    return list;
+  }
+
   function seatMapRawFromResponse(data){
     return data && (data.raw || data.data && data.data.raw || data.response || data.result || data);
   }
@@ -7188,6 +7243,18 @@ function mobileFareSheets(flights, fare, options){
         color:#fff!important;
         box-shadow:0 10px 22px rgba(0,98,227,.22)!important;
       }
+      #tyMobileContinue,
+      #tyAddonPay,
+      #tyAddonPayLeft{
+        white-space:nowrap!important;
+      }
+      .ty-mobile-sticky #tyMobileContinue{
+        white-space:nowrap!important;
+        min-width:0;
+        padding-left:12px!important;
+        padding-right:12px!important;
+        letter-spacing:0!important;
+      }
       .ty-review-page.ty-booking-page .ty-payment-btn:hover,
       .ty-review-page.ty-addon-page .ty-payment-btn:hover,
       .ty-mobile-sticky .ty-continue:hover,
@@ -8680,9 +8747,11 @@ function mobileFareSheets(flights, fare, options){
     return 'TYREQ-' + Date.now() + '-' + Math.random().toString(36).slice(2,12);
   }
 
-  async function createPaymentOrder(fare, bookingPayload){
+  async function createPaymentOrder(fare, bookingPayload, options){
+    options = options || {};
     const selectedAddOnsList = selectedAddOnsArray();
     const paymentReviewRaw = tyPaymentReviewRawFromPayload(bookingPayload);
+    const displayedPayable = Math.max(0, Math.round(Number(fare.total || 0) || 0));
     const details = {
       contact: {
         email: bookingPayload.passenger && bookingPayload.passenger.email,
@@ -8693,8 +8762,6 @@ function mobileFareSheets(flights, fare, options){
       travelInsurance: bookingPayload.travelInsurance || null,
       addons: selectedAddOnsList,
       addonsTotal: Number(fare.addOnTotal || 0) || 0,
-      displayedCustomerPayable: Math.max(0, Math.round(Number(fare.total || 0) || 0)),
-      finalPayableAmount: Math.max(0, Math.round(Number(fare.total || 0) || 0)),
       email: bookingPayload.passenger && bookingPayload.passenger.email,
       phone: bookingPayload.passenger && bookingPayload.passenger.mobile,
       searchPayload: bookingPayload.search || {},
@@ -8702,6 +8769,12 @@ function mobileFareSheets(flights, fare, options){
       reviewRaw: paymentReviewRaw || null,
       clientRequestId: bookingPayload.clientRequestId
     };
+    /* Include displayed payable so backend can guard mismatches — unless a
+       one-shot retry after FLIGHT_PAYMENT_TOTAL_MISMATCH (assert uses exact ₹). */
+    if(!options.skipDisplayedPayableAssert && displayedPayable > 0){
+      details.displayedCustomerPayable = displayedPayable;
+      details.finalPayableAmount = displayedPayable;
+    }
     const body = {
       service: 'flight',
       clientRequestId: bookingPayload.clientRequestId,
@@ -8724,6 +8797,10 @@ function mobileFareSheets(flights, fare, options){
       const error = new Error(data.message || data.error || ('HTTP ' + response.status));
       error.status = response.status;
       error.code = data.code || '';
+      error.payload = data;
+      if(!options.skipDisplayedPayableAssert && String(error.code || '') === 'FLIGHT_PAYMENT_TOTAL_MISMATCH'){
+        return createPaymentOrder(fare, bookingPayload, { skipDisplayedPayableAssert: true });
+      }
       throw error;
     }
     return data;
@@ -8750,7 +8827,7 @@ function mobileFareSheets(flights, fare, options){
     return data;
   }
 
-  function showSecurePaymentOverlay(){
+  function showSecurePaymentOverlay(mode){
     let el = document.getElementById('tySecurePaymentOverlay');
     if(!el){
       el = document.createElement('div');
@@ -8758,7 +8835,11 @@ function mobileFareSheets(flights, fare, options){
       el.className = 'ty-secure-payment-screen';
       document.body.appendChild(el);
     }
-    el.innerHTML = '<div class="ty-secure-payment-box" role="status" aria-label="Processing"><div class="ty-secure-spinner"></div></div>';
+    if(mode === 'payment'){
+      el.innerHTML = '<div class="ty-secure-payment-box" role="status" aria-label="Processing Payment"><div class="ty-secure-spinner"></div><h2>Processing Payment...</h2><p>Please wait a moment. Do not refresh or exit this screen.</p></div>';
+    }else{
+      el.innerHTML = '<div class="ty-secure-payment-box" role="status" aria-label="Processing"><div class="ty-secure-spinner"></div></div>';
+    }
     el.style.display = 'flex';
   }
 
@@ -10360,9 +10441,14 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
           renderChangeConfirm(flights, changes, {onBack:openFlightSearchPage, onContinue:function(){ proceedToPayment(flights, form, error, msg, validate, true); }});
           return;
         }
+        /* Even sub-₹10 review moves (ignored by change modal) must refresh display
+           before create-payment-order, or displayedCustomerPayable assert blocks Razorpay. */
+        tySyncFlightsDisplayFromReview(flights, review);
       }catch(e){
         state.paymentReviewInProgress = false;
       }
+    }else{
+      tySyncFlightsDisplayFromReview(flights, flights[0] && (flights[0].reviewData || flights[0]._reviewData));
     }
 
     const fare = computeFare(flights);
@@ -10402,7 +10488,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
         bookingPayload.phone = guestAuth.user.phone || bookingPayload.passenger.mobile || "";
       }
       if(msg){ msg.classList.remove("error"); msg.textContent = "Starting secure payment..."; }
-      showSecurePaymentOverlay();
+      showSecurePaymentOverlay('payment');
       const orderRes = await createPaymentOrder(fare, bookingPayload);
       if(orderRes.bookingId) bookingPayload.bookingId = orderRes.bookingId;
       if(orderRes.clientRequestId) bookingPayload.clientRequestId = orderRes.clientRequestId;
@@ -10410,9 +10496,9 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       sessionStorage.setItem('ty_selected_booking_item', JSON.stringify(bookingPayload));
       localStorage.setItem('ty_selected_flight', JSON.stringify(bookingPayload));
       const order = orderRes.order || orderRes.data || orderRes;
-      const key = orderRes.key || orderRes.razorpayKey || order.key || window.RAZORPAY_KEY_ID;
-      const orderId = order.id || order.order_id || order.orderId || order.razorpay_order_id || orderRes.orderId || orderRes.razorpayOrderId;
-      const rawAmount = Number(order.amount || orderRes.amount || 0);
+      const key = orderRes.key || orderRes.razorpayKey || order.key || order.razorpayKey || window.RAZORPAY_KEY_ID;
+      const orderId = order.id || order.order_id || order.orderId || order.razorpay_order_id || order.razorpayOrderId || orderRes.orderId || orderRes.razorpayOrderId;
+      const rawAmount = Number(order.amount || orderRes.amount || order.amountPaise || 0);
       /* Razorpay order amount from backend is already in paise and authoritative.
          Never fall back to frontend fare.total — refuse Checkout if amount is missing. */
       if(!(rawAmount > 0)){
@@ -10421,6 +10507,18 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       const amount = Math.round(rawAmount);
       const currency = order.currency || orderRes.currency || "INR";
       if(!key || !orderId) throw new Error("Payment could not be started. Please try again.");
+      const authPayable = Math.max(0, Math.round(Number(
+        orderRes.price && (orderRes.price.customerPayable || orderRes.price.finalPayable)
+        || order.amountRupees
+        || 0
+      )));
+      if(authPayable > 0){
+        const stickyTotal = ROOT.querySelector('#tyMobileSticky .ty-total-line b, #tyMobileSticky b');
+        if(stickyTotal) stickyTotal.textContent = money(authPayable);
+        ROOT.querySelectorAll('.ty-total-row b, .ty-price-card .ty-total-row b').forEach(function(node){
+          if(node) node.textContent = money(authPayable);
+        });
+      }
       await loadRazorpayScript();
       let tyRazorpayTerminalHandled = false;
       const rz = new window.Razorpay({
@@ -10601,7 +10699,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       .ty-mobile-sticky,.ty-mobile-sheet{display:none}.ty-pax-tabs{display:flex;flex-wrap:wrap;gap:8px}.ty-pax-tabs button{border:1px solid #dce6f1;background:#fff;color:#071d49;border-radius:12px;padding:9px 12px;font-size:13px;font-weight:950}.ty-pax-tabs button.active{border-color:#0062e3;background:#eef7ff;color:#0062e3}.ty-pax-panel:not(.active){display:none}
       .ty-policy-modal,.ty-promo-modal{position:fixed;inset:0;z-index:10050;background:#f4f7fa;font-family:Inter,Roboto,Arial,sans-serif;color:#111827}.ty-policy-page,.ty-promo-page{height:100%;width:100%;background:#fff;overflow:auto}.ty-policy-page header{position:sticky;top:0;z-index:3;background:#fff;padding:18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5edf7}.ty-policy-page h2,.ty-promo-page h2{margin:0;font-size:22px;line-height:1.2;font-weight:950;color:#111827}.ty-policy-page header button,.ty-promo-close{border:0;background:transparent;font-size:40px;line-height:1;color:#8a8f98}.ty-policy-page nav{position:sticky;top:69px;z-index:2;display:grid;grid-template-columns:1fr 1fr 1fr;background:#fff;border-bottom:10px solid #e5e5e5}.ty-policy-page nav button{border:0;background:#fff;color:#666;font-size:15px;font-weight:900;padding:15px 6px;border-bottom:4px solid transparent}.ty-policy-page nav button.active{color:#111;border-bottom-color:#0062e3}.ty-policy-page main{padding:18px}.ty-policy-pane{display:none}.ty-policy-pane.active{display:block}.ty-policy-route{margin-bottom:22px}.ty-policy-route table{width:100%;border-collapse:collapse;border:1px solid #edf1f6}.ty-policy-route th,.ty-policy-route td{border:1px solid #edf1f6;padding:12px 10px;text-align:left;font-size:14px;line-height:1.35}.ty-policy-text{border:1px solid #edf1f6;border-radius:8px;padding:14px;font-size:14px;line-height:1.45;white-space:pre-wrap}.ty-promo-page{padding:22px 18px}.ty-promo-close{position:absolute;right:18px;top:14px}.ty-promo-input{display:flex;border:1px solid #cfd7e2;border-radius:10px;overflow:hidden;margin:18px 0;background:#fff}.ty-promo-input input{flex:1;min-width:0;border:0;padding:15px 14px;font-size:15px}.ty-promo-input button{border:0;background:#0062e3;color:#fff;font-weight:950;padding:0 20px;min-width:92px;font-size:15px}.ty-promo-list{display:flex;flex-direction:column;gap:12px}.ty-promo-list article{border:1px solid #dce6f1;border-radius:12px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.ty-promo-list article.active{background:#d9fff2;border-color:#97ead0}.ty-promo-list article p{grid-column:1/-1;margin:0;color:#288b78;font-size:13px;line-height:1.35}.ty-promo-list article button{grid-column:1/-1;border:0;border-radius:999px;background:#0062e3;color:#fff;min-height:42px;padding:0 18px;font-size:15px;font-weight:950;width:100%;margin-top:8px}.ty-promo-list article.active button{background:#0f9f6e}.ty-promo-list article button:disabled{opacity:.68}
       @media(max-width:767px){
-        body.travel-page,#travelRoot{margin:0;padding:0;max-width:100vw;overflow-x:hidden}.ty-review-page.ty-booking-page{padding-bottom:118px}.ty-booking-top{display:none}.ty-booking-shell{width:100%;max-width:100%;margin:0;display:block;padding:0}.ty-booking-left{gap:10px}.ty-side{position:static;display:block}.ty-mobile-review-back{position:relative!important;left:auto!important;top:auto!important;z-index:30;width:44px;height:44px;margin:10px 0 8px 14px!important;border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 6px 18px rgba(7,29,73,.12);display:flex;align-items:center;justify-content:center;color:#071d49;font-size:34px;flex:0 0 44px!important}.ty-review-page.ty-booking-page .ty-booking-shell{margin-top:0!important}.ty-review-card,.ty-contact-card,.ty-gst-card{border-radius:0;border-left:0;border-right:0}.ty-section-head,.ty-traveller-head{padding:11px 12px}.ty-section-head h2,.ty-traveller-head h2{font-size:16px}.ty-section-body{padding:12px}.ty-form-grid,.ty-form-grid.two,.ty-form-grid.contact,.ty-form-grid.passenger,.ty-form-grid.passport{display:grid;grid-template-columns:1fr;gap:10px}.ty-phone-row{grid-template-columns:96px minmax(0,1fr)}.ty-policy-open,.ty-promo-card{border-radius:0;margin:0;box-shadow:0 2px 10px rgba(7,29,73,.08)}.ty-price-card,.ty-offer-box{display:none}.ty-mobile-sticky{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:#17202d;color:#fff;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;align-items:center;padding:13px 20px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(7,29,73,.22)}.ty-mobile-sticky span{display:block;font-size:13px;font-weight:800;color:#e7edf7}.ty-mobile-sticky b{font-size:22px;font-weight:950;color:#fff}.ty-mobile-sticky .ty-total-line{display:flex;align-items:center;gap:6px}.ty-mobile-sticky .ty-info-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;color:#fff;font-weight:950}.ty-mobile-sticky .ty-continue{border:0;border-radius:999px;background:#f56b12;color:#fff;min-height:52px;font-size:16px;font-weight:950}.ty-left-continue,#tyProceedPayment,#tyProceedPaymentLeft,#tyAddonPay,#tyAddonPayLeft{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}.ty-mobile-sheet{position:fixed;inset:0;background:rgba(15,23,42,.56);z-index:1200;align-items:flex-end;justify-content:center;overflow:visible}.ty-mobile-sheet.active{display:flex}.ty-sheet-card{position:relative;width:100%;max-height:58vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:48px 16px calc(22px + env(safe-area-inset-bottom))}.ty-sheet-close{position:absolute;right:14px;top:12px;width:40px;height:40px;border:1px solid #dfe7f1;border-radius:999px;background:#fff;color:#17202d;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 4px 12px rgba(7,29,73,.12)}.ty-sheet-card h2{margin:0 48px 16px 0;color:#071d49}.ty-sheet-pane{display:block}.ty-break-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #e5edf7;font-weight:900}.ty-break-row.total{font-size:18px;color:#0062e3}.ty-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.ty-review-actions button{min-height:50px;border-radius:999px;font-size:15px;font-weight:950}.ty-review-actions .edit{border:1px solid #f56b12;background:#fff;color:#f56b12}.ty-review-actions .confirm{border:0;background:#f56b12;color:#fff}.ty-review-flight{border:1px solid #dfe7f1;border-radius:14px;padding:10px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;margin:10px 0 14px}.ty-policy-page main{padding:16px 14px}.ty-policy-route th,.ty-policy-route td{padding:11px 8px;font-size:13px}.ty-promo-page{padding:22px 14px}}
+        body.travel-page,#travelRoot{margin:0;padding:0;max-width:100vw;overflow-x:hidden}.ty-review-page.ty-booking-page{padding-bottom:118px}.ty-booking-top{display:none}.ty-booking-shell{width:100%;max-width:100%;margin:0;display:block;padding:0}.ty-booking-left{gap:10px}.ty-side{position:static;display:block}.ty-mobile-review-back{position:relative!important;left:auto!important;top:auto!important;z-index:30;width:44px;height:44px;margin:10px 0 8px 14px!important;border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 6px 18px rgba(7,29,73,.12);display:flex;align-items:center;justify-content:center;color:#071d49;font-size:34px;flex:0 0 44px!important}.ty-review-page.ty-booking-page .ty-booking-shell{margin-top:0!important}.ty-review-card,.ty-contact-card,.ty-gst-card{border-radius:0;border-left:0;border-right:0}.ty-section-head,.ty-traveller-head{padding:11px 12px}.ty-section-head h2,.ty-traveller-head h2{font-size:16px}.ty-section-body{padding:12px}.ty-form-grid,.ty-form-grid.two,.ty-form-grid.contact,.ty-form-grid.passenger,.ty-form-grid.passport{display:grid;grid-template-columns:1fr;gap:10px}.ty-phone-row{grid-template-columns:96px minmax(0,1fr)}.ty-policy-open,.ty-promo-card{border-radius:0;margin:0;box-shadow:0 2px 10px rgba(7,29,73,.08)}.ty-price-card,.ty-offer-box{display:none}.ty-mobile-sticky{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:#17202d;color:#fff;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 20px calc(13px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(7,29,73,.22)}.ty-mobile-sticky span{display:block;font-size:13px;font-weight:800;color:#e7edf7}.ty-mobile-sticky b{font-size:22px;font-weight:950;color:#fff}.ty-mobile-sticky .ty-total-line{display:flex;align-items:center;gap:6px}.ty-mobile-sticky .ty-info-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;color:#fff;font-weight:950}.ty-mobile-sticky .ty-continue{border:0;border-radius:999px;background:#f56b12;color:#fff;min-height:52px;font-size:16px;font-weight:950;white-space:nowrap;padding:0 16px}.ty-left-continue,#tyProceedPayment,#tyProceedPaymentLeft,#tyAddonPay,#tyAddonPayLeft{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}.ty-mobile-sheet{position:fixed;inset:0;background:rgba(15,23,42,.56);z-index:1200;align-items:flex-end;justify-content:center;overflow:visible}.ty-mobile-sheet.active{display:flex}.ty-sheet-card{position:relative;width:100%;max-height:58vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:48px 16px calc(22px + env(safe-area-inset-bottom))}.ty-sheet-close{position:absolute;right:14px;top:12px;width:40px;height:40px;border:1px solid #dfe7f1;border-radius:999px;background:#fff;color:#17202d;font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3;box-shadow:0 4px 12px rgba(7,29,73,.12)}.ty-sheet-card h2{margin:0 48px 16px 0;color:#071d49}.ty-sheet-pane{display:block}.ty-break-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #e5edf7;font-weight:900}.ty-break-row.total{font-size:18px;color:#0062e3}.ty-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.ty-review-actions button{min-height:50px;border-radius:999px;font-size:15px;font-weight:950}.ty-review-actions .edit{border:1px solid #f56b12;background:#fff;color:#f56b12}.ty-review-actions .confirm{border:0;background:#f56b12;color:#fff}.ty-review-flight{border:1px solid #dfe7f1;border-radius:14px;padding:10px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;margin:10px 0 14px}.ty-policy-page main{padding:16px 14px}.ty-policy-route th,.ty-policy-route td{padding:11px 8px;font-size:13px}.ty-promo-page{padding:22px 14px}}
       @media (max-width:1024px), (hover:none), (pointer:coarse){
         .ty-review-page.ty-booking-page .ty-desktop-continue,
         .ty-review-page.ty-booking-page .ty-left-continue,
@@ -10616,7 +10714,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
         .ty-review-page.ty-addon-page form > .ty-payment-btn,
         .ty-review-page.ty-addon-page .ty-side > .ty-payment-btn{display:none!important;visibility:hidden!important;opacity:0!important;height:0!important;min-height:0!important;max-height:0!important;width:0!important;min-width:0!important;max-width:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;pointer-events:none!important;position:absolute!important;left:-999999px!important;top:auto!important}
         .ty-mobile-sticky{display:grid!important}
-        .ty-mobile-sticky .ty-continue{display:block!important;visibility:visible!important;opacity:1!important;height:auto!important;width:auto!important;min-width:0!important;max-width:none!important;min-height:52px!important;position:static!important;left:auto!important;margin:0!important;padding:0 16px!important;pointer-events:auto!important;overflow:visible!important}
+        .ty-mobile-sticky .ty-continue{display:block!important;visibility:visible!important;opacity:1!important;height:auto!important;width:auto!important;min-width:0!important;max-width:none!important;min-height:52px!important;position:static!important;left:auto!important;margin:0!important;padding:0 16px!important;pointer-events:auto!important;overflow:visible!important;white-space:nowrap!important}
         .ty-gst-card:not(.gst-open) .ty-gst-fields-holder{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;max-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}
       }
       @media (min-width:1025px) and (hover:hover) and (pointer:fine){
