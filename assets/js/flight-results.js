@@ -1310,6 +1310,42 @@
     return Math.max(0, Math.round(supplier + markupAmountForSupplierFare(flight, supplier)));
   }
 
+  /*
+    One authoritative customer fare for card + fare modal + selected payload.
+    Prefer the search/result display amount for the selected fare option.
+    Never re-apply markup with a second rounding path for that same fare
+    (that caused result card ₹3,078 vs modal ₹3,079).
+  */
+  function tyCustomerFareDisplayAmount(flight, fareOption){
+    const cardAmount = Math.max(0, Math.round(Number(tyResultCardFareAmount(flight) || 0) || 0));
+    if(!fareOption) return cardAmount;
+
+    const optionId = String(
+      fareOption.id || fareOption.priceId || fareOption.fareId || fareOption.resultIndex || fareOption.key || ''
+    ).trim();
+    const selectedIds = tyFlightSelectedPriceIds([flight]);
+    if(optionId && selectedIds.size && selectedIds.has(optionId) && cardAmount > 0){
+      return cardAmount;
+    }
+
+    const optionSupplier = Number(fareOption.supplierPrice || 0) || 0;
+    const cardSupplier = Number(supplierPriceFromFlight(flight) || 0) || 0;
+    if(cardAmount > 0 && cardSupplier > 0 && optionSupplier > 0){
+      /* Same supplier total as the result card → same displayed fare. */
+      if(Math.abs(cardSupplier - optionSupplier) < 0.5) return cardAmount;
+      /* Alternate fare option: keep the card's effective markup ratio (no second % round). */
+      return Math.max(0, Math.round(optionSupplier * (cardAmount / cardSupplier)));
+    }
+
+    const existing = Math.max(0, Math.round(Number(fareOption.price || 0) || 0));
+    if(existing > 0) return existing;
+    if(optionSupplier > 0){
+      const recomputed = customerFarePriceForSupplier(flight, optionSupplier);
+      if(recomputed > 0) return recomputed;
+    }
+    return cardAmount;
+  }
+
   function markupDeltaForFlights(flights){
     return (Array.isArray(flights) ? flights : [flights]).filter(Boolean).reduce(function(sum, f){
       const supplier = supplierPriceFromFlight(f);
@@ -1334,12 +1370,17 @@
         const fdAdult = p.fd && (p.fd.ADULT || p.fd.Adult || p.fd.adult) || {};
         const fc = (p.totalFareDetail && p.totalFareDetail.fC) || (fdAdult && fdAdult.fC) || p.fC || {};
         const supplierPrice = Number(fc.TF || p.totalPrice || p.amount || p.price || p.totalFare || 0);
-        const price = customerFarePriceForSupplier(flight, supplierPrice);
+        const rawId = p.id || p.priceId || p.fareId || p.resultIndex || p.key || ('fare-' + idx);
+        const price = tyCustomerFareDisplayAmount(flight, {
+          id: String(rawId),
+          priceId: p.priceId || p.id || '',
+          fareId: p.fareId || '',
+          supplierPrice: supplierPrice
+        });
         if(!price) return;
         const bag = readFareBaggage(p, flight);
         const addOns = readFareAddOns(p);
         const fareType = changeTextValue(p.fareIdentifier || p.ft || p.fareType || p.name || fdAdult.fareIdentifier || flight.fareType) || 'Fare';
-        const rawId = p.id || p.priceId || p.fareId || p.resultIndex || p.key || ('fare-' + idx);
         items.push({
           id: String(rawId),
           price: price,
@@ -1361,7 +1402,7 @@
       const bag = readFareBaggage(flight, flight);
       items.push({
         id:'selected',
-        price:Number(flight.resultDisplayAmount || flight.displayPrice || flight.price || 0),
+        price: tyCustomerFareDisplayAmount(flight),
         supplierPrice:supplierPriceFromFlight(flight),
         fareType: changeTextValue(flight.fareType) || 'Fare',
         refundable: !!flight.refundable,
@@ -1464,8 +1505,8 @@
 
   function selectedFareFlight(flight, fare){
     const out = Object.assign({}, flight);
-    const supplierPrice = Number(fare.supplierPrice || supplierPriceFromFlight(flight) || fare.price || 0) || 0;
-    const customerPrice = Number(fare.price || customerFarePriceForSupplier(flight, supplierPrice) || flight.price || 0) || 0;
+    const supplierPrice = Number(fare.supplierPrice || supplierPriceFromFlight(flight) || 0) || 0;
+    const customerPrice = tyCustomerFareDisplayAmount(flight, fare);
     const oldPb = flightPricingBreakup(flight);
 
     out.price = customerPrice;
