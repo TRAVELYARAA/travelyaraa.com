@@ -10507,12 +10507,14 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       const amount = Math.round(rawAmount);
       const currency = order.currency || orderRes.currency || "INR";
       if(!key || !orderId) throw new Error("Payment could not be started. Please try again.");
-      const authPayable = Math.max(0, Math.round(Number(
-        orderRes.price && (orderRes.price.customerPayable || orderRes.price.finalPayable)
-        || order.amountRupees
-        || 0
-      )));
+      /* Authoritative payable = Razorpay paise / 100 (whole rupees after backend canonicalize).
+         Keep sticky/side Grand Total identical to checkout — never leave a ₹1 display drift. */
+      const authPayable = Math.max(0, Math.round(amount / 100));
       if(authPayable > 0){
+        if(fare && typeof fare === 'object') fare.total = authPayable;
+        if(bookingPayload.fare && typeof bookingPayload.fare === 'object') bookingPayload.fare.total = authPayable;
+        bookingPayload.amount = authPayable;
+        bookingPayload.totalAmount = authPayable;
         const stickyTotal = ROOT.querySelector('#tyMobileSticky .ty-total-line b, #tyMobileSticky b');
         if(stickyTotal) stickyTotal.textContent = money(authPayable);
         ROOT.querySelectorAll('.ty-total-row b, .ty-price-card .ty-total-row b').forEach(function(node){
