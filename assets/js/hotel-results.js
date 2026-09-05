@@ -5236,7 +5236,81 @@ function tyhResumePendingPaymentContext(){
   }catch(e){}
 }
 async function loadStatusById(id){ try{ showLoader('',true); const res=await apiGet('/api/bookings/'+encodeURIComponent(id)+'/status'); save(KEY.status,res); renderStatus(res.booking||res.data||res,res); }catch(e){ renderStatus({bookingId:id, bookingStatus:'PENDING', error:e.message},{success:false,message:e.message}); }finally{ hideLoader(); } }
-function statusLabel(b){ const s=String(b.bookingStatus||b.status||b.orderStatus||'PENDING').toUpperCase(); if(s.includes('SUCCESS')||s.includes('CONFIRM')) return ['Booking confirmed','confirmed']; if(s.includes('FAIL')||s.includes('ABORT')) return ['Booking failed','failed']; if(s.includes('CANCEL')) return ['Booking cancelled','cancelled']; if(s.includes('HOLD')) return ['Booking on hold','pending']; return ['Booking pending','pending']; }
+function statusLabel(b){
+  const kind=hotelDetailKind(b);
+  if(kind==='completed') return ['Booking completed','completed'];
+  if(kind==='upcoming') return ['Upcoming stay','confirmed'];
+  if(kind==='cancelled') return ['Booking cancelled','cancelled'];
+  if(kind==='failed_paid'||kind==='failed_unpaid') return ['Booking unsuccessful','failed'];
+  if(kind==='pending_paid') return ['Payment received','pending'];
+  return ['Booking pending','pending'];
+}
+function hotelPaymentPaid(b){
+  const p=String((b&&b.paymentStatus)||'').toUpperCase();
+  return /SUCCESS|PAID|CAPTURED|COMPLETE/.test(p);
+}
+function hotelStayCompleted(b){
+  const dates=hotelCheckDates(b);
+  if(!dates.checkOut) return false;
+  try{
+    const out=new Date(dates.checkOut);
+    if(Number.isNaN(out.getTime())) return false;
+    const today=new Date(); today.setHours(0,0,0,0);
+    return out < today;
+  }catch(e){ return false; }
+}
+function hotelDetailKind(b){
+  b=b||{};
+  const s=String(b.bookingStatus||b.status||b.orderStatus||'PENDING').toUpperCase();
+  const paid=hotelPaymentPaid(b);
+  const ref=!!hotelReferenceFromStatus(b);
+  if(/CANCEL/.test(s)) return 'cancelled';
+  if(/FAIL|ABORT|ERROR|UNSUCCESS|REFUND_REQUIRED|SUPPLIER_BOOKING_FAILED/.test(s)) return paid ? 'failed_paid' : 'failed_unpaid';
+  if((/SUCCESS|CONFIRM/.test(s) || ref) && hotelStayCompleted(b)) return 'completed';
+  if(/SUCCESS|CONFIRM/.test(s) || ref) return 'upcoming';
+  if(paid) return 'pending_paid';
+  return 'pending';
+}
+function hotelLatLng(b){
+  const h=hotelStatusHInfo(b)||{};
+  const gl=h.gl||h.geo||h.location||{};
+  const lat=Number(h.lt||h.lat||h.latitude||gl.lt||gl.lat||gl.latitude||0);
+  const lng=Number(h.ln||h.lng||h.lon||h.longitude||gl.ln||gl.lng||gl.lon||gl.longitude||0);
+  if(Number.isFinite(lat)&&Number.isFinite(lng)&&lat&&lng) return {lat,lng};
+  return null;
+}
+function hotelMapUrl(b){
+  const ll=hotelLatLng(b);
+  if(ll) return 'https://www.openstreetmap.org/?mlat='+encodeURIComponent(ll.lat)+'&mlon='+encodeURIComponent(ll.lng)+'#map=16/'+encodeURIComponent(ll.lat)+'/'+encodeURIComponent(ll.lng);
+  const addr=addressFromHotel(hotelStatusHInfo(b));
+  if(addr) return 'https://www.openstreetmap.org/search?query='+encodeURIComponent(addr);
+  return '';
+}
+function hotelAuthPrice(b){
+  const p=(b&&b.price)||{};
+  const order=hotelOrderInfo(b)||{};
+  return {
+    room: Math.max(0, Math.round(Number(p.ticketAmount||p.resultDisplayAmount||p.displayPrice||0)||0)),
+    fees: Math.max(0, Math.round(Number(p.convenienceFee||0)||0)),
+    discount: Math.max(0, Math.round(Number(p.offerDiscount||p.discount||0)||0)),
+    total: Math.max(0, Math.round(Number(p.customerPayable||p.finalPayableAmount||b.amount||b.totalAmount||order.amount||0)||0))
+  };
+}
+function hotelBedText(room){
+  const b=room&&(room.bedType||room.beds||room.bt||room.bed)||'';
+  if(!b) return '';
+  if(typeof b==='string') return b;
+  if(Array.isArray(b)) return b.map(x=>typeof x==='object'?(x.name||x.type||x.desc||''):String(x)).filter(Boolean).join(', ');
+  return String(b.name||b.type||b.desc||'');
+}
+function hotelSpecialRequests(b){
+  const d=(b&&b.details)||{};
+  return firstVal(d.specialRequests,d.specialRequest,d.remarks,d.guestRequest,d.requestNotes,'');
+}
+function hotelCanCancel(b){ return hotelDetailKind(b)==='upcoming' && !!hotelReferenceFromStatus(b); }
+function hotelCanShowVoucher(b){ const k=hotelDetailKind(b); return (k==='upcoming'||k==='completed') && !!hotelReferenceFromStatus(b); }
+function hotelCanShowReceipt(b){ return hotelPaymentPaid(b); }
+function hotelCanResendConfirm(b){ return hotelCanShowVoucher(b); }
 
 function firstVal(){
   for(const v of arguments){
@@ -5312,10 +5386,11 @@ function hotelRoomInfos(b){
         id:ri.id || op.id || ('room_'+rooms.length),
         name:firstVal(ri.rc, ri.rt, ri.srn, 'Selected room'),
         roomType:firstVal(ri.rt, ri.rc, ri.srn, ''),
-        meal:firstVal(ri.mb, op.mb, option().mealBasis, 'As selected'),
+        meal:firstVal(ri.mb, op.mb, option().mealBasis, ''),
+        bedType:firstVal(ri.bt, ri.bedType, ri.bed, op.bt, op.bedType, ''),
         adults:firstVal(ri.adt, ''),
         children:firstVal(ri.chd, ''),
-        price:n(ri.tfcs?.TF) || n(ri.tp) || n(op.tp),
+        price:Number(ri.tfcs?.TF||ri.tp||op.tp||0)||0,
         currency:firstVal(op.sc, 'INR'),
         refundable: cnp.ifra===true ? 'Refundable' : (cnp.inra===true ? 'Non-refundable' : ''),
         deadline:firstVal(ri.ddt, op.ddt, ''),
@@ -5405,15 +5480,50 @@ function hotelContactHtml(b){
   return '<div class="tyh-kv"><span>Email</span><b>'+esc(email||'Pending')+'</b></div>'
     +'<div class="tyh-kv"><span>Phone</span><b>'+esc(phone||'Pending')+'</b></div>';
 }
+function hotelPaymentStatusLabel(b){
+  const p=String((b&&b.paymentStatus)||'').toUpperCase();
+  if(/SUCCESS|PAID|CAPTURED|COMPLETE/.test(p)) return 'Paid';
+  if(/FAIL|ABORT|ERROR|DECLIN/.test(p)) return 'Not completed';
+  if(/REFUND/.test(p)) return 'Refunded';
+  if(/PENDING|CREATED|INIT/.test(p)) return 'Pending';
+  return paidFriendlyFallback(b);
+}
+function paidFriendlyFallback(b){
+  return hotelPaymentPaid(b)?'Paid':'Pending';
+}
+function hotelRefundNote(b){
+  const refund=firstVal(
+    b.refundAmount,b.refundStatus,b.refundDate,
+    b.payment&&b.payment.refundAmount,b.payment&&b.payment.refundStatus,
+    deepFind(b,['refundAmount','refundStatus','refundDate'])
+  );
+  if(refund){
+    const amount=Number(b.refundAmount||(b.payment&&b.payment.refundAmount)||0);
+    const status=firstVal(b.refundStatus,b.payment&&b.payment.refundStatus,'');
+    const when=firstVal(b.refundDate,b.payment&&b.payment.refundDate,'');
+    const bits=[];
+    if(amount>0) bits.push(money(amount));
+    if(status) bits.push(String(status));
+    if(when) bits.push(fmtDate(when));
+    return bits.length?bits.join(' • '):'Refund details are not available yet.';
+  }
+  return 'Refund details are not available yet.';
+}
 function hotelPaymentHtml(b){
-  const order=hotelOrderInfo(b), h=hotelStatusHInfo(b), rooms=hotelRoomInfos(b);
-  const roomTotal=rooms.reduce((a,r)=>a+n(r.price),0);
-  const paid=n(order.amount) || n(b.amount) || n(b.totalAmount) || n(b.price&&b.price.customerPayable) || totalAmount();
-  const currency=firstVal(order.currency, arr(h.ops)[0]?.sc, 'INR');
-  return '<div class="tyh-kv"><span>Room total</span><b>'+money(roomTotal||paid)+'</b></div>'
-    +'<div class="tyh-kv"><span>Payment status</span><b>'+esc(b.paymentStatus||'Pending')+'</b></div>'
-    +'<div class="tyh-kv"><span>Currency</span><b>'+esc(currency)+'</b></div>'
-    +'<div class="tyh-kv total"><span>Total paid</span><b>'+money(paid)+'</b></div>';
+  const auth=hotelAuthPrice(b);
+  const paid=hotelPaymentPaid(b);
+  const method=firstVal(b.payment&&b.payment.method, b.paymentMethod, b.payment&&b.payment.cardNetwork, '');
+  const methodSafe=/razorpay|tripjack|supplier|provider|gateway/i.test(String(method))?'':method;
+  let html='';
+  if(auth.room) html+='<div class="tyh-kv"><span>Room charge</span><b>'+money(auth.room)+'</b></div>';
+  if(auth.fees) html+='<div class="tyh-kv"><span>Taxes and fees</span><b>'+money(auth.fees)+'</b></div>';
+  if(auth.discount) html+='<div class="tyh-kv tyh-discount"><span>Discount</span><b>- '+money(auth.discount)+'</b></div>';
+  html+='<div class="tyh-kv"><span>'+(paid?'Paid amount':'Amount due')+'</span><b>'+money(auth.total)+'</b></div>';
+  html+='<div class="tyh-kv"><span>Payment status</span><b>'+esc(hotelPaymentStatusLabel(b))+'</b></div>';
+  if(methodSafe) html+='<div class="tyh-kv"><span>Payment method</span><b>'+esc(methodSafe)+'</b></div>';
+  html+='<div class="tyh-kv total"><span>Total charge</span><b>'+money(auth.total)+'</b></div>';
+  html+='<p class="tyh-bd-note">Includes taxes and fees where applicable.</p>';
+  return html;
 }
 function hotelStatusCardHtml(b){
   const h=hotelStatusHInfo(b), info=parseJsonMaybe(h.des);
@@ -5447,64 +5557,251 @@ function hotelReferenceFromStatus(b){
 function renderStatus(b, raw){
   b=b||{};
   const lab=statusLabel(b);
+  const kind=hotelDetailKind(b);
   const id=b.bookingId||b.id||b.travelYaraaBookingId||'';
   const reference=hotelReferenceFromStatus(b);
-  const isConfirmed=lab[1]==='confirmed' && !!reference;
-  const statusNote=isConfirmed
-    ? 'Your hotel booking is confirmed. Please carry valid ID proof at check-in.'
-    : lab[1]==='failed'
-      ? 'This hotel reservation could not be completed. Any eligible reversal or refund will follow the payment and hotel policy.'
-      : lab[1]==='cancelled'
-        ? 'This hotel booking is cancelled. Refund details will appear when they are received from the payment and hotel systems.'
-        : 'The hotel booking is being confirmed. Open this page again for the latest status.';
-  let content='<main class="tyh-status tyh-hotel-status-page">'
-    +'<section class="tyh-confirm '+lab[1]+'"><div><h2>'+esc(lab[0])+'</h2><p>'+esc(statusNote)+'</p></div><span>'+esc(lab[0])+'</span></section>'
-    +hotelStatusCardHtml(b);
-  if(isConfirmed){
-    content+='<section class="tyh-panel"><h2>Booking reference</h2>'
-      +'<div class="tyh-kv"><span>Booking ID</span><b>'+esc(id)+'</b></div>'
-      +'<div class="tyh-kv"><span>Hotel reference</span><b>'+esc(reference)+'</b></div>'
-      +'</section>'
-      +'<section class="tyh-panel"><h2>Room details</h2>'+hotelRoomsHtml(b)+'</section>'
-      +'<section class="tyh-panel"><h2>Guest details</h2>'+statusGuests(b).join('')
-        +'<div class="tyh-kv"><span>Nationality</span><b>'+esc(countryNameFromIso((b.details&&b.details.nationality)||(b.search&&b.search.nationality)||draft().nationality||searchNationality()))+'</b></div>'
-        +'<div class="tyh-kv"><span>Country of Residence</span><b>'+esc(countryNameFromIso((b.details&&(b.details.countryOfResidence||b.details.residenceCountry))||(b.search&&(b.search.countryOfResidence||b.search.residenceCountry))||draft().countryOfResidence||searchResidenceCountry()))+'</b></div>'
-      +'</section>'
-      +'<section class="tyh-panel"><h2>Contact details</h2>'+hotelContactHtml(b)+'</section>'
-      +'<section class="tyh-panel"><h2>Payment summary</h2>'+hotelPaymentHtml(b)+'</section>'
-      +'<section class="tyh-panel"><h2>Hotel policy</h2>'+hotelPolicyHtml(b)+'</section>'
-      +'<section class="tyh-actions tyh-status-actions">'
-        +'<button data-download="/api/bookings/'+attr(id)+'/ticket">Download voucher</button>'
-        +'<button data-download="/api/bookings/'+attr(id)+'/receipt">Download receipt</button>'
-        +'<button data-action="email">Resend email</button>'
-        +'<button data-action="refresh">Refresh status</button>'
-        +'<button data-action="cancel">Cancel / refund</button>'
-        +'<button data-action="change">Request stay change</button>'
-        +'<button data-action="support">Contact support</button>'
-        +'<button data-action="new">New booking</button>'
-      +'</section>';
+  const dates=hotelCheckDates(b);
+  const h=hotelStatusHInfo(b);
+  const mapUrl=hotelMapUrl(b);
+  const img=imageOf(h)||imageOf(hotel());
+  const stars=Math.max(0,Math.min(5,Math.round(Number(h.rt||h.star||hotel().star||0))));
+  const guests=hotelGuestsFromStatus(b);
+  const lead=guests[0]||{};
+  const adultCount=guests.filter(g=>/ADT|ADULT/i.test(String(g.pt||g.type||'ADT'))).length || guests.length || 1;
+  const childCount=guests.filter(g=>/CHD|CHILD/i.test(String(g.pt||g.type||''))).length;
+  const rooms=hotelRoomInfos(b);
+  const special=hotelSpecialRequests(b);
+  const paid=hotelPaymentPaid(b);
+  const canVoucher=hotelCanShowVoucher(b);
+  const canReceipt=hotelCanShowReceipt(b);
+  const canCancel=hotelCanCancel(b);
+  const canConfirm=hotelCanResendConfirm(b);
+
+  let statusTitle=lab[0];
+  let statusNote='';
+  if(kind==='upcoming'){
+    statusTitle='Booking confirmed';
+    statusNote='Your hotel stay is confirmed. Please carry a valid photo ID at check-in.';
+  }else if(kind==='completed'){
+    statusTitle='Booking completed';
+    statusNote='This stay is completed. You can book again or download available documents below.';
+  }else if(kind==='cancelled'){
+    statusTitle='Booking cancelled';
+    statusNote='This hotel booking is cancelled. Refund details appear only when available from payment records.';
+  }else if(kind==='failed_unpaid'){
+    statusTitle='Booking unsuccessful';
+    statusNote='Payment was not completed for this booking.';
+  }else if(kind==='failed_paid'){
+    statusTitle='Booking unsuccessful';
+    statusNote='Payment was completed, but the hotel booking could not be confirmed.';
+  }else if(kind==='pending_paid'){
+    statusTitle='Payment received';
+    statusNote='Payment was received. Hotel confirmation is still being updated.';
   }else{
-    content+='<section class="tyh-actions tyh-status-actions"><button data-action="new">New booking</button></section>';
+    statusNote='The hotel booking is being updated. Refresh this page for the latest status.';
   }
-  content+='</main>';
-  shell(content,{title:'Booking status',sub:'Hotel booking',status:lab[0]});
+
+  const alertHtml = kind==='failed_unpaid'
+    ? '<div class="tyh-bd-alert fail"><p>Payment was not completed for this booking.</p><p>No amount has been charged.</p><p>You can start a new booking whenever you are ready.</p></div>'
+    : kind==='failed_paid'
+      ? '<div class="tyh-bd-alert warn"><p>Payment was completed, but the hotel booking could not be confirmed.</p><p>Your payment receipt is available below.</p><p>Our support team can help you with the next step.</p></div>'
+      : kind==='cancelled'
+        ? '<div class="tyh-bd-alert cancel"><p>This booking was cancelled.</p><p>'+esc(hotelRefundNote(b))+'</p></div>'
+        : '';
+
+  const propertyPane =
+    '<div class="tyh-bd-pane active" data-bd-pane="property">'
+      +'<section class="tyh-bd-card tyh-bd-status '+esc(lab[1])+'">'
+        +'<div class="tyh-bd-status-band">'+esc(statusTitle)+'</div>'
+        +'<div class="tyh-bd-status-body">'
+          +'<h2>'+esc(statusTitle)+'</h2>'
+          +'<p>'+esc(statusNote)+'</p>'
+          +'<div class="tyh-bd-booking-id"><span>Booking ID: '+esc(id)+'</span>'+(id?'<button type="button" class="tyh-bd-copy" data-copy-id="'+attr(id)+'" aria-label="Copy booking ID"></button>':'')+'</div>'
+          +(reference?'<p class="tyh-bd-ref">Hotel confirmation: '+esc(reference)+'</p>':'')
+          +alertHtml
+          +'<div class="tyh-bd-inline-actions">'
+            +(kind==='completed'?'<button type="button" class="tyh-bd-btn primary" data-action="book-again">Book again</button>':'')
+            +(kind==='failed_unpaid'||kind==='failed_paid'||kind==='pending'?'<button type="button" class="tyh-bd-btn primary" data-action="new">New booking</button>':'')
+            +'<button type="button" class="tyh-bd-btn ghost" data-action="my-bookings">My Bookings</button>'
+            +(kind==='pending'||kind==='pending_paid'?'<button type="button" class="tyh-bd-btn ghost" data-action="refresh">Refresh status</button>':'')
+          +'</div>'
+        +'</div>'
+      +'</section>'
+      +'<section class="tyh-bd-card">'
+        +'<div class="tyh-bd-hero">'+(img?'<img src="'+attr(img)+'" alt="'+attr(hotelNameFromStatus(b))+'">':'<div class="tyh-bd-hero-fallback" aria-hidden="true"><span>TravelYaraa</span></div>')+'</div>'
+        +'<div class="tyh-bd-prop">'
+          +'<h3>'+esc(hotelNameFromStatus(b))+'</h3>'
+          +(stars?'<div class="tyh-bd-stars" aria-label="'+stars+' star">'+('★'.repeat(stars))+('☆'.repeat(5-stars))+'</div>':'')
+          +'<p class="tyh-bd-address">'+esc(addressFromHotel(h)||'Address will appear when available for this booking.')+'</p>'
+          +(mapUrl?'<a class="tyh-bd-link" href="'+attr(mapUrl)+'" target="_blank" rel="noopener noreferrer">View on map</a>':'')
+          +'<div class="tyh-bd-dates">'
+            +'<div><small>Check-in</small><b>'+esc(dates.checkIn?fmtDate(dates.checkIn):'Pending')+'</b></div>'
+            +'<span class="tyh-bd-nights">'+esc((dates.nights||1)+' night'+(Number(dates.nights||1)===1?'':'s'))+'</span>'
+            +'<div class="right"><small>Check-out</small><b>'+esc(dates.checkOut?fmtDate(dates.checkOut):'Pending')+'</b></div>'
+          +'</div>'
+          +(canConfirm?'<button type="button" class="tyh-bd-link-btn" data-action="confirm-email">Get booking confirmation</button>':'')
+        +'</div>'
+      +'</section>'
+      +'<section class="tyh-bd-help">'
+        +'<div><h3>Need help?</h3><p>Get quick answers, contact info, and more for this booking.</p>'
+        +'<button type="button" class="tyh-bd-btn light" data-action="support">Contact TravelYaraa Support</button></div>'
+      +'</section>'
+    +'</div>';
+
+  const roomPane =
+    '<div class="tyh-bd-pane" data-bd-pane="room">'
+      +'<section class="tyh-bd-card"><h3>Room information</h3>'
+      +(rooms.length?rooms.map(function(r,i){
+          const bed=hotelBedText(r);
+          const guestLine=[r.adults?r.adults+' adult'+(Number(r.adults)===1?'':'s'):'', r.children?r.children+' child'+(Number(r.children)===1?'':'ren'):''].filter(Boolean).join(', ');
+          const benefits=[];
+          if(r.meal) benefits.push(r.meal);
+          if(r.refundable) benefits.push(r.refundable);
+          const chipHtml=hotelRoomBenefitsHtml(r);
+          const roomImg=img||'';
+          return '<article class="tyh-bd-room">'
+            +'<div class="tyh-bd-room-main">'
+              +(roomImg?'<div class="tyh-bd-room-thumb"><img src="'+attr(roomImg)+'" alt="" loading="lazy"></div>':'<div class="tyh-bd-room-thumb" aria-hidden="true"></div>')
+              +'<div><b>'+esc((rooms.length>1?(i+1)+' × ':'')+r.name)+'</b>'
+              +(bed?'<p>'+esc(bed)+'</p>':'')
+              +(guestLine?'<p>'+esc(guestLine)+'</p>':'')
+              +'</div>'
+            +'</div>'
+            +(benefits.length||chipHtml?'<div class="tyh-bd-benefits"><small>Benefits</small>'+(benefits.length?'<p>'+esc(benefits.join(', '))+'</p>':'')+chipHtml+'</div>':'')
+          +'</article>';
+        }).join(''):'<p class="tyh-bd-empty">Room details are not available yet.</p>')
+      +(special?'<div class="tyh-bd-special"><small>Special requests</small><p>'+esc(special)+'</p></div>':'')
+      +'</section>'
+    +'</div>';
+
+  const guestPane =
+    '<div class="tyh-bd-pane" data-bd-pane="guest">'
+      +'<section class="tyh-bd-card"><h3>Guest information</h3>'
+      +'<div class="tyh-kv"><span>Lead guest</span><b>'+esc(guestName(lead))+'</b></div>'
+      +'<div class="tyh-kv"><span>Booked capacity</span><b>'+esc([adultCount?adultCount+' adult'+(adultCount===1?'':'s'):'', childCount?childCount+' child'+(childCount===1?'':'ren'):''].filter(Boolean).join(', ')||'As booked')+'</b></div>'
+      +(guests.length>1?guests.slice(1).map(function(g,i){ return '<div class="tyh-kv"><span>Guest '+(i+2)+'</span><b>'+esc(guestName(g))+'</b></div>'; }).join(''):'')
+      +hotelContactHtml(b)
+      +'</section>'
+    +'</div>';
+
+  const roomsPolicy=hotelPolicyHtml(b);
+  const cancelPane =
+    '<div class="tyh-bd-pane" data-bd-pane="cancel">'
+      +'<section class="tyh-bd-card"><h3>Cancellation policy</h3>'
+      +(kind==='cancelled'?'<div class="tyh-bd-policy-alert bad"><b>This booking is cancelled</b><p>'+esc(hotelRefundNote(b))+'</p></div>':'')
+      +(kind==='failed_paid'?'<div class="tyh-bd-policy-alert warn"><b>Hotel confirmation was not completed</b><p>Use payment receipt and TravelYaraa Support for the next step.</p></div>':'')
+      +(kind==='failed_unpaid'?'<div class="tyh-bd-policy-alert bad"><b>No payment was completed</b><p>There is nothing to cancel for this booking.</p></div>':'')
+      +roomsPolicy
+      +(canCancel?'<button type="button" class="tyh-bd-btn danger" data-action="cancel">Cancel booking</button>':'')
+      +'</section>'
+    +'</div>';
+
+  const paymentPane =
+    '<div class="tyh-bd-pane" data-bd-pane="payment">'
+      +'<section class="tyh-bd-card"><h3>Payment information</h3>'
+      +hotelPaymentHtml(b)
+      +'<div class="tyh-bd-doc-actions">'
+        +(canReceipt?'<button type="button" class="tyh-bd-link-btn" data-download="/api/bookings/'+attr(id)+'/receipt">Download receipt</button>':'')
+        +(canVoucher?'<button type="button" class="tyh-bd-link-btn" data-download="/api/bookings/'+attr(id)+'/ticket">Download hotel voucher</button>':'')
+        +(canReceipt?'<button type="button" class="tyh-bd-link-btn" data-action="send-receipt">Send e-receipt by email</button>':'')
+      +'</div>'
+      +(!canReceipt&&!canVoucher?'<p class="tyh-bd-empty">Payment documents are available after a successful payment.</p>':'')
+      +'</section>'
+    +'</div>';
+
+  const tabs=[
+    ['property','Property Info'],
+    ['room','Room Info'],
+    ['guest','Guest Info'],
+    ['cancel','Cancellation Policy'],
+    ['payment','Payment Info']
+  ];
+
+  const content='<main class="tyh-bd-page tyh-hotel-status-page">'
+    +'<nav class="tyh-bd-tabs" role="tablist">'
+      +tabs.map(function(t,i){ return '<button type="button" role="tab" class="'+(i===0?'active':'')+'" data-bd-tab="'+attr(t[0])+'">'+esc(t[1])+'</button>'; }).join('')
+    +'</nav>'
+    +'<div class="tyh-bd-layout">'
+      +'<div class="tyh-bd-main">'+propertyPane+roomPane+guestPane+cancelPane+paymentPane+'</div>'
+      +'<aside class="tyh-bd-side">'
+        +'<section class="tyh-bd-card tyh-bd-side-summary">'
+          +'<h3>Stay summary</h3>'
+          +'<p><b>'+esc(hotelNameFromStatus(b))+'</b></p>'
+          +'<p>'+esc((dates.checkIn?fmtDate(dates.checkIn):'Pending')+' → '+(dates.checkOut?fmtDate(dates.checkOut):'Pending'))+'</p>'
+          +'<p>Booking ID: '+esc(id)+'</p>'
+          +'<p class="tyh-bd-side-total">'+money(hotelAuthPrice(b).total)+'</p>'
+          +(canConfirm?'<button type="button" class="tyh-bd-btn primary" data-action="confirm-email">Get confirmation</button>':'')
+          +'<button type="button" class="tyh-bd-btn ghost" data-action="support">Contact support</button>'
+        +'</section>'
+      +'</aside>'
+    +'</div>'
+    +'<div class="tyh-bd-modal" id="tyhConfirmModal" hidden>'
+      +'<div class="tyh-bd-modal-card">'
+        +'<button type="button" class="tyh-bd-modal-close" data-close-confirm aria-label="Close">×</button>'
+        +'<h3>Get booking confirmation</h3>'
+        +'<label class="tyh-bd-field"><span>Email</span><input type="email" id="tyhConfirmEmail" value="'+attr(firstVal((b.details&&b.details.contact&&b.details.contact.email),b.details&&b.details.email,b.user&&b.user.email,''))+'" autocomplete="email"></label>'
+        +'<button type="button" class="tyh-bd-btn primary" data-action="email">Send to email</button>'
+      +'</div>'
+    +'</div>'
+  +'</main>';
+
+  shell(content,{title:'Booking Detail',sub:'Hotel booking',status:statusTitle,hideLogo:true});
   bindStatus(id,b);
 }
+function bindStatus(id,b){
+  qa('[data-back]',root).forEach(function(btn){ btn.onclick=function(){ location.href='/my-bookings.html'; }; });
+  qa('[data-bd-tab]',root).forEach(function(tab){
+    tab.onclick=function(){
+      const key=tab.getAttribute('data-bd-tab');
+      qa('[data-bd-tab]',root).forEach(function(t){ t.classList.toggle('active', t===tab); });
+      qa('[data-bd-pane]',root).forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-bd-pane')===key); });
+    };
+  });
+  qa('[data-download]',root).forEach(function(x){ x.onclick=function(){ if(!x.disabled) downloadStatusFile(x.dataset.download); }; });
+  qa('[data-action]',root).forEach(function(x){ x.onclick=function(){ action(id, x.dataset.action); }; });
+  qa('[data-copy-id]',root).forEach(function(btn){
+    btn.onclick=async function(){
+      const value=btn.getAttribute('data-copy-id')||'';
+      try{ await navigator.clipboard.writeText(value); }catch(_e){}
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.classList.remove('copied'); }, 900);
+    };
+  });
+  const modal=q('#tyhConfirmModal',root);
+  qa('[data-close-confirm]',root).forEach(function(btn){
+    btn.onclick=function(){ if(modal) modal.hidden=true; };
+  });
+  if(modal){
+    modal.addEventListener('click', function(e){ if(e.target===modal) modal.hidden=true; });
+  }
+}
+
 async function action(id, type){
   try{
-    if(type==='new'){ location.href='/index.html?service=hotel'; return; }
+    if(type==='new' || type==='book-again'){ location.href='/index.html?service=hotel'; return; }
+    if(type==='my-bookings'){ location.href='/my-bookings.html'; return; }
     if(type==='refresh') return loadStatusById(id);
-    if(type==='email'){
-      const r=await api('/api/bookings/'+encodeURIComponent(id)+'/resend-email',{});
+    if(type==='confirm-email'){
+      const modal=q('#tyhConfirmModal',root);
+      if(modal) modal.hidden=false;
+      return;
+    }
+    if(type==='email' || type==='send-receipt'){
+      const emailInput=q('#tyhConfirmEmail',root);
+      const body={};
+      if(emailInput && String(emailInput.value||'').trim()) body.email=String(emailInput.value||'').trim();
+      const r=await api('/api/bookings/'+encodeURIComponent(id)+'/resend-email', body);
       alert(r.message||'Email sent.');
+      const modal=q('#tyhConfirmModal',root);
+      if(modal) modal.hidden=true;
       return;
     }
     if(type==='cancel'){
       if(!confirm('Check the hotel cancellation charges and continue with the cancellation request?')) return;
-      const quote=await api('/api/bookings/'+encodeURIComponent(id)+'/cancel',{confirm:false,service:'hotel',reason:'Customer requested hotel cancellation/refund from Booking Status Page'});
+      const quote=await api('/api/bookings/'+encodeURIComponent(id)+'/cancel',{confirm:false,service:'hotel',reason:'Customer requested hotel cancellation from Booking Detail'});
       const summary=quote.message||'Cancellation charges were checked.';
       if(!confirm(summary+' Submit the cancellation request now?')) return;
-      const r=await api('/api/bookings/'+encodeURIComponent(id)+'/cancel',{confirm:true,service:'hotel',reason:'Customer confirmed hotel cancellation/refund from Booking Status Page'});
+      const r=await api('/api/bookings/'+encodeURIComponent(id)+'/cancel',{confirm:true,service:'hotel',reason:'Customer confirmed hotel cancellation from Booking Detail'});
       alert(r.message||'Cancellation request submitted.');
       if(r.booking) renderStatus(r.booking,r);
       return;
@@ -5518,7 +5815,7 @@ async function action(id, type){
       return;
     }
     if(type==='support'){ location.href='/customer-support.html?bookingId='+encodeURIComponent(id); }
-  }catch(e){ alert(e.message||'Action failed. Please try again.'); }
+  }catch(e){ alert(friendlyError(e)||e.message||'Action failed. Please try again.'); }
 }
 async function downloadStatusFile(path){
   try{
@@ -5532,12 +5829,9 @@ async function downloadStatusFile(path){
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);
   }catch(e){alert(e.message||'Document could not be downloaded.');}finally{hideLoader();}
 }
-function bindStatus(id,b){
-  qa('[data-download]',root).forEach(x=>x.onclick=()=>{if(!x.disabled)downloadStatusFile(x.dataset.download);});
-  qa('[data-action]',root).forEach(x=>x.onclick=()=>action(id,x.dataset.action));
-}
 
 function init(){
+  if(window.__tyhSkipHotelInit) return;
   if(window.__tyhResultsInit) return;
   window.__tyhResultsInit=true;
   tyhResumePendingPaymentContext();
@@ -5723,7 +6017,102 @@ function css(){ return `
 .tyh-rate-side strong,.tyh-rate-side em{text-align:left}
 .tyh-rate-side .tyh-cta{width:100%}
 }.tyh-book,.tyh-status{max-width:920px;margin:14px auto;padding:0 14px;display:grid;gap:14px}.tyh-summary-card,.tyh-panel,.tyh-actions,.tyh-confirm{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}.tyh-mini{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center}.tyh-mini-img{height:115px;border-radius:14px;background:#eef6ff;display:grid;place-items:center;overflow:hidden;color:var(--ty-blue);font-size:40px;font-weight:900}.tyh-mini-img img{width:100%;height:100%;object-fit:cover}.tyh-mini h2{margin:0 0 6px;color:var(--ty-navy);font-size:21px;line-height:1.25}.tyh-mini p{margin:0;color:var(--ty-muted);font-size:13px;line-height:1.35}.tyh-room-name{margin-top:8px!important;color:#344054!important;font-weight:800}.tyh-panel h2{margin:0 0 12px;color:var(--ty-navy);font-size:18px}.tyh-panel h2 small{font-size:12px;color:var(--ty-muted);font-weight:700}.tyh-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.tyh-tabs button{border:1px solid var(--ty-line);background:#fff;color:var(--ty-navy);border-radius:999px;padding:9px 12px;font-size:13px;font-weight:900;white-space:nowrap}.tyh-tabs button.active{border-color:var(--ty-blue);background:#eef6ff;color:var(--ty-blue)}.tyh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tyh-form-grid label{font-size:12px;color:#344054;font-weight:850;display:flex;flex-direction:column;align-items:stretch;gap:6px}.tyh-form-grid input,.tyh-form-grid select{height:44px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px;font-size:14px;background:#fff;color:#101828}.tyh-check{display:flex!important;align-items:flex-start;gap:10px;color:#344054;font-size:13px;font-weight:750;line-height:1.4}.tyh-kv,.tyh-guest-row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #eef2f7;padding:11px 0;align-items:center}.tyh-kv:first-of-type,.tyh-guest-row:first-of-type{border-top:0}.tyh-kv span,.tyh-guest-row span{color:var(--ty-muted);font-size:13px;font-weight:750}.tyh-kv b,.tyh-guest-row b{color:#101828;text-align:right;font-size:14px}.tyh-kv.total b{font-size:21px;color:var(--ty-blue)}.tyh-policy-actions{display:flex;gap:8px;flex-wrap:wrap}.tyh-policy-actions button{border:1px solid var(--ty-line);background:#fff;border-radius:999px;color:var(--ty-blue);font-weight:900;padding:9px 12px}.tyh-policy-box{margin-top:12px;background:#f8fbff;border:1px solid var(--ty-line);border-radius:14px;padding:12px;color:#344054;font-size:13px;line-height:1.45}.tyh-bottom{position:sticky;bottom:0;z-index:40;background:#101827;color:#fff;border-radius:22px 22px 0 0;margin:4px -14px -110px;padding:16px 18px calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:center;gap:12px}.tyh-bottom span{display:block;font-size:12px;font-weight:800;color:#cbd5e1}.tyh-bottom b{font-size:22px}.tyh-bottom button{min-width:190px;border-radius:999px}.tyh-confirm{background:#ecfdf3;border-color:#bbf7d0}.tyh-confirm.failed{background:#fff1f2;border-color:#fecdd3}.tyh-confirm.pending{background:#fff7ed;border-color:#fed7aa}.tyh-confirm h2{margin:0 0 8px;font-size:24px;color:var(--ty-navy)}.tyh-confirm p{margin:0 0 10px;color:#344054}.tyh-confirm span{display:inline-flex;background:#fff;border-radius:999px;padding:7px 11px;color:#344054;font-weight:900;font-size:12px}.tyh-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tyh-actions button{background:#fff;color:var(--ty-navy);border:1px solid var(--ty-line)}.tyh-actions button:nth-child(1),.tyh-actions button:nth-child(2){background:var(--ty-blue);color:#fff;border:0}.tyh-actions button:disabled{opacity:.45;cursor:not-allowed}
-.tyh-hotel-status-page{max-width:980px}
+.tyh-hotel-status-page{max-width:1180px;margin:0 auto;padding:0 14px 28px}
+.tyh-bd-page{width:100%}
+.tyh-bd-tabs{position:sticky;top:68px;z-index:25;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 -14px 14px;padding:0 14px;background:var(--ty-bg);border-bottom:1px solid var(--ty-line)}
+.tyh-bd-tabs::-webkit-scrollbar{display:none}
+.tyh-bd-tabs button{flex:0 0 auto;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ty-muted);padding:12px 10px 10px;font-size:14px;font-weight:850;white-space:nowrap}
+.tyh-bd-tabs button.active{color:var(--ty-blue);border-bottom-color:var(--ty-blue)}
+.tyh-bd-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.tyh-bd-main{display:grid;gap:14px;min-width:0}
+.tyh-bd-pane{display:none}
+.tyh-bd-pane.active{display:grid;gap:14px}
+.tyh-bd-side{position:sticky;top:120px}
+.tyh-bd-card{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}
+.tyh-bd-card h3{margin:0 0 12px;color:var(--ty-navy);font-size:18px}
+.tyh-bd-status{padding:0;overflow:hidden}
+.tyh-bd-status-band{padding:12px 16px;text-align:center;color:#fff;font-weight:900;font-size:14px;background:var(--ty-blue)}
+.tyh-bd-status.completed .tyh-bd-status-band,.tyh-bd-status.confirmed .tyh-bd-status-band{background:#067647}
+.tyh-bd-status.cancelled .tyh-bd-status-band{background:#526174}
+.tyh-bd-status.failed .tyh-bd-status-band{background:#b42318}
+.tyh-bd-status.pending .tyh-bd-status-band{background:#b54708}
+.tyh-bd-status-body{padding:16px}
+.tyh-bd-status-body h2{margin:0 0 6px;color:var(--ty-navy);font-size:22px}
+.tyh-bd-status-body>p{margin:0 0 12px;color:#344054;font-size:13px;line-height:1.45;font-weight:650}
+.tyh-bd-booking-id{display:flex;align-items:center;gap:8px;margin:0 0 8px;color:#101828;font-weight:850;font-size:14px}
+.tyh-bd-ref{margin:0 0 10px;color:var(--ty-muted);font-size:12px;font-weight:750}
+.tyh-bd-copy{position:relative;width:28px;height:28px;border:0;border-radius:8px;background:#eef5ff;font-size:0}
+.tyh-bd-copy:before,.tyh-bd-copy:after{content:"";position:absolute;width:9px;height:11px;border:1.8px solid var(--ty-blue);border-radius:2px;background:#fff}
+.tyh-bd-copy:before{left:8px;top:7px}.tyh-bd-copy:after{left:11px;top:10px;background:#eef5ff}
+.tyh-bd-copy.copied:after{content:"✓";display:grid;place-items:center;width:18px;height:18px;left:5px;top:5px;border:0;background:#067647;color:#fff;font-size:12px;font-weight:900;border-radius:50%}
+.tyh-bd-copy.copied:before{display:none}
+.tyh-bd-inline-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.tyh-bd-btn{border:0;border-radius:12px;padding:11px 14px;font-weight:900;font-size:13px;cursor:pointer}
+.tyh-bd-btn.primary{background:var(--ty-blue);color:#fff}
+.tyh-bd-btn.ghost{background:#fff;color:var(--ty-navy);border:1px solid var(--ty-line)}
+.tyh-bd-btn.light{background:#fff;color:var(--ty-blue)}
+.tyh-bd-btn.danger{background:#fff1f2;color:#b42318;border:1px solid #fecdd3;margin-top:12px;width:100%}
+.tyh-bd-alert{border-radius:14px;padding:12px 14px;margin:10px 0 0;font-size:13px;line-height:1.45;font-weight:700}
+.tyh-bd-alert p{margin:0 0 6px}.tyh-bd-alert p:last-child{margin:0}
+.tyh-bd-alert.fail{background:#fff1f2;color:#b42318;border:1px solid #fecdd3}
+.tyh-bd-alert.warn{background:#fff7ed;color:#b54708;border:1px solid #fed7aa}
+.tyh-bd-alert.cancel{background:#f2f4f7;color:#344054;border:1px solid #e4e7ec}
+.tyh-bd-hero{border-radius:14px;overflow:hidden;min-height:180px;background:#eef6ff;margin-bottom:14px}
+.tyh-bd-hero img{width:100%;height:220px;object-fit:cover;display:block}
+.tyh-bd-hero-fallback{display:grid;place-items:center;min-height:180px;color:var(--ty-blue);font-weight:950;font-size:22px;background:linear-gradient(135deg,#e8f1ff,#f7fbff)}
+.tyh-bd-prop h3{margin:0 0 6px;font-size:20px}
+.tyh-bd-stars{color:#f5b301;margin:0 0 8px;letter-spacing:1px;font-size:15px}
+.tyh-bd-address{margin:0 0 8px;color:#344054;font-size:13px;line-height:1.45;font-weight:700}
+.tyh-bd-link,.tyh-bd-link-btn{display:inline-flex;align-items:center;gap:6px;margin:4px 0 10px;color:var(--ty-blue);font-weight:900;font-size:13px;text-decoration:none;border:0;background:transparent;padding:0;cursor:pointer}
+.tyh-bd-dates{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--ty-line);border-radius:14px;background:#f8fbff}
+.tyh-bd-dates small{display:block;color:var(--ty-muted);font-size:11px;font-weight:800;margin-bottom:4px}
+.tyh-bd-dates b{color:var(--ty-navy);font-size:13px}
+.tyh-bd-dates .right{text-align:right}
+.tyh-bd-nights{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#eef2f7;color:#526174;padding:6px 10px;font-size:11px;font-weight:900;white-space:nowrap}
+.tyh-bd-help{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px;border-radius:18px;background:linear-gradient(135deg,#0062e3,#0a4fb8);color:#fff;box-shadow:0 12px 28px rgba(0,98,227,.22)}
+.tyh-bd-help h3{margin:0 0 6px;font-size:20px;color:#fff}
+.tyh-bd-help p{margin:0 0 12px;color:rgba(255,255,255,.92);font-size:13px;line-height:1.45;font-weight:650;max-width:420px}
+.tyh-bd-room{border-top:1px solid #eef2f7;padding-top:12px;margin-top:12px}
+.tyh-bd-room:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.tyh-bd-room-main{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:start}
+.tyh-bd-room-main b{display:block;color:#101828;font-size:15px}
+.tyh-bd-room-main p{margin:4px 0 0;color:var(--ty-muted);font-size:12px;font-weight:750}
+.tyh-bd-room-thumb{width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,#e8f1ff,#f7fbff)}
+.tyh-bd-room-thumb img{width:100%;height:100%;object-fit:cover;border-radius:12px}
+.tyh-bd-benefits{margin-top:10px;padding-top:10px;border-top:1px solid #eef2f7}
+.tyh-bd-benefits small,.tyh-bd-special small{display:block;color:var(--ty-muted);font-size:11px;font-weight:800;margin-bottom:4px}
+.tyh-bd-benefits p,.tyh-bd-special p{margin:0;color:#101828;font-size:13px;font-weight:750}
+.tyh-bd-special{margin-top:12px;padding-top:12px;border-top:1px solid #eef2f7}
+.tyh-bd-empty{margin:0;color:var(--ty-muted);font-size:13px;font-weight:700}
+.tyh-bd-policy-alert{border-radius:12px;padding:12px 14px;margin:0 0 12px;border-left:4px solid #b42318;background:#fff1f2}
+.tyh-bd-policy-alert.warn{border-left-color:#b54708;background:#fff7ed}
+.tyh-bd-policy-alert.bad b{color:#b42318;display:block;margin-bottom:4px}
+.tyh-bd-policy-alert.warn b{color:#b54708;display:block;margin-bottom:4px}
+.tyh-bd-policy-alert p{margin:0;color:#344054;font-size:12px;font-weight:700}
+.tyh-bd-doc-actions{display:grid;gap:10px;margin-top:12px}
+.tyh-bd-note{margin:8px 0 0;color:var(--ty-muted);font-size:12px;font-weight:700}
+.tyh-bd-side-summary p{margin:0 0 8px;color:#344054;font-size:13px;font-weight:700}
+.tyh-bd-side-total{margin:12px 0!important;color:var(--ty-navy)!important;font-size:22px!important;font-weight:950!important}
+.tyh-bd-side .tyh-bd-btn{width:100%;margin-top:8px}
+.tyh-discount b{color:#067647!important}
+.tyh-bd-modal{position:fixed;inset:0;z-index:120;display:grid;align-items:end;background:rgba(7,29,73,.45)}
+.tyh-bd-modal[hidden]{display:none!important}
+.tyh-bd-modal-card{background:#fff;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-width:560px;width:100%;margin:0 auto;position:relative;box-shadow:0 -12px 40px rgba(7,29,73,.2)}
+.tyh-bd-modal-close{position:absolute;right:12px;top:12px;width:36px;height:36px;border:0;border-radius:10px;background:#eef5ff;color:var(--ty-blue);font-size:22px;line-height:1;cursor:pointer}
+.tyh-bd-modal-card h3{margin:0 28px 14px 0;color:var(--ty-navy);font-size:18px}
+.tyh-bd-field{display:block;margin-bottom:14px}
+.tyh-bd-field span{display:block;margin-bottom:6px;color:var(--ty-muted);font-size:12px;font-weight:800}
+.tyh-bd-field input{width:100%;height:48px;border:2px solid var(--ty-blue);border-radius:12px;padding:0 12px;font-size:14px}
+.tyh-bd-modal-card .tyh-bd-btn{width:100%}
+@media(max-width:900px){
+.tyh-bd-layout{grid-template-columns:1fr}
+.tyh-bd-side{display:none}
+.tyh-bd-tabs{top:64px}
+.tyh-bd-hero img{height:180px}
+.tyh-bd-dates{grid-template-columns:1fr;text-align:left}
+.tyh-bd-dates .right{text-align:left}
+.tyh-bd-nights{justify-self:start}
+}
 .tyh-status-hotel-card{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:stretch}
 .tyh-status-hotel-img{border-radius:16px;overflow:hidden;min-height:150px;background:#eef6ff;display:grid;place-items:center;color:var(--ty-blue);font-size:46px;font-weight:900}
 .tyh-status-hotel-img img{width:100%;height:100%;object-fit:cover}
@@ -6220,6 +6609,7 @@ body.tyh-modal-lock{overflow:hidden}
 }
 `; }
 
+try{ window.__tyhRenderHotelBookingDetail = renderStatus; }catch(_e){}
 init();
 })();
 
