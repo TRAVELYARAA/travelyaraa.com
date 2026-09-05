@@ -5331,10 +5331,45 @@ function hotelSpecialRequests(b){
   const d=(b&&b.details)||{};
   return firstVal(d.specialRequests,d.specialRequest,d.remarks,d.guestRequest,d.requestNotes,'');
 }
-function hotelCanCancel(b){ return hotelDetailKind(b)==='upcoming' && !!hotelReferenceFromStatus(b); }
+function hotelIsNonRefundable(b){
+  const rooms=hotelRoomInfos(b);
+  if(rooms.some(r=>/non-?refundable/i.test(String(r.refundable||'')) || (r.cancellation&&r.cancellation.inra===true))) return true;
+  const joined=[b.cancellationPolicy,b.refundable,deepFind(b,['cancellationPolicy','refundable','nonRefundable'])].filter(Boolean).join(' ');
+  return /non-?refundable/i.test(joined);
+}
+function hotelCanCancel(b){
+  return hotelDetailKind(b)==='upcoming' && !!hotelReferenceFromStatus(b) && !hotelIsNonRefundable(b);
+}
 function hotelCanShowVoucher(b){ const k=hotelDetailKind(b); return (k==='upcoming'||k==='completed') && !!hotelReferenceFromStatus(b); }
 function hotelCanShowReceipt(b){ return hotelPaymentPaid(b); }
 function hotelCanResendConfirm(b){ return hotelCanShowVoucher(b); }
+function hotelNeedsRefundSection(b){
+  const k=hotelDetailKind(b);
+  if(hotelIsNonRefundable(b) && k!=='failed_paid') return false;
+  return k==='cancelled' || k==='failed_paid' || k==='refunded' || !!firstVal(b.refundStatus,b.refundAmount,b.payment&&b.payment.refundStatus,'');
+}
+function hotelRefundSectionHtml(b){
+  const amount=Number(b.refundAmount||(b.payment&&b.payment.refundAmount)||0);
+  const status=firstVal(b.refundStatus,b.payment&&b.payment.refundStatus,'');
+  const when=firstVal(b.refundDate,b.payment&&b.payment.refundDate,'');
+  const charge=Number(b.cancellationCharge||(b.cancellationRequest&&b.cancellationRequest.charge)||0);
+  const method=firstVal(b.refundMethod,b.payment&&b.payment.refundMethod,'');
+  const cancelledAt=firstVal(b.cancelledAt,b.cancellationRequest&&b.cancellationRequest.requestedAt,'');
+  const hasData=!!(status||amount>0||charge>0||when||cancelledAt);
+  let html='<section class="tyh-bd-card" id="tyhRefundBox"><h3>Refund info</h3>';
+  if(!hasData){
+    html+='<p class="tyh-bd-empty">Refund details are not available yet. Please contact support with your Booking ID.</p></section>';
+    return html;
+  }
+  if(status) html+='<div class="tyh-kv"><span>Refund status</span><b>'+esc(status)+'</b></div>';
+  if(amount>0) html+='<div class="tyh-kv"><span>Refund amount</span><b>'+money(amount)+'</b></div>';
+  if(charge>0) html+='<div class="tyh-kv"><span>Cancellation charge</span><b>'+money(charge)+'</b></div>';
+  if(method) html+='<div class="tyh-kv"><span>Refund method</span><b>'+esc(method)+'</b></div>';
+  if(when) html+='<div class="tyh-kv"><span>Refund date</span><b>'+esc(fmtDate(when))+'</b></div>';
+  if(cancelledAt) html+='<div class="tyh-kv"><span>Cancellation date</span><b>'+esc(fmtDate(cancelledAt))+'</b></div>';
+  html+='</section>';
+  return html;
+}
 
 function firstVal(){
   for(const v of arguments){
@@ -5593,9 +5628,11 @@ function renderStatus(b, raw){
   const stars=Math.max(0,Math.min(5,Math.round(Number(h.rt||h.star||(b.selectedResult&&b.selectedResult.star)||hotel().star||0))));
   const guests=hotelGuestsFromStatus(b);
   const lead=guests[0]||{};
-  const adultCount=guests.filter(g=>/ADT|ADULT/i.test(String(g.pt||g.type||'ADT'))).length || guests.length || 1;
-  const childCount=guests.filter(g=>/CHD|CHILD/i.test(String(g.pt||g.type||''))).length;
   const rooms=hotelRoomInfos(b);
+  const roomAdults=rooms.reduce(function(n,r){ return n+(Number(r.adults)||0); },0);
+  const roomChildren=rooms.reduce(function(n,r){ return n+(Number(r.children)||0); },0);
+  const adultCount=roomAdults || guests.filter(g=>/ADT|ADULT/i.test(String(g.pt||g.type||'ADT'))).length || guests.length || 1;
+  const childCount=roomChildren || guests.filter(g=>/CHD|CHILD/i.test(String(g.pt||g.type||''))).length;
   const special=hotelSpecialRequests(b);
   const paid=hotelPaymentPaid(b);
   const canVoucher=hotelCanShowVoucher(b);
@@ -5603,69 +5640,54 @@ function renderStatus(b, raw){
   const canCancel=hotelCanCancel(b);
   const canConfirm=hotelCanResendConfirm(b);
   const canRetry=hotelCanRetryPayment(b);
+  const nonRefundable=hotelIsNonRefundable(b);
   const roomCount=Math.max(1, rooms.length || arr(hotelStatusQuery(b).roomInfo).length || 1);
+  const compactStay=[
+    (dates.nights||1)+' night'+(Number(dates.nights||1)===1?'':'s'),
+    roomCount+' room'+(roomCount===1?'':'s'),
+    adultCount?adultCount+' adult'+(adultCount===1?'':'s'):'',
+    childCount?childCount+' child'+(childCount===1?'':'ren'):''
+  ].filter(Boolean).join(' · ');
 
   let statusTitle=lab[0];
   let statusNote='';
-  if(kind==='upcoming'){
-    statusTitle='Booking Confirmed';
-    statusNote='Your hotel stay is confirmed. Please carry a valid photo ID at check-in.';
-  }else if(kind==='completed'){
-    statusTitle='Stay Completed';
-    statusNote='This stay is completed. You can download available documents or book again.';
-  }else if(kind==='cancelled'){
-    statusTitle='Booking Cancelled';
-    statusNote='This hotel booking is cancelled. Refund details appear only when available from payment records.';
-  }else if(kind==='failed_unpaid'){
-    statusTitle='Payment Failed';
-    statusNote='Payment was not completed. No amount has been charged.';
-  }else if(kind==='failed_paid'){
-    statusTitle='Booking Failed';
-    statusNote='Payment received, but the hotel booking could not be confirmed. Our support/refund process will handle this.';
-  }else if(kind==='pending_paid'||kind==='pending'){
-    statusTitle='Booking Pending';
-    statusNote='We are confirming your booking with the hotel.';
-  }
+  if(kind==='upcoming'){ statusTitle='Booking Confirmed'; statusNote='Your hotel booking is confirmed.'; }
+  else if(kind==='completed'){ statusTitle='Stay Completed'; statusNote='This stay is completed.'; }
+  else if(kind==='cancelled'){ statusTitle='Booking Cancelled'; statusNote='This hotel booking has been cancelled.'; }
+  else if(kind==='failed_unpaid'){ statusTitle='Payment Failed'; statusNote='Payment was not completed.'; }
+  else if(kind==='failed_paid'){ statusTitle='Booking Failed'; statusNote='Payment was received, but the hotel booking could not be confirmed.'; }
+  else { statusTitle='Booking Pending'; statusNote='We are confirming your booking with the hotel.'; }
 
-  const alertHtml = kind==='failed_unpaid'
-    ? '<div class="tyh-bd-alert fail"><p>Payment was not completed. No amount has been charged.</p></div>'
-    : kind==='failed_paid'
-      ? '<div class="tyh-bd-alert warn"><p>Payment received, but the hotel booking could not be confirmed.</p><p>Our support/refund process will handle this.</p></div>'
-      : kind==='cancelled'
-        ? '<div class="tyh-bd-alert cancel" id="tyhRefundBox"><p>This booking was cancelled.</p><p>'+esc(hotelRefundNote(b))+'</p></div>'
-        : kind==='pending'||kind==='pending_paid'
-          ? '<div class="tyh-bd-alert warn"><p>We are confirming your booking with the hotel.</p></div>'
-          : '';
+  const actions=[];
+  if(canVoucher) actions.push('<button type="button" class="tyh-bd-btn primary" data-download="/api/bookings/'+attr(id)+'/ticket">Download voucher</button>');
+  if(canReceipt) actions.push('<button type="button" class="tyh-bd-btn ghost" data-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
+  if(canConfirm) actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="confirm-email">Resend email</button>');
+  if(canCancel) actions.push('<button type="button" class="tyh-bd-btn danger" data-action="cancel">Cancel booking</button>');
+  if(canRetry) actions.push('<button type="button" class="tyh-bd-btn primary" data-action="retry-payment">Retry payment</button>');
+  if(kind==='pending'||kind==='pending_paid'||kind==='failed_paid') actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="refresh">Check status</button>');
+  if(hotelNeedsRefundSection(b) && paid && !nonRefundable) actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="refund-status">View refund status</button>');
+  if(kind==='cancelled'&&paid) actions.push('<button type="button" class="tyh-bd-btn ghost" data-download="/api/bookings/'+attr(id)+'/receipt">Download cancellation receipt</button>');
+  if(kind==='completed'||kind==='cancelled'||kind==='failed_unpaid'||kind==='failed_paid') actions.push('<button type="button" class="tyh-bd-btn primary" data-action="book-again">'+(kind==='completed'?'Book again':'New booking')+'</button>');
+  if(kind==='upcoming') actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="new">Book another hotel</button>');
+  actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="my-bookings">Back to My Bookings</button>');
+  actions.push('<button type="button" class="tyh-bd-btn ghost" data-action="support">Contact support</button>');
 
-  const primaryActions=[];
-  if(canVoucher) primaryActions.push('<button type="button" class="tyh-bd-btn primary" data-download="/api/bookings/'+attr(id)+'/ticket">Download voucher</button>');
-  if(canReceipt) primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
-  if(canConfirm) primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="confirm-email">Resend email</button>');
-  if(canCancel) primaryActions.push('<button type="button" class="tyh-bd-btn danger" data-action="cancel">Cancel booking</button>');
-  if(canRetry) primaryActions.push('<button type="button" class="tyh-bd-btn primary" data-action="retry-payment">Retry payment</button>');
-  if(kind==='pending'||kind==='pending_paid'||kind==='failed_paid') primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="refresh">Check status again</button>');
-  if((kind==='cancelled'||kind==='failed_paid'||kind==='refunded')&&paid) primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="refund-status">View refund status</button>');
-  if(kind==='cancelled'&&paid) primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-download="/api/bookings/'+attr(id)+'/receipt">Download cancellation receipt</button>');
-  if(kind==='completed'||kind==='cancelled') primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="book-again">Book again</button>');
-  if(kind==='failed_unpaid'||kind==='failed_paid') primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="new">Back to hotel search</button>');
-  primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="support">Contact support</button>');
-  primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="my-bookings">Back to My Bookings</button>');
-  if(kind==='upcoming') primaryActions.push('<button type="button" class="tyh-bd-btn ghost" data-action="new">Book another hotel</button>');
+  const statusSection =
+    '<section class="tyh-bd-card tyh-bd-status '+esc(lab[1])+'" id="tyhSecStatus">'
+      +'<div class="tyh-bd-status-band">'+esc(statusTitle)+'</div>'
+      +'<div class="tyh-bd-status-body">'
+        +'<h2>'+esc(statusTitle)+'</h2>'
+        +'<p>'+esc(statusNote)+'</p>'
+        +'<div class="tyh-bd-booking-id"><span>TravelYaraa Booking ID: '+esc(id)+'</span>'+(id?'<button type="button" class="tyh-bd-copy" data-copy-id="'+attr(id)+'" aria-label="Copy booking ID"></button>':'')+'</div>'
+        +(reference&&(kind==='upcoming'||kind==='completed')?'<p class="tyh-bd-ref">Hotel confirmation number: '+esc(reference)+'</p>':'')
+        +(nonRefundable?'<div class="tyh-bd-policy-alert bad"><b>Non-refundable</b><p>Cancellation and refund are not available for this booking.</p></div>':'')
+      +'</div>'
+    +'</section>';
 
-  const propertyPane =
-    '<div class="tyh-bd-pane active" data-bd-pane="property">'
-      +'<section class="tyh-bd-card tyh-bd-status '+esc(lab[1])+'">'
-        +'<div class="tyh-bd-status-band">'+esc(statusTitle)+'</div>'
-        +'<div class="tyh-bd-status-body">'
-          +'<h2>'+esc(statusTitle)+'</h2>'
-          +'<p>'+esc(statusNote)+'</p>'
-          +'<div class="tyh-bd-booking-id"><span>TravelYaraa Booking ID: '+esc(id)+'</span>'+(id?'<button type="button" class="tyh-bd-copy" data-copy-id="'+attr(id)+'" aria-label="Copy booking ID"></button>':'')+'</div>'
-          +(reference&&(kind==='upcoming'||kind==='completed')?'<p class="tyh-bd-ref">Hotel confirmation number: '+esc(reference)+'</p>':'')
-          +alertHtml
-          +'<div class="tyh-bd-inline-actions">'+primaryActions.join('')+'</div>'
-        +'</div>'
-      +'</section>'
+  const propertySection =
+    '<section class="tyh-bd-section" id="tyhSecProperty" data-bd-section="property">'
       +'<section class="tyh-bd-card">'
+        +'<h3>Property info</h3>'
         +'<div class="tyh-bd-hero">'+(img?'<img src="'+attr(img)+'" alt="'+attr(hotelNameFromStatus(b))+'">':'<div class="tyh-bd-hero-fallback" aria-hidden="true"><span>TravelYaraa</span></div>')+'</div>'
         +'<div class="tyh-bd-prop">'
           +'<h3>'+esc(hotelNameFromStatus(b))+'</h3>'
@@ -5677,23 +5699,14 @@ function renderStatus(b, raw){
             +'<span class="tyh-bd-nights">'+esc((dates.nights||1)+' night'+(Number(dates.nights||1)===1?'':'s'))+'</span>'
             +'<div class="right"><small>Check-out</small><b>'+esc(dates.checkOut?fmtDate(dates.checkOut):'Pending')+'</b></div>'
           +'</div>'
-          +'<div class="tyh-status-mini-grid">'
-            +'<p><small>Rooms</small><strong>'+esc(roomCount)+'</strong></p>'
-            +'<p><small>Guests</small><strong>'+esc([adultCount?adultCount+' adult'+(adultCount===1?'':'s'):'', childCount?childCount+' child'+(childCount===1?'':'ren'):''].filter(Boolean).join(', ')||'As booked')+'</strong></p>'
-            +'<p><small>Lead guest</small><strong>'+esc(guestName(lead))+'</strong></p>'
-            +'<p><small>Payment</small><strong>'+esc(hotelPaymentStatusLabel(b))+'</strong></p>'
-          +'</div>'
+          +'<p class="tyh-bd-inline-meta">'+esc(compactStay)+'</p>'
         +'</div>'
       +'</section>'
-      +'<section class="tyh-bd-help">'
-        +'<div><h3>Need help?</h3><p>Get quick answers, contact info, and more for this booking.</p>'
-        +'<button type="button" class="tyh-bd-btn light" data-action="support">Contact TravelYaraa Support</button></div>'
-      +'</section>'
-    +'</div>';
+    +'</section>';
 
-  const roomPane =
-    '<div class="tyh-bd-pane" data-bd-pane="room">'
-      +'<section class="tyh-bd-card"><h3>Room information</h3>'
+  const roomSection =
+    '<section class="tyh-bd-section" id="tyhSecRoom" data-bd-section="room">'
+      +'<section class="tyh-bd-card"><h3>Room info</h3>'
       +(rooms.length?rooms.map(function(r,i){
           const bed=hotelBedText(r);
           const guestLine=[r.adults?r.adults+' adult'+(Number(r.adults)===1?'':'s'):'', r.children?r.children+' child'+(Number(r.children)===1?'':'ren'):''].filter(Boolean).join(', ');
@@ -5701,58 +5714,55 @@ function renderStatus(b, raw){
           if(r.meal) benefits.push(r.meal);
           if(r.refundable) benefits.push(r.refundable);
           const chipHtml=hotelRoomBenefitsHtml(r);
-          const roomImg=img||'';
           return '<article class="tyh-bd-room">'
             +'<div class="tyh-bd-room-main">'
-              +(roomImg?'<div class="tyh-bd-room-thumb"><img src="'+attr(roomImg)+'" alt="" loading="lazy"></div>':'<div class="tyh-bd-room-thumb" aria-hidden="true"></div>')
+              +(img?'<div class="tyh-bd-room-thumb"><img src="'+attr(img)+'" alt="" loading="lazy"></div>':'<div class="tyh-bd-room-thumb" aria-hidden="true"></div>')
               +'<div><b>'+esc((rooms.length>1?(i+1)+' × ':'')+r.name)+'</b>'
               +(bed?'<p>'+esc(bed)+'</p>':'')
               +(guestLine?'<p>'+esc(guestLine)+'</p>':'')
-              +'</div>'
-            +'</div>'
+              +'</div></div>'
             +(benefits.length||chipHtml?'<div class="tyh-bd-benefits"><small>Benefits</small>'+(benefits.length?'<p>'+esc(benefits.join(', '))+'</p>':'')+chipHtml+'</div>':'')
           +'</article>';
         }).join(''):'<p class="tyh-bd-empty">Room details are not available yet.</p>')
       +(special?'<div class="tyh-bd-special"><small>Special requests</small><p>'+esc(special)+'</p></div>':'')
-      +'</section>'
-    +'</div>';
+      +'</section></section>';
 
-  const guestPane =
-    '<div class="tyh-bd-pane" data-bd-pane="guest">'
-      +'<section class="tyh-bd-card"><h3>Guest information</h3>'
+  const guestSection =
+    '<section class="tyh-bd-section" id="tyhSecGuest" data-bd-section="guest">'
+      +'<section class="tyh-bd-card"><h3>Guest info</h3>'
       +'<div class="tyh-kv"><span>Lead guest</span><b>'+esc(guestName(lead))+'</b></div>'
       +'<div class="tyh-kv"><span>Booked capacity</span><b>'+esc([adultCount?adultCount+' adult'+(adultCount===1?'':'s'):'', childCount?childCount+' child'+(childCount===1?'':'ren'):''].filter(Boolean).join(', ')||'As booked')+'</b></div>'
       +(guests.length>1?guests.slice(1).map(function(g,i){ return '<div class="tyh-kv"><span>Guest '+(i+2)+'</span><b>'+esc(guestName(g))+'</b></div>'; }).join(''):'')
       +hotelContactHtml(b)
-      +'</section>'
-    +'</div>';
+      +'</section></section>';
 
-  const roomsPolicy=hotelPolicyHtml(b);
-  const cancelPane =
-    '<div class="tyh-bd-pane" data-bd-pane="cancel">'
+  const cancelSection =
+    '<section class="tyh-bd-section" id="tyhSecCancel" data-bd-section="cancel">'
       +'<section class="tyh-bd-card"><h3>Cancellation policy</h3>'
+      +(nonRefundable?'<div class="tyh-bd-policy-alert bad"><b>Non-refundable</b><p>This booking cannot be cancelled for a refund.</p></div>':'')
       +(kind==='cancelled'?'<div class="tyh-bd-policy-alert bad"><b>This booking is cancelled</b><p>'+esc(hotelRefundNote(b))+'</p></div>':'')
-      +(kind==='failed_paid'?'<div class="tyh-bd-policy-alert warn"><b>Hotel confirmation was not completed</b><p>Use payment receipt and TravelYaraa Support for the next step.</p></div>':'')
-      +(kind==='failed_unpaid'?'<div class="tyh-bd-policy-alert bad"><b>No payment was completed</b><p>There is nothing to cancel for this booking.</p></div>':'')
-      +roomsPolicy
-      +(canCancel?'<button type="button" class="tyh-bd-btn danger" data-action="cancel">Cancel booking</button>':'')
-      +'</section>'
-    +'</div>';
+      +(kind==='failed_paid'?'<div class="tyh-bd-policy-alert warn"><b>Hotel confirmation was not completed</b><p>Payment was captured. Refund details appear below when available.</p></div>':'')
+      +hotelPolicyHtml(b)
+      +'</section></section>';
 
-  const paymentPane =
-    '<div class="tyh-bd-pane" data-bd-pane="payment">'
-      +'<section class="tyh-bd-card"><h3>Payment information</h3>'
+  const paymentSection =
+    '<section class="tyh-bd-section" id="tyhSecPayment" data-bd-section="payment">'
+      +'<section class="tyh-bd-card"><h3>Payment info</h3>'
       +hotelPaymentHtml(b)
       +'<div class="tyh-bd-doc-actions">'
         +(canReceipt?'<button type="button" class="tyh-bd-link-btn" data-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>':'')
-        +(canReceipt?'<button type="button" class="tyh-bd-link-btn" data-download="/api/bookings/'+attr(id)+'/receipt">Download payment receipt</button>':'')
         +(canVoucher?'<button type="button" class="tyh-bd-link-btn" data-download="/api/bookings/'+attr(id)+'/ticket">Download hotel voucher</button>':'')
-        +(canConfirm?'<button type="button" class="tyh-bd-link-btn" data-action="confirm-email">Resend confirmation email</button>':'')
-        +((kind==='cancelled'||kind==='failed_paid')&&paid?'<button type="button" class="tyh-bd-link-btn" data-action="refund-status">View refund status</button>':'')
       +'</div>'
       +(!canReceipt&&!canVoucher?'<p class="tyh-bd-empty">Payment documents are available after a successful payment.</p>':'')
-      +'</section>'
-    +'</div>';
+      +'</section></section>';
+
+  const refundSection = hotelNeedsRefundSection(b) ? ('<section class="tyh-bd-section" id="tyhSecRefund" data-bd-section="refund">'+hotelRefundSectionHtml(b)+'</section>') : '';
+
+  const actionsSection =
+    '<section class="tyh-bd-section" id="tyhSecActions">'
+      +'<section class="tyh-bd-card"><h3>Actions</h3>'
+      +'<div class="tyh-bd-inline-actions">'+actions.join('')+'</div>'
+      +'</section></section>';
 
   const tabs=[
     ['property','Property Info'],
@@ -5763,37 +5773,20 @@ function renderStatus(b, raw){
   ];
   const params=new URLSearchParams(location.search);
   const initialTab=params.get('tab')||'property';
-  function withBdTab(html,key){
-    const on=initialTab===key;
-    return String(html||'')
-      .replace(/class="tyh-bd-pane(?: active)?"/,'class="tyh-bd-pane'+(on?' active':'')+'"');
-  }
 
-  const content='<main class="tyh-bd-page tyh-hotel-status-page">'
-    +'<nav class="tyh-bd-tabs" role="tablist">'
-      +tabs.map(function(t){ return '<button type="button" role="tab" class="'+(t[0]===initialTab?'active':'')+'" data-bd-tab="'+attr(t[0])+'">'+esc(t[1])+'</button>'; }).join('')
+  const content='<main class="tyh-bd-page tyh-hotel-status-page tyh-bd-scroll">'
+    +'<nav class="tyh-bd-tabs" role="navigation" aria-label="Booking sections">'
+      +tabs.map(function(t){ return '<button type="button" class="'+(t[0]===initialTab?'active':'')+'" data-bd-tab="'+attr(t[0])+'">'+esc(t[1])+'</button>'; }).join('')
     +'</nav>'
-    +'<div class="tyh-bd-layout">'
-      +'<div class="tyh-bd-main">'
-        +withBdTab(propertyPane,'property')
-        +withBdTab(roomPane,'room')
-        +withBdTab(guestPane,'guest')
-        +withBdTab(cancelPane,'cancel')
-        +withBdTab(paymentPane,'payment')
-      +'</div>'
-      +'<aside class="tyh-bd-side">'
-        +'<section class="tyh-bd-card tyh-bd-side-summary">'
-          +'<h3>Stay summary</h3>'
-          +'<p><b>'+esc(hotelNameFromStatus(b))+'</b></p>'
-          +'<p>'+esc((dates.checkIn?fmtDate(dates.checkIn):'Pending')+' → '+(dates.checkOut?fmtDate(dates.checkOut):'Pending'))+'</p>'
-          +'<p>TravelYaraa Booking ID: '+esc(id)+'</p>'
-          +'<p class="tyh-bd-side-total">'+money(hotelAuthPrice(b).total)+'</p>'
-          +(canVoucher?'<button type="button" class="tyh-bd-btn primary" data-download="/api/bookings/'+attr(id)+'/ticket">Download voucher</button>':'')
-          +(canReceipt?'<button type="button" class="tyh-bd-btn ghost" data-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>':'')
-          +'<button type="button" class="tyh-bd-btn ghost" data-action="support">Contact support</button>'
-          +'<button type="button" class="tyh-bd-btn ghost" data-action="my-bookings">Back to My Bookings</button>'
-        +'</section>'
-      +'</aside>'
+    +'<div class="tyh-bd-stream">'
+      +statusSection
+      +propertySection
+      +roomSection
+      +guestSection
+      +cancelSection
+      +paymentSection
+      +refundSection
+      +actionsSection
     +'</div>'
     +'<div class="tyh-bd-modal" id="tyhConfirmModal" hidden>'
       +'<div class="tyh-bd-modal-card">'
@@ -5809,16 +5802,34 @@ function renderStatus(b, raw){
   bindStatus(id,b);
   if(params.get('retry')==='1' && canRetry) setTimeout(function(){ action(id,'retry-payment'); }, 200);
   if(params.get('refresh')==='1' && (kind==='pending'||kind==='pending_paid'||kind==='failed_paid')) setTimeout(function(){ action(id,'refresh'); }, 120);
+  if(initialTab && initialTab!=='property'){
+    setTimeout(function(){
+      const el=q('#tyhSec'+({property:'Property',room:'Room',guest:'Guest',cancel:'Cancel',payment:'Payment',refund:'Refund'}[initialTab]||'Property'),root);
+      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+    }, 180);
+  }
 }
 function bindStatus(id,b){
   qa('[data-back]',root).forEach(function(btn){ btn.onclick=function(){ location.href='/my-bookings.html'; }; });
+  const sectionMap={property:'tyhSecProperty',room:'tyhSecRoom',guest:'tyhSecGuest',cancel:'tyhSecCancel',payment:'tyhSecPayment',refund:'tyhSecRefund'};
   qa('[data-bd-tab]',root).forEach(function(tab){
     tab.onclick=function(){
       const key=tab.getAttribute('data-bd-tab');
+      const target=q('#'+(sectionMap[key]||'tyhSecProperty'),root);
+      if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
       qa('[data-bd-tab]',root).forEach(function(t){ t.classList.toggle('active', t===tab); });
-      qa('[data-bd-pane]',root).forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-bd-pane')===key); });
     };
   });
+  const sections=qa('[data-bd-section]',root);
+  if(sections.length && 'IntersectionObserver' in window){
+    const observer=new IntersectionObserver(function(entries){
+      const visible=entries.filter(function(e){ return e.isIntersecting; }).sort(function(a,b){ return b.intersectionRatio-a.intersectionRatio; })[0];
+      if(!visible) return;
+      const key=visible.target.getAttribute('data-bd-section');
+      qa('[data-bd-tab]',root).forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-bd-tab')===key); });
+    },{root:null, rootMargin:'-30% 0px -55% 0px', threshold:[0.1,0.25,0.5]});
+    sections.forEach(function(sec){ observer.observe(sec); });
+  }
   qa('[data-download]',root).forEach(function(x){ x.onclick=function(){ if(!x.disabled) downloadStatusFile(x.dataset.download); }; });
   qa('[data-action]',root).forEach(function(x){ x.onclick=function(){ action(id, x.dataset.action); }; });
   qa('[data-copy-id]',root).forEach(function(btn){
@@ -6134,13 +6145,15 @@ function css(){ return `
 .tyh-bd-tabs::-webkit-scrollbar{display:none}
 .tyh-bd-tabs button{flex:0 0 auto;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ty-muted);padding:12px 10px 10px;font-size:14px;font-weight:850;white-space:nowrap}
 .tyh-bd-tabs button.active{color:var(--ty-blue);border-bottom-color:var(--ty-blue)}
-.tyh-bd-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
-.tyh-bd-main{display:grid;gap:14px;min-width:0}
-.tyh-bd-pane{display:none}
-.tyh-bd-pane.active{display:grid;gap:14px}
-.tyh-bd-side{position:sticky;top:120px}
+.tyh-bd-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.tyh-bd-main,.tyh-bd-stream{display:grid;gap:14px;min-width:0}
+.tyh-bd-section{scroll-margin-top:128px;display:grid;gap:14px}
+.tyh-bd-pane{display:grid;gap:14px}
+.tyh-bd-side{display:none}
 .tyh-bd-card{background:#fff;border:1px solid var(--ty-line);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(7,29,73,.05)}
 .tyh-bd-card h3{margin:0 0 12px;color:var(--ty-navy);font-size:18px}
+.tyh-bd-inline-meta{margin:8px 0 0;color:var(--ty-muted);font-size:12px;font-weight:750}
+.tyh-kv b{overflow-wrap:anywhere;word-break:break-word;max-width:62%}
 .tyh-bd-status{padding:0;overflow:hidden}
 .tyh-bd-status-band{padding:12px 16px;text-align:center;color:#fff;font-weight:900;font-size:14px;background:var(--ty-blue)}
 .tyh-bd-status.completed .tyh-bd-status-band,.tyh-bd-status.confirmed .tyh-bd-status-band{background:#067647}
@@ -6168,9 +6181,9 @@ function css(){ return `
 .tyh-bd-alert.fail{background:#fff1f2;color:#b42318;border:1px solid #fecdd3}
 .tyh-bd-alert.warn{background:#fff7ed;color:#b54708;border:1px solid #fed7aa}
 .tyh-bd-alert.cancel{background:#f2f4f7;color:#344054;border:1px solid #e4e7ec}
-.tyh-bd-hero{border-radius:14px;overflow:hidden;min-height:180px;background:#eef6ff;margin-bottom:14px}
-.tyh-bd-hero img{width:100%;height:220px;object-fit:cover;display:block}
-.tyh-bd-hero-fallback{display:grid;place-items:center;min-height:180px;color:var(--ty-blue);font-weight:950;font-size:22px;background:linear-gradient(135deg,#e8f1ff,#f7fbff)}
+.tyh-bd-hero{border-radius:14px;overflow:hidden;min-height:160px;background:#eef6ff;margin-bottom:12px}
+.tyh-bd-hero img{width:100%;height:180px;object-fit:cover;display:block}
+.tyh-bd-hero-fallback{display:grid;place-items:center;min-height:160px;color:var(--ty-blue);font-weight:950;font-size:22px;background:linear-gradient(135deg,#e8f1ff,#f7fbff)}
 .tyh-bd-prop h3{margin:0 0 6px;font-size:20px}
 .tyh-bd-stars{color:#f5b301;margin:0 0 8px;letter-spacing:1px;font-size:15px}
 .tyh-bd-address{margin:0 0 8px;color:#344054;font-size:13px;line-height:1.45;font-weight:700}
@@ -6180,7 +6193,7 @@ function css(){ return `
 .tyh-bd-dates b{color:var(--ty-navy);font-size:13px}
 .tyh-bd-dates .right{text-align:right}
 .tyh-bd-nights{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#eef2f7;color:#526174;padding:6px 10px;font-size:11px;font-weight:900;white-space:nowrap}
-.tyh-bd-help{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px;border-radius:18px;background:linear-gradient(135deg,#0062e3,#0a4fb8);color:#fff;box-shadow:0 12px 28px rgba(0,98,227,.22)}
+.tyh-bd-help{display:none}
 .tyh-bd-help h3{margin:0 0 6px;font-size:20px;color:#fff}
 .tyh-bd-help p{margin:0 0 12px;color:rgba(255,255,255,.92);font-size:13px;line-height:1.45;font-weight:650;max-width:420px}
 .tyh-bd-room{border-top:1px solid #eef2f7;padding-top:12px;margin-top:12px}
@@ -6219,7 +6232,8 @@ function css(){ return `
 .tyh-bd-layout{grid-template-columns:1fr}
 .tyh-bd-side{display:none}
 .tyh-bd-tabs{top:64px}
-.tyh-bd-hero img{height:180px}
+.tyh-bd-section{scroll-margin-top:120px}
+.tyh-bd-hero img{height:160px}
 .tyh-bd-dates{grid-template-columns:1fr;text-align:left}
 .tyh-bd-dates .right{text-align:left}
 .tyh-bd-nights{justify-self:start}

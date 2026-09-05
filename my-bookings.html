@@ -55,33 +55,29 @@
     .flight-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(95px,.75fr) minmax(0,1fr);gap:9px;align-items:start}
     .point strong{display:block;color:var(--navy);font-size:19px}.point b{display:block;margin-top:3px;color:var(--navy);font-size:12px;line-height:1.35}.point small{display:block;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.35}.point.right{text-align:right}
     .journey{text-align:center;padding-top:7px;color:var(--muted);font-size:10px;font-weight:800}.journey-line{position:relative;height:1px;margin:5px 0 7px;background:#a9bed8}.journey-line:before,.journey-line:after{content:"";position:absolute;top:-3px;width:7px;height:7px;border:1.5px solid var(--blue);border-radius:50%;background:#fff}.journey-line:before{left:0}.journey-line:after{right:0}.journey-line i{position:absolute;left:50%;top:-8px;transform:translateX(-50%) rotate(90deg);color:var(--blue);font-style:normal;font-size:15px}
-    .hotel-summary{margin-top:14px;padding:14px;border:1px solid #e3edf8;border-radius:15px;background:#fbfdff;display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;align-items:start}
-    .hotel-summary b{display:block;color:var(--navy);font-size:16px}
-    .hotel-summary span{display:block;margin-top:5px;color:var(--muted);font-size:12px;font-weight:700}
-    .hotel-thumb{width:96px;height:96px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
+    .hotel-summary{margin-top:12px;padding:12px;border:1px solid #e3edf8;border-radius:14px;background:#fbfdff;display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;align-items:start}
+    .hotel-summary b{display:block;color:var(--navy);font-size:15px;line-height:1.25}
+    .hotel-summary span{display:block;margin-top:4px;color:var(--muted);font-size:12px;font-weight:700}
+    .hotel-thumb{width:72px;height:72px;border-radius:11px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
     .hotel-thumb img{width:100%;height:100%;object-fit:cover}
-    .hotel-thumb.fallback:before{content:"";display:block;width:28px;height:28px;border-radius:8px;background:rgba(0,98,227,.12)}
+    .hotel-thumb.fallback:before{content:"";display:block;width:22px;height:22px;border-radius:7px;background:rgba(0,98,227,.12)}
     .hotel-summary.plain{display:block}
     .hotel-summary.plain b{display:block}
-    .hotel-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-    .hotel-meta-grid p{margin:0;padding:8px 10px;border:1px solid #e3edf8;border-radius:11px;background:#fff}
-    .hotel-meta-grid small{display:block;color:var(--muted);font-size:10px;font-weight:800;margin-bottom:3px}
-    .hotel-meta-grid strong{display:block;color:var(--navy);font-size:12px;font-weight:850;line-height:1.3}
+    .hotel-inline{margin-top:8px;color:var(--muted);font-size:12px;font-weight:750;line-height:1.4}
     .card-actions{display:grid;gap:8px;margin-top:12px}
     .card-actions .manage{margin-top:0}
-    .card-actions .btn-secondary{display:block;width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);padding:12px 14px;text-align:center;text-decoration:none;font-weight:850;cursor:pointer}
-    .card-actions .btn-danger{display:block;width:100%;border:1px solid #fecdd3;border-radius:12px;background:#fff1f2;color:var(--red);padding:12px 14px;text-align:center;font-weight:850;cursor:pointer}
-    .card-actions .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .card-actions .btn-secondary{display:block;width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);padding:11px 14px;text-align:center;text-decoration:none;font-weight:850;cursor:pointer}
+    .card-actions .btn-primary-soft{display:block;width:100%;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:12px 14px;text-align:center;text-decoration:none;font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgba(0,98,227,.16)}
     .status-badge{flex:0 0 auto;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;white-space:nowrap}
     .status-badge.confirmed,.status-badge.completed{background:var(--green-bg);color:var(--green)}
     .status-badge.pending{background:var(--amber-bg);color:var(--amber)}
     .status-badge.failed,.status-badge.payment_failed{background:var(--red-bg);color:var(--red)}
     .status-badge.cancelled,.status-badge.refunded{background:var(--grey-bg);color:var(--grey)}
-    .price-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:var(--muted);font-size:12px;font-weight:750}.price-row strong{color:var(--navy);font-size:16px}
-    .pay-status{margin-top:6px;color:var(--muted);font-size:12px;font-weight:750}
+    .price-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;color:var(--muted);font-size:12px;font-weight:750}.price-row strong{color:var(--navy);font-size:15px}
+    .pay-status{margin:4px 0 0;color:var(--muted);font-size:11px;font-weight:750}
     .manage{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:13px 16px;text-align:center;text-decoration:none;font-weight:900;box-shadow:0 7px 16px rgba(0,98,227,.18)}
     .manage:active{transform:translateY(1px)}
-    @media(max-width:620px){.btn-row{grid-template-columns:1fr}.hotel-meta-grid{grid-template-columns:1fr}}
+    @media(max-width:620px){.hotel-summary{grid-template-columns:64px minmax(0,1fr)}.hotel-thumb{width:64px;height:64px}}
     .state{display:grid;place-items:center;min-height:260px;padding:30px 22px;border:1px solid var(--line);border-radius:19px;background:#fff;text-align:center;box-shadow:0 9px 25px rgba(7,29,73,.05)}
     .state h2{margin:0;color:var(--navy);font-size:20px}.state p{max-width:480px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55;font-weight:650}.state a,.retry{display:inline-block;margin-top:15px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:11px 18px;text-decoration:none;font-weight:900}
     .loader{width:46px;height:46px;border:4px solid #dce8f7;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
@@ -270,33 +266,23 @@
   function airlineLogo(code,name){const safeCode=text(code).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);if(!safeCode)return esc(text(name).slice(0,2).toUpperCase()||'TY');return '<img src="/assets/airline-logo/'+attr(safeCode)+'.png" alt="" onerror="this.parentNode.textContent=\''+attr(safeCode)+'\'">';}
   function detailUrl(id,service,extra){const page=service==='hotel'?'/pages/results/hotels.html':'/pages/results/flights.html';const q=new URLSearchParams({service:service,step:'booking-status',bookingId:id});if(extra)Object.keys(extra).forEach(k=>{if(extra[k])q.set(k,extra[k]);});return page+'?'+q.toString();}
   function supportUrl(id){return '/customer-support.html?bookingId='+encodeURIComponent(id);}
+  function hotelLooksNonRefundable(b){
+    const joined=[deepFind(b,['refundable','cancellationPolicy','nonRefundable','policyText']),getPath(b,['reviewRaw','hInfo','ops',0,'ris',0,'cnp','inra'])].filter(v=>v!==undefined&&v!==null).join(' ');
+    return /non-?refundable/i.test(joined) || joined===true || joined==='true';
+  }
+  function hotelHasRefundSignal(b){
+    if(hotelLooksNonRefundable(b)) return false;
+    return !!(firstValue(b.refundAmount,b.refundStatus,b.refundDate,getPath(b,['payment','refundAmount']),getPath(b,['payment','refundStatus'])) || paymentPaid(b));
+  }
   function hotelActionsHtml(b,kind,id){
     const manage=detailUrl(id,'hotel');
-    const paid=paymentPaid(b);
-    const confirmed=kind==='confirmed'||kind==='completed';
-    const hasVoucher=confirmed&&isRealRef(hotelConfirmationRef(b));
     const buttons=[];
     buttons.push('<a class="manage" data-manage href="'+attr(manage)+'">Manage booking</a>');
-    if(kind==='confirmed'){
-      if(hasVoucher) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/ticket">View voucher</button>');
-      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
-      buttons.push('<div class="btn-row"><button type="button" class="btn-danger" data-hotel-cancel="'+attr(id)+'">Cancel booking</button><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-    }else if(kind==='pending'){
-      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{refresh:'1'}))+'">Check status</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-    }else if(kind==='completed'){
-      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
-      buttons.push('<div class="btn-row"><a class="btn-secondary" href="/index.html?service=hotel">Book again</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-    }else if(kind==='cancelled'||kind==='refunded'){
-      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/receipt">Download cancellation receipt</button>');
-      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{tab:'cancel'}))+'">View refund status</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Book again</a>');
-    }else if(kind==='payment_failed'){
-      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{retry:'1'}))+'">Retry payment</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Back to hotel search</a>');
-    }else{
-      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{refresh:'1'}))+'">Check status again</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
-      if(paid) buttons.push('<a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{tab:'cancel'}))+'">View refund status</a>');
-      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Back to hotel search</a>');
+    if(kind==='cancelled'||kind==='refunded'||kind==='failed'||kind==='payment_failed'||kind==='completed'){
+      buttons.push('<a class="btn-primary-soft" href="/index.html?service=hotel">'+(kind==='completed'?'Book again':'New booking')+'</a>');
+    }
+    if((kind==='cancelled'||kind==='refunded'||kind==='failed')&&hotelHasRefundSignal(b)){
+      buttons.push('<a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{tab:'refund'}))+'">View refund status</a>');
     }
     return '<div class="card-actions">'+buttons.join('')+'</div>';
   }
@@ -319,28 +305,30 @@
       const h=hotelData(b);
       title=h.name;
       date=formatDate(bookingDate(b,h));
-      const guestLine=[h.adults?h.adults+' adult'+(h.adults===1?'':'s'):'',h.children?h.children+' child'+(h.children===1?'':'ren'):''].filter(Boolean).join(', ');
+      const compact=[
+        h.nights?(h.nights+' night'+(Number(h.nights)===1?'':'s')):'',
+        h.rooms?(h.rooms+' room'+(Number(h.rooms)===1?'':'s')):'',
+        h.adults?(h.adults+' adult'+(Number(h.adults)===1?'':'s')):'',
+        h.children?(h.children+' child'+(Number(h.children)===1?'':'ren')):''
+      ].filter(Boolean).join(' · ');
       summary='<div class="hotel-summary">'+(h.image?'<div class="hotel-thumb"><img src="'+attr(h.image)+'" alt="" loading="lazy" onerror="this.parentNode.classList.add(\'fallback\');this.remove()"></div>':'<div class="hotel-thumb fallback" aria-hidden="true"></div>')
         +'<div class="hotel-copy"><b>'+esc(h.name)+'</b>'
         +'<span>'+esc(h.city||h.address||'')+'</span>'
         +'<span>Check in: '+esc(formatDate(h.checkIn)||'Pending')+'</span>'
         +'<span>Check out: '+esc(formatDate(h.checkOut)||'Pending')+'</span>'
         +(h.leadName?'<span>Lead guest: '+esc(h.leadName)+'</span>':'')
+        +(compact?'<span class="hotel-inline">'+esc(compact)+'</span>':'')
         +'</div></div>'
-        +'<div class="hotel-meta-grid">'
-        +'<p><small>Nights</small><strong>'+esc(h.nights||'—')+'</strong></p>'
-        +'<p><small>Rooms</small><strong>'+esc(h.rooms||1)+'</strong></p>'
-        +'<p><small>Guests</small><strong>'+esc(guestLine||'As booked')+'</strong></p>'
-        +'<p><small>Payment</small><strong>'+esc(paymentStatusLabel(b))+'</strong></p>'
-        +'</div>';
-      actions=hotelActionsHtml(b,displayKind,id)+(total?'<div class="price-row"><span>Paid amount</span><strong>'+esc(total)+'</strong></div><p class="pay-status">Payment status: '+esc(paymentStatusLabel(b))+'</p>':'');
+        +(total?'<div class="price-row"><span>Paid amount</span><strong>'+esc(total)+'</strong></div>':'')
+        +'<p class="pay-status">Payment: '+esc(paymentStatusLabel(b))+'</p>';
+      actions=hotelActionsHtml(b,displayKind,id);
     }else{
       title=service.charAt(0).toUpperCase()+service.slice(1)+' booking';
       date=formatDate(b.createdAt||b.updatedAt);
       summary='<div class="hotel-summary plain"><b>'+esc(title)+'</b><span>Booking details are available in Manage Booking.</span></div>';
       actions='<a class="manage" data-manage href="'+attr(detailUrl(id,service))+'">Manage booking</a>';
     }
-    return '<article class="booking-card"><div class="status-strip '+attr(displayKind)+'"><span>'+esc(statusLabel(displayKind,service))+'</span><span>'+esc(service.charAt(0).toUpperCase()+service.slice(1))+'</span></div><div class="card-body"><div class="card-head"><div><h2 class="route">'+esc(service==='hotel'?(hCityTitle(b)||title):title)+'</h2><p class="meta">'+esc([date,service==='hotel'?'':(count+' passenger'+(count>1?'s':'')),service==='flight'?tripType(b):''].filter(Boolean).join(' • '))+'</p><p class="booking-id">TravelYaraa Booking ID: <b>'+esc(id)+'</b><button class="copy" type="button" data-copy="'+attr(id)+'" aria-label="Copy booking ID"></button></p></div><span class="status-badge '+attr(displayKind)+'">'+esc(statusLabel(displayKind,service))+'</span></div>'+summary+(total && service!=='hotel'?'<div class="price-row"><span>Total paid / payable</span><strong>'+esc(total)+'</strong></div>':'')+actions+'</div></article>';
+    return '<article class="booking-card"><div class="status-strip '+attr(displayKind)+'"><span>'+esc(statusLabel(displayKind,service))+'</span><span>'+esc(service.charAt(0).toUpperCase()+service.slice(1))+'</span></div><div class="card-body"><div class="card-head"><div><h2 class="route">'+esc(service==='hotel'?title:title)+'</h2><p class="meta">'+esc([date,service==='hotel'?'':(count+' passenger'+(count>1?'s':'')),service==='flight'?tripType(b):''].filter(Boolean).join(' • '))+'</p><p class="booking-id">'+(service==='hotel'?'TravelYaraa Booking ID':'Booking ID')+': <b>'+esc(id)+'</b><button class="copy" type="button" data-copy="'+attr(id)+'" aria-label="Copy booking ID"></button></p></div><span class="status-badge '+attr(displayKind)+'">'+esc(statusLabel(displayKind,service))+'</span></div>'+summary+(total && service!=='hotel'?'<div class="price-row"><span>Total paid / payable</span><strong>'+esc(total)+'</strong></div>':'')+actions+'</div></article>';
   }
   function hCityTitle(b){const h=hotelData(b);return h.city||h.name;}
 
