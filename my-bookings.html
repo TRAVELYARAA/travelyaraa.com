@@ -34,7 +34,7 @@
     .status-strip{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;font-size:13px;font-weight:900}
     .status-strip.confirmed,.status-strip.completed{color:var(--green);background:var(--green-bg)}
     .status-strip.pending{color:var(--amber);background:var(--amber-bg)}
-    .status-strip.failed{color:var(--red);background:var(--red-bg)}
+    .status-strip.failed,.status-strip.payment_failed{color:var(--red);background:var(--red-bg)}
     .status-strip.cancelled,.status-strip.refunded{color:var(--grey);background:var(--grey-bg)}
     .card-body{padding:15px}
     .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -55,22 +55,33 @@
     .flight-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(95px,.75fr) minmax(0,1fr);gap:9px;align-items:start}
     .point strong{display:block;color:var(--navy);font-size:19px}.point b{display:block;margin-top:3px;color:var(--navy);font-size:12px;line-height:1.35}.point small{display:block;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.35}.point.right{text-align:right}
     .journey{text-align:center;padding-top:7px;color:var(--muted);font-size:10px;font-weight:800}.journey-line{position:relative;height:1px;margin:5px 0 7px;background:#a9bed8}.journey-line:before,.journey-line:after{content:"";position:absolute;top:-3px;width:7px;height:7px;border:1.5px solid var(--blue);border-radius:50%;background:#fff}.journey-line:before{left:0}.journey-line:after{right:0}.journey-line i{position:absolute;left:50%;top:-8px;transform:translateX(-50%) rotate(90deg);color:var(--blue);font-style:normal;font-size:15px}
-    .hotel-summary{margin-top:14px;padding:14px;border:1px solid #e3edf8;border-radius:15px;background:#fbfdff;display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;align-items:start}
+    .hotel-summary{margin-top:14px;padding:14px;border:1px solid #e3edf8;border-radius:15px;background:#fbfdff;display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;align-items:start}
     .hotel-summary b{display:block;color:var(--navy);font-size:16px}
     .hotel-summary span{display:block;margin-top:5px;color:var(--muted);font-size:12px;font-weight:700}
-    .hotel-thumb{width:84px;height:84px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
+    .hotel-thumb{width:96px;height:96px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
     .hotel-thumb img{width:100%;height:100%;object-fit:cover}
-    .hotel-thumb.fallback:before{content:"TY";color:var(--blue);font-weight:950;font-size:18px}
+    .hotel-thumb.fallback:before{content:"";display:block;width:28px;height:28px;border-radius:8px;background:rgba(0,98,227,.12)}
     .hotel-summary.plain{display:block}
     .hotel-summary.plain b{display:block}
+    .hotel-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .hotel-meta-grid p{margin:0;padding:8px 10px;border:1px solid #e3edf8;border-radius:11px;background:#fff}
+    .hotel-meta-grid small{display:block;color:var(--muted);font-size:10px;font-weight:800;margin-bottom:3px}
+    .hotel-meta-grid strong{display:block;color:var(--navy);font-size:12px;font-weight:850;line-height:1.3}
+    .card-actions{display:grid;gap:8px;margin-top:12px}
+    .card-actions .manage{margin-top:0}
+    .card-actions .btn-secondary{display:block;width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);padding:12px 14px;text-align:center;text-decoration:none;font-weight:850;cursor:pointer}
+    .card-actions .btn-danger{display:block;width:100%;border:1px solid #fecdd3;border-radius:12px;background:#fff1f2;color:var(--red);padding:12px 14px;text-align:center;font-weight:850;cursor:pointer}
+    .card-actions .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .status-badge{flex:0 0 auto;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;white-space:nowrap}
     .status-badge.confirmed,.status-badge.completed{background:var(--green-bg);color:var(--green)}
     .status-badge.pending{background:var(--amber-bg);color:var(--amber)}
-    .status-badge.failed{background:var(--red-bg);color:var(--red)}
+    .status-badge.failed,.status-badge.payment_failed{background:var(--red-bg);color:var(--red)}
     .status-badge.cancelled,.status-badge.refunded{background:var(--grey-bg);color:var(--grey)}
     .price-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:var(--muted);font-size:12px;font-weight:750}.price-row strong{color:var(--navy);font-size:16px}
+    .pay-status{margin-top:6px;color:var(--muted);font-size:12px;font-weight:750}
     .manage{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:13px 16px;text-align:center;text-decoration:none;font-weight:900;box-shadow:0 7px 16px rgba(0,98,227,.18)}
     .manage:active{transform:translateY(1px)}
+    @media(max-width:620px){.btn-row{grid-template-columns:1fr}.hotel-meta-grid{grid-template-columns:1fr}}
     .state{display:grid;place-items:center;min-height:260px;padding:30px 22px;border:1px solid var(--line);border-radius:19px;background:#fff;text-align:center;box-shadow:0 9px 25px rgba(7,29,73,.05)}
     .state h2{margin:0;color:var(--navy);font-size:20px}.state p{max-width:480px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55;font-weight:650}.state a,.retry{display:inline-block;margin-top:15px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:11px 18px;text-decoration:none;font-weight:900}
     .loader{width:46px;height:46px;border:4px solid #dce8f7;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
@@ -166,12 +177,49 @@
     return [...unique.values()];
   }
 
-  function statusKind(b){const words=[b.bookingStatus,b.status,b.orderStatus,b.ticketStatus,b.paymentStatus,getPath(b,['payment','status']),deepFind(b,['bookingStatus','orderStatus','ticketStatus','paymentStatus'])].filter(Boolean).map(v=>text(v).toUpperCase()).join(' ');if(/REFUNDED|REFUND_PROCESSED|REFUND_COMPLETED/.test(words))return 'refunded';if(/CANCELLED|CANCELED|VOID/.test(words))return 'cancelled';if(/PAYMENT_FAILED|BOOKING_FAILED|TICKET_FAILED|FAILED|FAILURE|ERROR|REJECT|ABORT|UNSUCCESS|REFUND_REQUIRED/.test(words))return 'failed';const ref=firstValue(b.airlinePnr,b.airlinePNR,b.pnr,b.airlineReference,b.ticketNumber,b.ticketNo,deepFind(b,['airlinePnr','airlinePNR','gdsPnr','pnr','airlineReference','ticketNumber','ticketNo','tktNo']));if(/CONFIRMED|TICKETED|BOOKED|COMPLETED|SUCCESS/.test(words)&&ref&&ref.length>=3)return 'confirmed';return 'pending';}
+  function isRealRef(v){const s=text(v);if(!s||s.length<3)return false;if(/^(NA|N\/A|NONE|NULL|PENDING|FAILED|0)$/i.test(s))return false;return /[A-Z0-9]/i.test(s);}
+  function hotelConfirmationRef(b){return firstValue(b.hotelConfirmationNumber,b.hotelConfirmationNo,b.hotelReference,b.confirmationNumber,b.confirmationNo,b.voucherNumber,getPath(b,['details','hotelConfirmationNumber']),getPath(b,['details','hotelReference']),getPath(b,['details','confirmationNumber']),getPath(b,['details','voucherNumber']));}
+  function travelYaraaBookingId(b){const id=firstValue(b.bookingId,b.travelYaraaBookingId,b.id);if(/^TY/i.test(id))return id;return firstValue(b.bookingId,b.travelYaraaBookingId)||id;}
+  function paymentPaid(b){const p=text(b.paymentStatus||getPath(b,['payment','status'])||'').toUpperCase();return /SUCCESS|PAID|CAPTURED|COMPLETE/.test(p);}
+  function paymentFailed(b){const p=text(b.paymentStatus||b.bookingStatus||getPath(b,['payment','status'])||'').toUpperCase();return /PAYMENT_FAILED|ORDER_CREATION_FAILED/.test(p)||(/FAIL|ABORT|DECLIN/.test(p)&&!paymentPaid(b));}
+  function nightsBetween(ci,co){try{const a=new Date(ci),b=new Date(co);if(Number.isNaN(a.getTime())||Number.isNaN(b.getTime()))return 0;const n=Math.round((b-a)/86400000);return n>0?n:0;}catch(_){return 0;}}
+  function hotelStayPast(b,h){const out=h&&h.checkOut;if(!out)return false;try{const d=new Date(/^\d{4}-\d{2}-\d{2}$/.test(out)?out+'T23:59:59':out);if(Number.isNaN(d.getTime()))return false;return d.getTime()<Date.now();}catch(_){return false;}}
+  function statusKind(b){
+    const service=text(b.service||b.type||activeService).toLowerCase();
+    const bookingWords=[b.bookingStatus,b.status,b.orderStatus,b.ticketStatus].filter(Boolean).map(v=>text(v).toUpperCase()).join(' ');
+    const payWords=[b.paymentStatus,getPath(b,['payment','status'])].filter(Boolean).map(v=>text(v).toUpperCase()).join(' ');
+    const words=bookingWords+' '+payWords;
+    if(/REFUNDED|REFUND_PROCESSED|REFUND_COMPLETED/.test(words))return 'refunded';
+    if(/CANCELLED|CANCELED|VOID|CANCEL_REQUESTED/.test(bookingWords))return 'cancelled';
+    if(service==='hotel'){
+      if(/PAYMENT_FAILED|ORDER_CREATION_FAILED/.test(payWords)||(paymentFailed(b)&&!paymentPaid(b)))return 'payment_failed';
+      if(/PAYMENT_FAILED|BOOKING_FAILED|FAILED|FAILURE|ERROR|ABORT|UNSUCCESS|REFUND_REQUIRED|SUPPLIER_BOOKING_FAILED/.test(bookingWords))return paymentPaid(b)?'failed':'payment_failed';
+      const href=hotelConfirmationRef(b);
+      if(/CONFIRMED|BOOKED|COMPLETED/.test(bookingWords)||isRealRef(href)){
+        const h=hotelData(b);
+        if(hotelStayPast(b,h)||activeStatus==='completed')return 'completed';
+        return 'confirmed';
+      }
+      return 'pending';
+    }
+    if(/PAYMENT_FAILED|BOOKING_FAILED|TICKET_FAILED|FAILED|FAILURE|ERROR|REJECT|ABORT|UNSUCCESS|REFUND_REQUIRED/.test(words))return 'failed';
+    const ref=firstValue(b.airlinePnr,b.airlinePNR,b.pnr,b.airlineReference,b.ticketNumber,b.ticketNo,deepFind(b,['airlinePnr','airlinePNR','gdsPnr','pnr','airlineReference','ticketNumber','ticketNo','tktNo']));
+    if(/CONFIRMED|TICKETED|BOOKED|COMPLETED|SUCCESS/.test(words)&&ref&&ref.length>=3)return 'confirmed';
+    return 'pending';
+  }
   function statusLabel(kind,service){
     if(service==='hotel'){
-      return {confirmed:'Upcoming',completed:'Completed',pending:'Pending',failed:'Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
+      return {confirmed:'Confirmed',completed:'Completed',pending:'Pending',failed:'Booking Failed',payment_failed:'Payment Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
     }
     return {confirmed:'Confirmed',completed:'Completed',pending:'Pending',failed:'Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
+  }
+  function paymentStatusLabel(b){
+    if(paymentPaid(b))return 'Paid';
+    if(paymentFailed(b))return 'Not completed';
+    const p=text(b.paymentStatus||'').toUpperCase();
+    if(/REFUND/.test(p))return 'Refunded';
+    if(/PENDING|CREATED|INIT/.test(p))return 'Pending';
+    return paymentPaid(b)?'Paid':'Pending';
   }
   function dateValue(value){if(!value)return null;const d=new Date(value);return Number.isNaN(d.getTime())?null:d;}
   function formatDate(value){const d=dateValue(value);return d?d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'';}
@@ -180,34 +228,154 @@
   function duration(minutes){const n=Number(minutes);if(!Number.isFinite(n)||n<=0)return '';return Math.floor(n/60)+'h '+(n%60?String(n%60)+'m':'');}
 
   function flightData(b){const selected=b.selectedFlight||arr(b.selectedFlights)[0]||b.selectedResult||getPath(b,['details','selectedFlight'])||getPath(b,['details','selectedResult'])||{};let segments=arr(selected.segments);if(!segments.length)segments=deepArray(selected,['segments','sI']);if(!segments.length)segments=deepArray(b,['segments','sI']);const first=segments[0]||selected||{};const last=segments[segments.length-1]||first;const firstRaw=first.raw||first;const lastRaw=last.raw||last;const fd=firstRaw.fD||first.fD||{};const ai=fd.aI||{};const depAirport=firstRaw.da||first.da||{};const arrAirport=lastRaw.aa||last.aa||{};const code=firstValue(first.airlineCode,selected.airlineCode,ai.code,deepFind(first,['airlineCode']));const name=firstValue(first.airline,selected.airline,ai.name,deepFind(first,['airlineName']),'Airline');const number=firstValue(first.flightNo,selected.flightNo,[code,fd.fN].filter(Boolean).join(' '));const dep=firstValue(first.dep,first.departureTime,selected.departureTime,firstRaw.dt,deepFind(first,['departureTime','departureDateTime']));const arrival=firstValue(last.arr,last.arrivalTime,selected.arrivalTime,lastRaw.at,deepFind(last,['arrivalTime','arrivalDateTime']));const fromCode=firstValue(first.origin,selected.origin,depAirport.code,deepFind(first,['originCode']));const toCode=firstValue(last.destination,selected.destination,arrAirport.code,deepFind(last,['destinationCode']));const fromCity=firstValue(depAirport.city,depAirport.cityCode,first.originCity,selected.originCity,fromCode);const toCity=firstValue(arrAirport.city,arrAirport.cityCode,last.destinationCity,selected.destinationCity,toCode);const fromAirport=firstValue(depAirport.name,first.originName,selected.originName);const toAirport=firstValue(arrAirport.name,last.destinationName,selected.destinationName);const mins=Number(selected.durationMinutes||selected.duration||segments.reduce((sum,s)=>sum+Number(s.duration||0)+Number(s.layover||s.cT||0),0));const stops=Math.max(0,Number(selected.stops!==undefined?selected.stops:segments.length-1)||0);return {selected,segments,code,name,number,dep,arrival,fromCode,toCode,fromCity,toCity,fromAirport,toAirport,fromTerminal:firstValue(depAirport.terminal,first.departureTerminal),toTerminal:firstValue(arrAirport.terminal,last.arrivalTerminal),duration:duration(mins),stops};}
+  function hotelImgUrl(v){if(!v)return '';if(typeof v==='string'){const s=text(v);return /^https?:\/\//i.test(s)?s:(/^\/\//.test(s)?'https:'+s:'');}const links=v.links||{};return hotelImgUrl((links.Standard&&(links.Standard.href||links.Standard.url))||(links.XXL&&(links.XXL.href||links.XXL.url))||v.url||v.src||v.imageUrl||v.href||'');}
   function hotelData(b){
     const selected=b.selectedHotel||b.selectedResult||getPath(b,['details','selectedHotel'])||getPath(b,['details','selectedResult'])||{};
-    const hInfo=getPath(selected,['raw','hInfo'])||getPath(selected,['hInfo'])||getPath(b,['reviewRaw','hInfo'])||{};
+    const hInfo=getPath(selected,['raw','hInfo'])||getPath(selected,['hInfo'])||getPath(b,['reviewRaw','hInfo'])||getPath(b,['supplierBooking','details','itemInfos','HOTEL','hInfo'])||{};
     const search=getPath(b,['details','searchPayload'])||b.search||{};
     const images=[selected.image,selected.imageUrl,selected.thumbnail,selected.heroImage,hInfo.image,hInfo.imageUrl]
-      .concat(Array.isArray(selected.images)?selected.images:[]).concat(Array.isArray(hInfo.imgs)?hInfo.imgs:[])
-      .map(function(x){ return typeof x==='string'?x:(x&&(x.url||x.src||x.imageUrl||'')); })
-      .filter(Boolean);
+      .concat(Array.isArray(selected.images)?selected.images:[]).concat(Array.isArray(hInfo.imgs)?hInfo.imgs:[]).concat(Array.isArray(hInfo.img)?hInfo.img:[])
+      .map(hotelImgUrl).filter(Boolean);
+    const checkIn=firstValue(b.checkIn,search.checkIn,search.checkinDate,getPath(b,['details','checkIn']),deepFind(b,['checkIn','checkInDate']));
+    const checkOut=firstValue(b.checkOut,search.checkOut,search.checkoutDate,getPath(b,['details','checkOut']),deepFind(b,['checkOut','checkOutDate']));
+    const guests=deepArray(b,['guests','travellers','passengers','travellerInfos']);
+    const guestFromDetails=arr(getPath(b,['details','guests']));
+    const guestList=guests.length?guests:(guestFromDetails.length?guestFromDetails:[]);
+    const lead=guestList[0]||{};
+    const leadName=[lead.ti||lead.title,lead.fN||lead.firstName,lead.lN||lead.lastName].filter(Boolean).join(' ')||firstValue(lead.name,lead.fullName,'');
+    const adults=Number(firstValue(lead.adt,search.adults,deepFind(b,['adults','adultCount'])))||guestList.filter(g=>/ADT|ADULT/i.test(String(g.pt||g.type||'ADT'))).length||Math.max(1,guestList.length||0);
+    const children=Number(firstValue(search.children,deepFind(b,['children','childCount'])))||guestList.filter(g=>/CHD|CHILD/i.test(String(g.pt||g.type||''))).length||0;
+    const rooms=Math.max(1,Number(firstValue(search.rooms,search.roomCount,selected.roomCount,deepFind(b,['rooms','roomCount'])))||arr(getPath(hInfo,['ops'])).length||1);
+    const address=firstValue(
+      selected.address,
+      [getPath(hInfo,['ad','adr']),getPath(hInfo,['ad','ctn']),getPath(hInfo,['ad','cn'])].filter(Boolean).join(', '),
+      selected.city,selected.area,getPath(hInfo,['ad','ctn'])
+    );
     return {
       name:firstValue(selected.name,selected.hotelName,hInfo.name,b.hotelName,deepFind(b,['hotelName']))||'Hotel booking',
-      city:firstValue(selected.city,selected.area,hInfo.ad&&hInfo.ad.ctn,b.city,search.cityName,search.city,deepFind(b,['hotelCity','destination'])),
-      checkIn:firstValue(b.checkIn,search.checkIn,search.checkinDate,getPath(b,['details','checkIn']),deepFind(b,['checkIn','checkInDate'])),
-      checkOut:firstValue(b.checkOut,search.checkOut,search.checkoutDate,getPath(b,['details','checkOut']),deepFind(b,['checkOut','checkOutDate'])),
-      image:images[0]||''
+      city:firstValue(selected.city,selected.area,getPath(hInfo,['ad','ctn']),b.city,search.cityName,search.city,deepFind(b,['hotelCity','destination'])),
+      address:address,
+      checkIn,checkOut,
+      nights:nightsBetween(checkIn,checkOut)||Number(search.nights)||0,
+      rooms,adults,children,leadName,
+      image:images[0]||'',
+      confirmation:hotelConfirmationRef(b)
     };
   }
   function passengerCount(b){const list=deepArray(b,['travellers','passengers','guests','travellerInfos']);if(list.length)return list.length;const adults=Number(deepFind(b,['adults','adultCount']))||0;const children=Number(deepFind(b,['children','childCount']))||0;const infants=Number(deepFind(b,['infants','infantCount']))||0;return Math.max(1,adults+children+infants);}
-  function amountOf(b){return Number(b.totalAmount||b.amount||getPath(b,['price','finalTotal'])||getPath(b,['fare','finalTotal'])||getPath(b,['quote','publicPrice','finalTotal'])||deepFind(b,['finalTotal','totalAmount','totalFare']))||0;}
+  function amountOf(b){return Number(getPath(b,['price','customerPayable'])||getPath(b,['price','finalPayableAmount'])||b.totalAmount||b.amount||getPath(b,['price','finalTotal'])||getPath(b,['fare','finalTotal'])||getPath(b,['quote','publicPrice','finalTotal'])||deepFind(b,['customerPayable','finalTotal','totalAmount','totalFare']))||0;}
   function currencyOf(b){return firstValue(b.currency,getPath(b,['price','currency']),getPath(b,['quote','publicPrice','currency']))||'INR';}
   function bookingDate(b,serviceData){return serviceData.dep||serviceData.checkIn||b.createdAt||b.updatedAt||'';}
   function tripType(b){return firstValue(deepFind(b,['tripType','journeyType']),'One way');}
   function airlineLogo(code,name){const safeCode=text(code).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);if(!safeCode)return esc(text(name).slice(0,2).toUpperCase()||'TY');return '<img src="/assets/airline-logo/'+attr(safeCode)+'.png" alt="" onerror="this.parentNode.textContent=\''+attr(safeCode)+'\'">';}
-  function detailUrl(id,service){const page=service==='hotel'?'/pages/results/hotels.html':'/pages/results/flights.html';return page+'?service='+encodeURIComponent(service)+'&step=booking-status&bookingId='+encodeURIComponent(id);}
+  function detailUrl(id,service,extra){const page=service==='hotel'?'/pages/results/hotels.html':'/pages/results/flights.html';const q=new URLSearchParams({service:service,step:'booking-status',bookingId:id});if(extra)Object.keys(extra).forEach(k=>{if(extra[k])q.set(k,extra[k]);});return page+'?'+q.toString();}
+  function supportUrl(id){return '/customer-support.html?bookingId='+encodeURIComponent(id);}
+  function hotelActionsHtml(b,kind,id){
+    const manage=detailUrl(id,'hotel');
+    const paid=paymentPaid(b);
+    const confirmed=kind==='confirmed'||kind==='completed';
+    const hasVoucher=confirmed&&isRealRef(hotelConfirmationRef(b));
+    const buttons=[];
+    buttons.push('<a class="manage" data-manage href="'+attr(manage)+'">Manage booking</a>');
+    if(kind==='confirmed'){
+      if(hasVoucher) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/ticket">View voucher</button>');
+      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
+      buttons.push('<div class="btn-row"><button type="button" class="btn-danger" data-hotel-cancel="'+attr(id)+'">Cancel booking</button><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+    }else if(kind==='pending'){
+      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{refresh:'1'}))+'">Check status</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+    }else if(kind==='completed'){
+      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/invoice">Download invoice</button>');
+      buttons.push('<div class="btn-row"><a class="btn-secondary" href="/index.html?service=hotel">Book again</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+    }else if(kind==='cancelled'||kind==='refunded'){
+      if(paid) buttons.push('<button type="button" class="btn-secondary" data-hotel-download="/api/bookings/'+attr(id)+'/receipt">Download cancellation receipt</button>');
+      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{tab:'cancel'}))+'">View refund status</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Book again</a>');
+    }else if(kind==='payment_failed'){
+      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{retry:'1'}))+'">Retry payment</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Back to hotel search</a>');
+    }else{
+      buttons.push('<div class="btn-row"><a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{refresh:'1'}))+'">Check status again</a><a class="btn-secondary" href="'+attr(supportUrl(id))+'">Contact support</a></div>');
+      if(paid) buttons.push('<a class="btn-secondary" data-manage href="'+attr(detailUrl(id,'hotel',{tab:'cancel'}))+'">View refund status</a>');
+      buttons.push('<a class="btn-secondary" href="/index.html?service=hotel">Back to hotel search</a>');
+    }
+    return '<div class="card-actions">'+buttons.join('')+'</div>';
+  }
 
-  function card(b){const service=text(b.service||b.type||activeService).toLowerCase();const id=firstValue(b.bookingId,b.id);const kind=statusKind(b);const displayKind=(activeStatus==='completed'&&kind==='confirmed')?'completed':kind;const count=passengerCount(b);const total=money(amountOf(b),currencyOf(b));let summary='';let title='';let date='';if(service==='flight'){const f=flightData(b);title=[f.fromCity+(f.fromCode&&f.fromCity!==f.fromCode?' ('+f.fromCode+')':''),f.toCity+(f.toCode&&f.toCity!==f.toCode?' ('+f.toCode+')':'')].filter(Boolean).join(' → ')||'Flight booking';date=formatDate(bookingDate(b,f));summary='<div class="flight-summary"><div class="airline"><div class="airline-logo">'+airlineLogo(f.code,f.name)+'</div><div><b>'+esc(f.name)+'</b><span>'+esc([f.number,f.stops?f.stops+' stop'+(f.stops>1?'s':''):'Non-stop',f.duration].filter(Boolean).join(' • '))+'</span></div></div><div class="flight-route"><div class="point"><strong>'+esc(formatTime(f.dep))+'</strong><b>'+esc([f.fromCity,f.fromCode&&'('+f.fromCode+')'].filter(Boolean).join(' '))+'</b><small>'+esc([f.fromAirport,f.fromTerminal].filter(Boolean).join(' • '))+'</small></div><div class="journey"><div class="journey-line"><i>✈</i></div><span>'+esc(f.duration)+'</span></div><div class="point right"><strong>'+esc(formatTime(f.arrival))+'</strong><b>'+esc([f.toCity,f.toCode&&'('+f.toCode+')'].filter(Boolean).join(' '))+'</b><small>'+esc([f.toAirport,f.toTerminal].filter(Boolean).join(' • '))+'</small></div></div></div>';}else if(service==='hotel'){const h=hotelData(b);title=h.name;date=formatDate(bookingDate(b,h));summary='<div class="hotel-summary">'+(h.image?'<div class="hotel-thumb"><img src="'+attr(h.image)+'" alt="" loading="lazy" onerror="this.parentNode.classList.add(\'fallback\');this.remove()"></div>':'<div class="hotel-thumb fallback" aria-hidden="true"></div>')+'<div class="hotel-copy"><b>'+esc(h.name)+'</b><span>'+esc(h.city||'')+'</span><span>Check in: '+esc(formatDate(h.checkIn)||'Pending')+'</span><span>Check out: '+esc(formatDate(h.checkOut)||'Pending')+'</span></div></div>';}else{title=service.charAt(0).toUpperCase()+service.slice(1)+' booking';date=formatDate(b.createdAt||b.updatedAt);summary='<div class="hotel-summary plain"><b>'+esc(title)+'</b><span>Booking details are available in Manage Booking.</span></div>';}
-    return '<article class="booking-card"><div class="status-strip '+attr(displayKind)+'"><span>'+esc(statusLabel(displayKind,service))+'</span><span>'+esc(service.charAt(0).toUpperCase()+service.slice(1))+'</span></div><div class="card-body"><div class="card-head"><div><h2 class="route">'+esc(service==='hotel'?(hCityTitle(b)||title):title)+'</h2><p class="meta">'+esc([date,service==='hotel'?'':(count+' passenger'+(count>1?'s':'')),service==='flight'?tripType(b):''].filter(Boolean).join(' • '))+'</p><p class="booking-id">Booking ID: <b>'+esc(id)+'</b><button class="copy" type="button" data-copy="'+attr(id)+'" aria-label="Copy booking ID"></button></p></div><span class="status-badge '+attr(displayKind)+'">'+esc(statusLabel(displayKind,service))+'</span></div>'+summary+(total && service!=='hotel'?'<div class="price-row"><span>Total paid / payable</span><strong>'+esc(total)+'</strong></div>':'')+'<a class="manage" data-manage href="'+attr(detailUrl(id,service))+'">Manage booking</a></div></article>';
+  function card(b){
+    const service=text(b.service||b.type||activeService).toLowerCase();
+    const id=travelYaraaBookingId(b);
+    const kind=statusKind(b);
+    const displayKind=(activeStatus==='completed'&&(kind==='confirmed'||kind==='completed'))?'completed':kind;
+    const count=passengerCount(b);
+    const total=money(amountOf(b),currencyOf(b));
+    let summary='';let title='';let date='';let actions='';
+    if(service==='flight'){
+      const f=flightData(b);
+      title=[f.fromCity+(f.fromCode&&f.fromCity!==f.fromCode?' ('+f.fromCode+')':''),f.toCity+(f.toCode&&f.toCity!==f.toCode?' ('+f.toCode+')':'')].filter(Boolean).join(' → ')||'Flight booking';
+      date=formatDate(bookingDate(b,f));
+      summary='<div class="flight-summary"><div class="airline"><div class="airline-logo">'+airlineLogo(f.code,f.name)+'</div><div><b>'+esc(f.name)+'</b><span>'+esc([f.number,f.stops?f.stops+' stop'+(f.stops>1?'s':''):'Non-stop',f.duration].filter(Boolean).join(' • '))+'</span></div></div><div class="flight-route"><div class="point"><strong>'+esc(formatTime(f.dep))+'</strong><b>'+esc([f.fromCity,f.fromCode&&'('+f.fromCode+')'].filter(Boolean).join(' '))+'</b><small>'+esc([f.fromAirport,f.fromTerminal].filter(Boolean).join(' • '))+'</small></div><div class="journey"><div class="journey-line"><i>✈</i></div><span>'+esc(f.duration)+'</span></div><div class="point right"><strong>'+esc(formatTime(f.arrival))+'</strong><b>'+esc([f.toCity,f.toCode&&'('+f.toCode+')'].filter(Boolean).join(' '))+'</b><small>'+esc([f.toAirport,f.toTerminal].filter(Boolean).join(' • '))+'</small></div></div></div>';
+      actions='<a class="manage" data-manage href="'+attr(detailUrl(id,service))+'">Manage booking</a>';
+    }else if(service==='hotel'){
+      const h=hotelData(b);
+      title=h.name;
+      date=formatDate(bookingDate(b,h));
+      const guestLine=[h.adults?h.adults+' adult'+(h.adults===1?'':'s'):'',h.children?h.children+' child'+(h.children===1?'':'ren'):''].filter(Boolean).join(', ');
+      summary='<div class="hotel-summary">'+(h.image?'<div class="hotel-thumb"><img src="'+attr(h.image)+'" alt="" loading="lazy" onerror="this.parentNode.classList.add(\'fallback\');this.remove()"></div>':'<div class="hotel-thumb fallback" aria-hidden="true"></div>')
+        +'<div class="hotel-copy"><b>'+esc(h.name)+'</b>'
+        +'<span>'+esc(h.city||h.address||'')+'</span>'
+        +'<span>Check in: '+esc(formatDate(h.checkIn)||'Pending')+'</span>'
+        +'<span>Check out: '+esc(formatDate(h.checkOut)||'Pending')+'</span>'
+        +(h.leadName?'<span>Lead guest: '+esc(h.leadName)+'</span>':'')
+        +'</div></div>'
+        +'<div class="hotel-meta-grid">'
+        +'<p><small>Nights</small><strong>'+esc(h.nights||'—')+'</strong></p>'
+        +'<p><small>Rooms</small><strong>'+esc(h.rooms||1)+'</strong></p>'
+        +'<p><small>Guests</small><strong>'+esc(guestLine||'As booked')+'</strong></p>'
+        +'<p><small>Payment</small><strong>'+esc(paymentStatusLabel(b))+'</strong></p>'
+        +'</div>';
+      actions=hotelActionsHtml(b,displayKind,id)+(total?'<div class="price-row"><span>Paid amount</span><strong>'+esc(total)+'</strong></div><p class="pay-status">Payment status: '+esc(paymentStatusLabel(b))+'</p>':'');
+    }else{
+      title=service.charAt(0).toUpperCase()+service.slice(1)+' booking';
+      date=formatDate(b.createdAt||b.updatedAt);
+      summary='<div class="hotel-summary plain"><b>'+esc(title)+'</b><span>Booking details are available in Manage Booking.</span></div>';
+      actions='<a class="manage" data-manage href="'+attr(detailUrl(id,service))+'">Manage booking</a>';
+    }
+    return '<article class="booking-card"><div class="status-strip '+attr(displayKind)+'"><span>'+esc(statusLabel(displayKind,service))+'</span><span>'+esc(service.charAt(0).toUpperCase()+service.slice(1))+'</span></div><div class="card-body"><div class="card-head"><div><h2 class="route">'+esc(service==='hotel'?(hCityTitle(b)||title):title)+'</h2><p class="meta">'+esc([date,service==='hotel'?'':(count+' passenger'+(count>1?'s':'')),service==='flight'?tripType(b):''].filter(Boolean).join(' • '))+'</p><p class="booking-id">TravelYaraa Booking ID: <b>'+esc(id)+'</b><button class="copy" type="button" data-copy="'+attr(id)+'" aria-label="Copy booking ID"></button></p></div><span class="status-badge '+attr(displayKind)+'">'+esc(statusLabel(displayKind,service))+'</span></div>'+summary+(total && service!=='hotel'?'<div class="price-row"><span>Total paid / payable</span><strong>'+esc(total)+'</strong></div>':'')+actions+'</div></article>';
   }
   function hCityTitle(b){const h=hotelData(b);return h.city||h.name;}
+
+  async function downloadHotelFile(path){
+    const auth=token();
+    if(!auth){alert('Please log in to download this document.');return;}
+    $('#opening').hidden=false;
+    try{
+      const response=await fetch(api(path),{headers:{Accept:'application/pdf',Authorization:'Bearer '+auth},cache:'no-store'});
+      if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.message||data.error||'Document is not available.');}
+      const blob=await response.blob();
+      const disposition=response.headers.get('content-disposition')||'';
+      const match=disposition.match(/filename="?([^";]+)"?/i);
+      const name=match&&match[1]?match[1]:'TravelYaraa-document.pdf';
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);
+    }catch(error){alert(error.message||'Document could not be downloaded.');}
+    finally{$('#opening').hidden=true;}
+  }
+  async function cancelHotelBooking(id){
+    if(!confirm('Check the hotel cancellation charges and continue with the cancellation request?'))return;
+    $('#opening').hidden=false;
+    try{
+      const auth=token();
+      const quoteRes=await fetch(api('/api/bookings/'+encodeURIComponent(id)+'/cancel'),{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+auth},body:JSON.stringify({confirm:false,service:'hotel',reason:'Customer requested hotel cancellation from My Bookings'})});
+      const quote=await quoteRes.json().catch(()=>({}));
+      if(!quoteRes.ok||quote.success===false)throw new Error(quote.message||quote.error||'Cancellation could not be checked.');
+      if(!confirm((quote.message||'Cancellation charges were checked.')+' Submit the cancellation request now?'))return;
+      const confRes=await fetch(api('/api/bookings/'+encodeURIComponent(id)+'/cancel'),{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+auth},body:JSON.stringify({confirm:true,service:'hotel',reason:'Customer confirmed hotel cancellation from My Bookings'})});
+      const conf=await confRes.json().catch(()=>({}));
+      if(!confRes.ok||conf.success===false)throw new Error(conf.message||conf.error||'Cancellation could not be submitted.');
+      alert(conf.message||'Cancellation request submitted.');
+      load();
+    }catch(error){alert(error.message||'Cancellation failed.');}
+    finally{$('#opening').hidden=true;}
+  }
 
   function setActive(){$$('.service-tab').forEach(b=>b.classList.toggle('active',b.dataset.service===activeService));$$('.status-tab').forEach(b=>b.classList.toggle('active',b.dataset.status===activeStatus));}
   function loading(){return '<div class="state"><div class="loader" aria-label="Loading bookings"></div></div>';}
@@ -255,6 +423,10 @@
     }
     const copy=event.target.closest('[data-copy]');
     if(copy){event.preventDefault();const value=copy.dataset.copy||'';try{await navigator.clipboard.writeText(value);copy.classList.add('copied');setTimeout(()=>copy.classList.remove('copied'),900);}catch(_){const input=document.createElement('textarea');input.value=value;document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();}return;}
+    const download=event.target.closest('[data-hotel-download]');
+    if(download){event.preventDefault();downloadHotelFile(download.getAttribute('data-hotel-download'));return;}
+    const cancelBtn=event.target.closest('[data-hotel-cancel]');
+    if(cancelBtn){event.preventDefault();cancelHotelBooking(cancelBtn.getAttribute('data-hotel-cancel'));return;}
     const manage=event.target.closest('[data-manage]');
     if(manage){$('#opening').hidden=false;}
   });
