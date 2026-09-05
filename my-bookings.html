@@ -55,16 +55,16 @@
     .flight-route{display:grid;grid-template-columns:minmax(0,1fr) minmax(95px,.75fr) minmax(0,1fr);gap:9px;align-items:start}
     .point strong{display:block;color:var(--navy);font-size:19px}.point b{display:block;margin-top:3px;color:var(--navy);font-size:12px;line-height:1.35}.point small{display:block;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.35}.point.right{text-align:right}
     .journey{text-align:center;padding-top:7px;color:var(--muted);font-size:10px;font-weight:800}.journey-line{position:relative;height:1px;margin:5px 0 7px;background:#a9bed8}.journey-line:before,.journey-line:after{content:"";position:absolute;top:-3px;width:7px;height:7px;border:1.5px solid var(--blue);border-radius:50%;background:#fff}.journey-line:before{left:0}.journey-line:after{right:0}.journey-line i{position:absolute;left:50%;top:-8px;transform:translateX(-50%) rotate(90deg);color:var(--blue);font-style:normal;font-size:15px}
-    .hotel-summary{margin-top:10px;padding:10px;border:1px solid #e3edf8;border-radius:12px;background:#fbfdff;display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:start}
+    .hotel-summary{margin-top:8px;padding:8px;border:1px solid #e3edf8;border-radius:12px;background:#fbfdff;display:grid;grid-template-columns:56px minmax(0,1fr);gap:8px;align-items:start}
     .hotel-summary b{display:block;color:var(--navy);font-size:14px;line-height:1.25}
-    .hotel-summary span{display:block;margin-top:3px;color:var(--muted);font-size:12px;font-weight:700}
-    .hotel-thumb{width:64px;height:64px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
+    .hotel-summary span{display:block;margin-top:2px;color:var(--muted);font-size:12px;font-weight:700}
+    .hotel-thumb{width:56px;height:56px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#e8f1ff,#f7fbff);display:grid;place-items:center}
     .hotel-thumb img{width:100%;height:100%;object-fit:cover}
-    .hotel-thumb.fallback:before{content:"";display:block;width:22px;height:22px;border-radius:7px;background:rgba(0,98,227,.12)}
+    .hotel-thumb.fallback:before{content:"";display:block;width:18px;height:18px;border-radius:6px;background:rgba(0,98,227,.12)}
     .hotel-summary.plain{display:block}
     .hotel-summary.plain b{display:block}
-    .hotel-inline{margin-top:8px;color:var(--muted);font-size:12px;font-weight:750;line-height:1.4}
-    .card-actions{display:grid;gap:8px;margin-top:12px}
+    .hotel-inline,.hotel-dates{margin-top:4px;color:var(--muted);font-size:12px;font-weight:750;line-height:1.35}
+    .card-actions{display:grid;gap:8px;margin-top:10px}
     .card-actions .manage{margin-top:0}
     .card-actions .btn-secondary{display:block;width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);padding:11px 14px;text-align:center;text-decoration:none;font-weight:850;cursor:pointer}
     .card-actions .btn-primary-soft{display:block;width:100%;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:12px 14px;text-align:center;text-decoration:none;font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgba(0,98,227,.16)}
@@ -77,7 +77,7 @@
     .pay-status{margin:4px 0 0;color:var(--muted);font-size:11px;font-weight:750}
     .manage{display:block;width:100%;margin-top:14px;border:0;border-radius:12px;background:var(--blue);color:#fff;padding:13px 16px;text-align:center;text-decoration:none;font-weight:900;box-shadow:0 7px 16px rgba(0,98,227,.18)}
     .manage:active{transform:translateY(1px)}
-    @media(max-width:620px){.hotel-summary{grid-template-columns:64px minmax(0,1fr)}.hotel-thumb{width:64px;height:64px}}
+    @media(max-width:620px){.hotel-summary{grid-template-columns:52px minmax(0,1fr)}.hotel-thumb{width:52px;height:52px}}
     .state{display:grid;place-items:center;min-height:260px;padding:30px 22px;border:1px solid var(--line);border-radius:19px;background:#fff;text-align:center;box-shadow:0 9px 25px rgba(7,29,73,.05)}
     .state h2{margin:0;color:var(--navy);font-size:20px}.state p{max-width:480px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55;font-weight:650}.state a,.retry{display:inline-block;margin-top:15px;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:11px 18px;text-decoration:none;font-weight:900}
     .loader{width:46px;height:46px;border:4px solid #dce8f7;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
@@ -310,8 +310,7 @@
       summary='<div class="hotel-summary">'+(h.image?'<div class="hotel-thumb"><img src="'+attr(h.image)+'" alt="" loading="lazy" onerror="this.parentNode.classList.add(\'fallback\');this.remove()"></div>':'<div class="hotel-thumb fallback" aria-hidden="true"></div>')
         +'<div class="hotel-copy">'
         +'<span>'+esc(h.city||h.address||'')+'</span>'
-        +'<span>Check in: '+esc(formatDate(h.checkIn)||'Pending')+'</span>'
-        +'<span>Check out: '+esc(formatDate(h.checkOut)||'Pending')+'</span>'
+        +'<span class="hotel-dates">'+esc([formatDate(h.checkIn)?'In '+formatDate(h.checkIn):'', formatDate(h.checkOut)?'Out '+formatDate(h.checkOut):''].filter(Boolean).join(' · ')||'Dates pending')+'</span>'
         +(compact?'<span class="hotel-inline">'+esc(compact)+'</span>':'')
         +'</div></div>';
       actions=hotelActionsHtml(b,displayKind,id);
