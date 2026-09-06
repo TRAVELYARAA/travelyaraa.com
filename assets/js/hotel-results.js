@@ -5245,7 +5245,7 @@ function statusLabel(b){
   if(kind==='completed') return ['Stay Completed','completed'];
   if(kind==='upcoming') return ['Booking Confirmed','confirmed'];
   if(kind==='cancelled') return ['Booking Cancelled','cancelled'];
-  if(kind==='failed_unpaid') return ['Payment Failed','failed'];
+  if(kind==='failed_unpaid') return ['Booking Failed','failed'];
   if(kind==='failed_paid') return ['Booking Failed','failed'];
   if(kind==='pending_paid') return ['Booking Pending','pending'];
   return ['Booking Pending','pending'];
@@ -5275,10 +5275,14 @@ function hotelDetailKind(b){
   const pay=String(b.paymentStatus||(b.payment&&(b.payment.status||b.payment.paymentStatus))||'').toUpperCase();
   const paid=hotelPaymentPaid(b);
   const ref=!!hotelReferenceFromStatus(b);
-  if(/CANCEL/.test(s)) return 'cancelled';
+  // Real cancellation only — abandoned/dismissed payment is Booking Failed, not Cancelled.
+  if(/PAYMENT_CANCELLED|PAYMENT_ABANDONED|PAYMENT_EXPIRED|PAYMENT_FAILED|ORDER_CREATION_FAILED|^BOOKING_FAILED$/.test(s)){
+    return paid ? 'failed_paid' : 'failed_unpaid';
+  }
+  if(/CANCELLED|CANCELED|VOID|CANCEL_REQUESTED/.test(s)) return 'cancelled';
   // Unpaid / failed / abandoned payment never stays as Upcoming Pending.
   if(!paid) return 'failed_unpaid';
-  if(/PAYMENT_FAILED|ORDER_CREATION_FAILED/.test(pay)) return 'failed_unpaid';
+  if(/PAYMENT_FAILED|ORDER_CREATION_FAILED|ABANDONED|EXPIRED/.test(pay)) return 'failed_unpaid';
   if(/FAIL|ABORT|ERROR|UNSUCCESS|REFUND_REQUIRED|SUPPLIER_BOOKING_FAILED|BOOKING_FAILED/.test(s)) return 'failed_paid';
   if((/SUCCESS|CONFIRM|BOOKED|COMPLETED/.test(s) || ref) && hotelStayCompleted(b)) return 'completed';
   if(/SUCCESS|CONFIRM|BOOKED|COMPLETED/.test(s) || ref) return 'upcoming';
@@ -5305,7 +5309,11 @@ function hotelPaymentIdSafe(b){
   return s;
 }
 function hotelCanRetryPayment(b){
-  return hotelDetailKind(b)==='failed_unpaid';
+  if(b && (b.canRetryPayment===true || b.canRetryPayment==='true')) return true;
+  if(b && (b.canRetryPayment===false || b.canRetryPayment==='false')) return false;
+  // Fallback only when backend flag is absent: unpaid + failed-like, never cancelled/confirmed.
+  const kind=hotelDetailKind(b);
+  return kind==='failed_unpaid';
 }
 function hotelLatLng(b){
   const h=hotelStatusHInfo(b)||{};
@@ -5686,15 +5694,16 @@ function renderStatus(b, raw){
     else if(firstVal(b.refundStatus,b.refundAmount,b.payment&&b.payment.refundStatus,b.payment&&b.payment.refundAmount,'')) statusNote='Your booking has been cancelled. Refund details are shown below.';
     else statusNote='Your booking has been cancelled. Refund details are not available yet. Please contact support with your Booking ID.';
   }
-  else if(kind==='failed_unpaid'){ statusTitle='Payment Failed'; statusNote='Payment was not completed. No confirmed hotel booking was created.'; }
+  else if(kind==='failed_unpaid'){ statusTitle='Booking Failed'; statusNote='Your hotel booking could not be completed because payment was not successful.'; }
   else if(kind==='failed_paid'){ statusTitle='Booking Failed'; statusNote='Payment was received, but the hotel booking could not be confirmed. Please check refund status or contact support with your Booking ID.'; }
   else { statusTitle='Booking Pending'; statusNote='We are confirming your hotel booking. Please check status again after a short time.'; }
 
-  const showBookAgain=kind==='completed'||kind==='cancelled'||kind==='failed_unpaid'||kind==='failed_paid';
   const bookAgainLabel=kind==='completed'?'Book again':'New booking';
   const statusPrimaryCta=[];
   if(canRetry) statusPrimaryCta.push('<button type="button" class="tyh-bd-btn primary" data-action="retry-payment">Retry payment</button>');
-  if(showBookAgain) statusPrimaryCta.push('<button type="button" class="tyh-bd-btn primary" data-action="book-again">'+esc(bookAgainLabel)+'</button>');
+  // New booking when retry is not allowed/expired, or for cancelled/completed/paid-fail (no retry).
+  const showNewBooking=!canRetry && (kind==='completed'||kind==='cancelled'||kind==='failed_unpaid'||kind==='failed_paid');
+  if(showNewBooking) statusPrimaryCta.push('<button type="button" class="tyh-bd-btn primary" data-action="book-again">'+esc(bookAgainLabel)+'</button>');
   const bookAgainCta=statusPrimaryCta.length
     ? ('<div class="tyh-bd-status-cta'+(statusPrimaryCta.length>1?' twin':'')+'">'+statusPrimaryCta.join('')+'</div>')
     : '';
