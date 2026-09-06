@@ -183,26 +183,28 @@
   function hotelPendingStale(b,ms){const t=Date.parse(b.updatedAt||b.createdAt||'')||0;if(!t)return true;return (Date.now()-t)>(ms||30*60*1000);}
   function statusKind(b){
     const service=text(b.service||b.type||activeService).toLowerCase();
+    const bookingStatus=text(b.bookingStatus||b.status||b.orderStatus||'').toUpperCase();
     const bookingWords=[b.bookingStatus,b.status,b.orderStatus,b.ticketStatus].filter(Boolean).map(v=>text(v).toUpperCase()).join(' ');
     const payWords=[b.paymentStatus,getPath(b,['payment','status'])].filter(Boolean).map(v=>text(v).toUpperCase()).join(' ');
     const words=bookingWords+' '+payWords;
     if(/REFUNDED|REFUND_PROCESSED|REFUND_COMPLETED/.test(words))return 'refunded';
-    if(/CANCELLED|CANCELED|VOID|CANCEL_REQUESTED/.test(bookingWords))return 'cancelled';
     if(service==='hotel'){
-      // Payment authoritative first: unpaid/failed/abandoned never stay in Upcoming as Pending.
-      if(!paymentPaid(b))return 'payment_failed';
-      if(/PAYMENT_FAILED|ORDER_CREATION_FAILED/.test(payWords))return 'payment_failed';
+      // Real cancellation only — abandoned/dismissed payment is Unsuccessful.
+      if(!/PAYMENT_CANCELLED|PAYMENT_ABANDONED|PAYMENT_EXPIRED|PAYMENT_FAILED|ORDER_CREATION_FAILED|^BOOKING_FAILED$/.test(bookingStatus)
+        && /CANCELLED|CANCELED|VOID|CANCEL_REQUESTED/.test(bookingStatus))return 'cancelled';
+      if(!paymentPaid(b))return 'failed';
+      if(/PAYMENT_FAILED|ORDER_CREATION_FAILED|ABANDONED|EXPIRED/.test(payWords))return 'failed';
       if(/PAYMENT_FAILED|BOOKING_FAILED|FAILED|FAILURE|ERROR|ABORT|UNSUCCESS|REFUND_REQUIRED|SUPPLIER_BOOKING_FAILED/.test(bookingWords))return 'failed';
       const href=hotelConfirmationRef(b);
-      if(/CONFIRMED|BOOKED|COMPLETED|SUCCESS/.test(bookingWords)||isRealRef(href)){
+      if((/CONFIRMED|BOOKED|COMPLETED|SUCCESS/.test(bookingWords)&&isRealRef(href))||isRealRef(href)){
         const h=hotelData(b);
         if(hotelStayPast(b,h)||activeStatus==='completed')return 'completed';
         return 'confirmed';
       }
-      // Paid but still waiting for hotel confirmation — only briefly Pending.
       if(hotelPendingStale(b))return 'failed';
       return 'pending';
     }
+    if(/CANCELLED|CANCELED|VOID|CANCEL_REQUESTED/.test(bookingWords))return 'cancelled';
     if(/PAYMENT_FAILED|BOOKING_FAILED|TICKET_FAILED|FAILED|FAILURE|ERROR|REJECT|ABORT|UNSUCCESS|REFUND_REQUIRED/.test(words))return 'failed';
     const ref=firstValue(b.airlinePnr,b.airlinePNR,b.pnr,b.airlineReference,b.ticketNumber,b.ticketNo,deepFind(b,['airlinePnr','airlinePNR','gdsPnr','pnr','airlineReference','ticketNumber','ticketNo','tktNo']));
     if(/CONFIRMED|TICKETED|BOOKED|COMPLETED|SUCCESS/.test(words)&&ref&&ref.length>=3)return 'confirmed';
@@ -210,7 +212,7 @@
   }
   function statusLabel(kind,service){
     if(service==='hotel'){
-      return {confirmed:'Confirmed',completed:'Completed',pending:'Pending',failed:'Booking Failed',payment_failed:'Payment Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
+      return {confirmed:'Confirmed',completed:'Completed',pending:'Pending',failed:'Booking Failed',payment_failed:'Booking Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
     }
     return {confirmed:'Confirmed',completed:'Completed',pending:'Pending',failed:'Failed',cancelled:'Cancelled',refunded:'Refunded'}[kind]||'Pending';
   }
