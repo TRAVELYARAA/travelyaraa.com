@@ -4692,8 +4692,12 @@ window.addEventListener("pageshow", closeAllPickersOnLoadV10);
 #cityPickerV5 .ty-airport-main-v184 b,#cityPickerV5 .ty-hotel-main-v184 b{font-size:13.5px!important;color:#071d49!important;font-weight:950!important;line-height:1.15!important}
 #cityPickerV5 .ty-airport-main-v184 small,#cityPickerV5 .ty-hotel-main-v184 small{font-size:10.8px!important;color:#64748b!important;line-height:1.2!important;margin-top:3px!important}
 #cityPickerV5 .ty-airport-country-v184,#cityPickerV5 .ty-hotel-country-v184{font-size:11px!important;color:#64748b!important;text-align:right!important;font-weight:850!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
-#cityPickerV5 .ty-hotel-city-row-v184{grid-template-columns:28px minmax(0,1fr) 76px!important}
-#cityPickerV5 .ty-hotel-pin-v184{width:24px!important;height:24px!important;border-radius:999px!important;background:#eef6ff!important;color:#0062e3!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:13px!important;font-weight:950!important}
+#cityPickerV5 .ty-hotel-city-row-v184{grid-template-columns:28px minmax(0,1fr) 76px!important;align-items:center!important}
+#cityPickerV5 .ty-hotel-pin-v184{width:24px!important;height:24px!important;border-radius:999px!important;background:#e8f1ff!important;color:#0062e3!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 24px!important}
+#cityPickerV5 .ty-hotel-pin-v184 svg{width:14px!important;height:14px!important;display:block!important;fill:none!important;stroke:currentColor!important;stroke-width:2!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+#cityPickerV5 .ty-hotel-main-v184{min-width:0!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important}
+#cityPickerV5 .ty-hotel-tag-v184{display:inline-flex!important;align-items:center!important;margin-top:4px!important;padding:1px 7px!important;border-radius:999px!important;background:#eef6ff!important;color:#0062e3!important;font-size:10px!important;font-weight:900!important;letter-spacing:.02em!important}
+#cityPickerV5 .ty-hotel-country-v184{font-size:11px!important;color:#64748b!important;text-align:right!important;font-weight:850!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 #cityPickerV5 .ty-hotel-chip-grid-v184{display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin:0 0 12px!important}
 #cityPickerV5 .ty-hotel-chip-v184{border:1px solid #dbe7f3!important;background:#fff!important;color:#071d49!important;border-radius:999px!important;min-height:34px!important;padding:0 13px!important;font-size:12px!important;font-weight:900!important;box-shadow:0 4px 12px rgba(7,29,73,.04)!important}
 #flightReturnBoxV5.ty-return-empty-v5 #flightReturnTextV5{font-size:7.8px!important;line-height:1.05!important;white-space:nowrap!important;display:block!important;overflow:visible!important;text-overflow:clip!important;color:#111827!important;font-weight:900!important;letter-spacing:-.04em!important;max-width:100%!important}
@@ -5020,32 +5024,13 @@ function rankHotelCityRowsV181(rows, query){
     if(t==="PROVINCE_STATE") return 2;
     return 3;
   }
-  function partsOf(r){return hotelCityPartsV181(r).map(hotelCityNormV181)}
   function exactName(r){return hotelCityNormV181(r.cityName||r.name||r.city)===q}
-  function clusterKey(r){
-    const parts=partsOf(r);
-    const hit=parts.find(function(p){return p===q||p.split(" ").indexOf(q)>=0||p.indexOf(q)>=0});
-    return String(hit||parts.slice(-2).join("|"))+"|"+hotelCityNormV181(r.country);
-  }
-  const counts={};
-  list.forEach(function(r){const k=clusterKey(r);counts[k]=(counts[k]||0)+1});
-  let bestK="",bestN=0;
-  Object.keys(counts).forEach(function(k){if(counts[k]>bestN){bestN=counts[k];bestK=k}});
+  // Preserve backend ranking order; only light local polish (no India country bias).
   list.sort(function(a,b){
-    const prefCountry=hotelCityNormV181(localStorage.getItem("ty_country")||"India");
-    const aIn=prefCountry&&hotelCityNormV181(a.country)===prefCountry?0:1;
-    const bIn=prefCountry&&hotelCityNormV181(b.country)===prefCountry?0:1;
-    if(aIn!==bIn) return aIn-bIn;
-    const aDom=bestN>=3&&clusterKey(a)===bestK?0:1;
-    const bDom=bestN>=3&&clusterKey(b)===bestK?0:1;
-    if(aDom!==bDom) return aDom-bDom;
-    const ta=typeRank(a),tb=typeRank(b);
-    if(ta!==tb) return ta-tb;
     const ea=exactName(a)?0:1,eb=exactName(b)?0:1;
     if(ea!==eb) return ea-eb;
-    const na=hotelCityNormV181(a.cityName||a.name),nb=hotelCityNormV181(b.cityName||b.name);
-    const sa=na.indexOf(q)===0?0:1,sb=nb.indexOf(q)===0?0:1;
-    if(sa!==sb) return sa-sb;
+    const ta=typeRank(a),tb=typeRank(b);
+    if(ta!==tb) return ta-tb;
     return (a._ord||0)-(b._ord||0);
   });
   return list;
@@ -5121,6 +5106,12 @@ function hotelRegionTypeLabelV181(value){
   if(raw==="CITY") return "City";
   return prettyHotelPlaceV181(raw.replace(/_/g," "));
 }
+function hotelLocationIconSvgV181(){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>';
+}
+function hotelBuildingIconSvgV181(){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l8-4 8 4v12"/><path d="M9 20v-5h6v5"/><path d="M9 10h.01M12 10h.01M15 10h.01M9 13h.01M12 13h.01M15 13h.01"/></svg>';
+}
 function hotelRowHtmlV181(r,recent){
   const parts=hotelCityPartsV181(r);
   const name=parts[0]||r.cityName||r.name||r.city||"";
@@ -5128,7 +5119,10 @@ function hotelRowHtmlV181(r,recent){
   const loc=hotelDestinationLabelV181(r);
   const country=String(r.country||loc.country||"").trim();
   const cityId=/^\d+$/.test(String(r.id||r.cityId||r.regionId||""))?String(r.id||r.cityId||r.regionId):"";
-  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(parts.join(", ")||loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr(cityId)}" data-country="${escAttr(country)}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184"></span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b>${sub?'<small>'+escHtml(sub)+'</small>':''}</span></button>`;
+  const isHotel=String(r.suggestionType||r.kind||"").toLowerCase()==="hotel";
+  const icon=isHotel?hotelBuildingIconSvgV181():hotelLocationIconSvgV181();
+  const tag=isHotel?'<span class="ty-hotel-tag-v184">Hotel</span>':'';
+  return `<button type="button" class="ty-city-row-v66 hotel ty-hotel-city-row-v184" data-kind="hotel" data-city="${escAttr(name)}" data-label="${escAttr(parts.join(", ")||loc.label||name)}" data-area="${escAttr(sub)}" data-cityid="${escAttr(cityId)}" data-country="${escAttr(country)}" data-lat="${escAttr(r.lat||"")}" data-lng="${escAttr(r.lng||"")}"><span class="ty-hotel-pin-v184" aria-hidden="true">${icon}</span><span class="ty-hotel-main-v184"><b>${escHtml(name)}</b>${sub?'<small>'+escHtml(sub)+'</small>':''}${tag}</span><span class="ty-hotel-country-v184">${escHtml(country)}</span></button>`;
 }
 function bindCityButtonsV181(box){
   qa(".ty-city-row-v66,.ty-hotel-chip-v184",box).forEach(btn=>btn.onclick=function(){
