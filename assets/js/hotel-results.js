@@ -1750,18 +1750,11 @@ function rankHotelCityRows(rows, query){
   if(!q||!list.length) return list;
   list.forEach(function(r,i){ r._ord=i; });
   function typeRank(r){ const t=String(r.regionType||'').toUpperCase(); if(t==='MULTI_CITY_VICINITY') return 0; if(t==='CITY') return 1; if(t==='PROVINCE_STATE') return 2; return 3; }
-  function partsOf(r){ return hotelCityParts(r).map(hotelCityNorm); }
   function exactName(r){ return hotelCityNorm(r.cityName||r.name||r.city)===q; }
-  function clusterKey(r){ const parts=partsOf(r); const hit=parts.find(function(p){ return p===q||p.split(' ').indexOf(q)>=0||p.indexOf(q)>=0; }); return String(hit||parts.slice(-2).join('|'))+'|'+hotelCityNorm(r.country); }
-  const counts={}; list.forEach(function(r){ const k=clusterKey(r); counts[k]=(counts[k]||0)+1; });
-  let bestK='', bestN=0; Object.keys(counts).forEach(function(k){ if(counts[k]>bestN){ bestN=counts[k]; bestK=k; } });
+  // Preserve backend ranking; no India country bias.
   list.sort(function(a,b){
-    const aDom=bestN>=3&&clusterKey(a)===bestK?0:1, bDom=bestN>=3&&clusterKey(b)===bestK?0:1;
-    if(aDom!==bDom) return aDom-bDom;
-    const ta=typeRank(a), tb=typeRank(b); if(ta!==tb) return ta-tb;
     const ea=exactName(a)?0:1, eb=exactName(b)?0:1; if(ea!==eb) return ea-eb;
-    const na=hotelCityNorm(a.cityName||a.name), nb=hotelCityNorm(b.cityName||b.name);
-    const sa=na.indexOf(q)===0?0:1, sb=nb.indexOf(q)===0?0:1; if(sa!==sb) return sa-sb;
+    const ta=typeRank(a), tb=typeRank(b); if(ta!==tb) return ta-tb;
     return (a._ord||0)-(b._ord||0);
   });
   return list;
@@ -1792,7 +1785,8 @@ async function fetchHotelCities(term){
 function cityPickerHtml(){
   if(!S.ui.cityOpen) return '';
   const rows=arr(S.ui.cityRows);
-  return '<div class="tyh-pop-bg" data-city-close></div><section class="tyh-city-pop" role="dialog" aria-label="City / Area / Property"><header><h2>City / Area / Property</h2><button type="button" data-city-close>×</button></header><input type="search" data-city-input value="'+attr(S.ui.cityQuery||'')+'" placeholder="Location, landmark, or property" autofocus><div class="tyh-city-list">'+(S.ui.cityStatus?'<p class="tyh-muted">'+esc(S.ui.cityStatus)+'</p>':'')+rows.map(function(r){ const parts=hotelCityParts(r); const title=parts[0]||r.cityName||r.name; const sub=parts.slice(1).join(', '); return '<button type="button" class="tyh-city-row" data-pick-city="'+attr(r.regionId)+'" data-city-name="'+attr(title)+'" data-city-sub="'+attr(sub)+'" data-city-country="'+attr(r.country||'')+'"><b>'+esc(title)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</button>'; }).join('')+'</div></section>';
+  const pin='<span class="tyh-city-pin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg></span>';
+  return '<div class="tyh-pop-bg" data-city-close></div><section class="tyh-city-pop" role="dialog" aria-label="City / Area / Property"><header><h2>City / Area / Property</h2><button type="button" data-city-close>×</button></header><input type="search" data-city-input value="'+attr(S.ui.cityQuery||'')+'" placeholder="City, area, or country" autofocus><div class="tyh-city-list">'+(S.ui.cityStatus?'<p class="tyh-muted">'+esc(S.ui.cityStatus)+'</p>':'')+rows.map(function(r){ const parts=hotelCityParts(r); const title=parts[0]||r.cityName||r.name; const sub=parts.slice(1).join(', '); const country=r.country||''; return '<button type="button" class="tyh-city-row" data-pick-city="'+attr(r.regionId)+'" data-city-name="'+attr(title)+'" data-city-sub="'+attr(sub)+'" data-city-country="'+attr(country)+'">'+pin+'<span class="tyh-city-main"><b>'+esc(title)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</span><span class="tyh-city-country">'+esc(country)+'</span></button>'; }).join('')+'</div></section>';
 }
 function guestPopupHtml(){
   if(!S.ui.guestOpen) return '';
@@ -6363,9 +6357,13 @@ function css(){ return `
 .tyh-city-pop h2,.tyh-guest-pop h2,.tyh-cal h2{margin:0;font-size:18px;color:var(--ty-navy)}
 .tyh-city-pop header button,.tyh-guest-pop header button,.tyh-cal header button{border:0;background:#fff;font-size:24px;color:var(--ty-blue)}
 .tyh-city-pop input[type=search]{width:calc(100% - 28px);margin:12px 14px;height:42px;border:1px solid var(--ty-line);border-radius:12px;padding:0 12px}
-.tyh-city-row{width:100%;border:0;border-bottom:1px solid #f1f5f9;background:#fff;text-align:left;padding:12px 14px;display:grid;gap:4px}
+.tyh-city-row{width:100%;border:0;border-bottom:1px solid #f1f5f9;background:#fff;text-align:left;padding:12px 14px;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center}
+.tyh-city-pin{width:24px;height:24px;border-radius:999px;background:#e8f1ff;color:#0062e3;display:inline-flex;align-items:center;justify-content:center}
+.tyh-city-pin svg{width:14px;height:14px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tyh-city-main{min-width:0;display:grid;gap:4px}
 .tyh-city-row b{color:#071d49;font-size:14px}
 .tyh-city-row small{color:#667085;font-size:12px}
+.tyh-city-country{color:#667085;font-size:11px;font-weight:700;white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis}
 .tyh-guest-row-ctrl{display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid #f1f5f9}
 .tyh-guest-row-ctrl small{display:block;color:#667085;font-size:12px;margin-top:3px}
 .tyh-guest-done{width:calc(100% - 28px);margin:14px;height:46px;border:0;border-radius:12px;background:var(--ty-blue);color:#fff;font-weight:900}
