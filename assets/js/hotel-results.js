@@ -874,6 +874,7 @@ function hotelFareParts(d){
     const before=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||feeAmt||0)));
     return hotelMoneyRound(Math.max(0, before-discAmt));
   };
+  const fromComponents=hotelMoneyRound(Math.max(0, roomBase+taxesFees-discount));
   if(applied && Number(applied.finalPayableAmount)>0){
     const offerTotal=hotelMoneyRound(applied.finalPayableAmount);
     const fromRows=recomputedFromRows(taxesFees, discount);
@@ -885,16 +886,18 @@ function hotelFareParts(d){
     }
   }else if(discount>0){
     total=recomputedFromRows(taxesFees, discount);
-  } else if(Number(d.finalPayableAmount)>0) total=hotelMoneyRound(d.finalPayableAmount);
-  else total=canonicalPayable>0?canonicalPayable:hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0)));
-  // Keep authoritative fee visible; reconcile only ±1 rounding drift into Taxes & Fees.
+  }else{
+    // Prefer rounded Room + Fees − Discount (backend payment policy). Never invent a ±₹1 fee
+    // to match a stale draft.finalPayableAmount.
+    total=fromComponents>0?fromComponents
+      :(canonicalPayable>0?canonicalPayable
+        :hotelMoneyRound(Math.max(0, Number(hotelRawTicketAmount(o,h)||0)+Number(hotelRawFeeAmount(o,h)||0))));
+  }
   if(!feeWaived){
     if(taxesFees<=0 && total>0 && (discount>0 || roomBase>0)){
       const implied=total-roomBase+discount;
       if(implied>0) taxesFees=hotelMoneyRound(implied);
     }
-    const drift=total-(roomBase+taxesFees-discount);
-    if(taxesFees>0 && Math.abs(drift)===1) taxesFees=hotelMoneyRound(Math.max(0, taxesFees+drift));
   }
   serviceFee=taxesFees;
   const parts={
@@ -3296,12 +3299,12 @@ function buildHotelReviewOutcome(reviewPack, selectedBefore, hotelCtx, currentAu
   if(reviewApiPay>0){
     newSell=hotelMoneyRound(reviewApiPay);
   }else{
-    const rebuilt=hotelMoneyRound(Number(newTicket||0) + Number(feeAfterRaw||0));
-    // Component rounding (round(ticket)+fee vs round(ticket+fee)/API payable) can drift by ₹1.
-    // That is not a genuine customer-payable change — keep the locked Results/Room amount.
-    if(lockedPay>0 && Math.abs(rebuilt-lockedPay)<=1) newSell=lockedPay;
-    else if(currentAuth>0 && Math.abs(rebuilt-currentAuth)<=1) newSell=currentAuth;
-    else newSell=rebuilt;
+    // Whole-rupee Room + Fees (same policy as backend canonicalizeHotelCustomerPrice).
+    // Do not keep a stale locked/current payable that differs by ₹1 from the rebuilt sum —
+    // that caused Payment summary ₹2417 vs backend/Razorpay ₹2416 mismatches.
+    newSell=hotelMoneyRound(Number(newTicket||0) + Number(feeAfterRaw||0));
+    if(!(newSell>0) && lockedPay>0) newSell=lockedPay;
+    else if(!(newSell>0) && currentAuth>0) newSell=currentAuth;
   }
   // Popup only when the canonical customer payable amount genuinely differs by ≥ ₹1.
   const priceChanged=currentAuth>0 && newSell>0 && Math.abs(newSell-currentAuth)>=1;
