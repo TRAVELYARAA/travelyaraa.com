@@ -90,7 +90,7 @@
     return expectView(view, service, 'results_embed');
   }
 
-  /* continue_selected: one-time. The gateway deletes the record on success. */
+  /* continue_selected: one-time. Replays return BOOKING_HANDOFF_CONSUMED until expiry. */
   async function consume(handoffId, service, expectedSelectedId){
     const view = expectView(
       await request(PATH + '/' + encodeURIComponent(checkedId(handoffId)) + '/consume', 'POST', {}),
