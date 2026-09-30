@@ -1823,7 +1823,10 @@
     const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
     if(!list.length) return list;
     const raw = reviewRawFromResponse(reviewData) || list[0].reviewRaw || list[0]._reviewRaw;
-    const supplierTf = tyFlightReviewSupplierTf(raw, list);
+    return tyApplyReviewSupplierTf(list, tyFlightReviewSupplierTf(raw, list));
+  }
+
+  function tyApplyReviewSupplierTf(list, supplierTf){
     if(!(supplierTf > 0)) return list;
     const customerTotal = Math.max(0, Math.round(
       customerReviewPriceForSupplierTotal(list, supplierTf)
@@ -1853,11 +1856,75 @@
       f.convenienceFee = 0;
       f.bookingFee = 0;
       f.serviceCharge = 0;
+      f._tyReviewedSupplierShare = supplierTf / list.length;
       if(f.raw && typeof f.raw === 'object'){
-        f.raw.pricingBreakup = Object.assign({}, f.raw.pricingBreakup || {}, pb);
+        /* raw can be shared with the result card object; never reprice the card. */
+        f.raw = Object.assign({}, f.raw, {pricingBreakup: Object.assign({}, f.raw.pricingBreakup || {}, pb)});
       }
     });
     return list;
+  }
+
+  function tyFareComponentsForPax(fd, type){
+    if(!fd || typeof fd !== 'object') return null;
+    const node = fd[type] || fd[type.charAt(0) + type.slice(1).toLowerCase()] || fd[type.toLowerCase()];
+    return node && (node.fC || node.fareComponents) || null;
+  }
+
+  /* Supplier amount the customer expects for all travellers of this search, before the
+     airline review: the accepted reviewed amount once synced, else the searched fare's
+     per-traveller-type TF x traveller counts. Search results price one adult. */
+  function tySearchSupplierTotalForTravellers(f){
+    if(!f) return 0;
+    if(Number(f._tyReviewedSupplierShare) > 0) return Number(f._tyReviewedSupplierShare);
+    const s = state.search || {};
+    const counts = {ADULT: Math.max(1, Number(s.adults || 1) || 1), CHILD: Math.max(0, Number(s.children || 0) || 0), INFANT: Math.max(0, Number(s.infants || 0) || 0)};
+    const id = String(f.priceId || f.id || '').trim();
+    const rawTrip = f.rawTrip || (f.raw && (f.raw.rawTrip || f.raw.trip)) || {};
+    const entries = [f.rawPrice, f.raw && f.raw.selectedPrice, f.selectedFare && f.selectedFare.rawPrice];
+    [rawTrip.totalPriceList, rawTrip.priceInfoList, rawTrip.prices, f.raw && f.raw.totalPriceList, f.raw && f.raw.priceInfoList].filter(Array.isArray).forEach(function(list){
+      list.forEach(function(p){ if(p && id && String(p.id || p.priceId || '') === id) entries.push(p); });
+    });
+    const entry = entries.find(function(p){ return p && typeof p === 'object' && p.fd && tyFareComponentsForPax(p.fd, 'ADULT'); });
+    if(entry){
+      let total = 0;
+      const complete = Object.keys(counts).every(function(type){
+        if(!counts[type]) return true;
+        const tf = Number((tyFareComponentsForPax(entry.fd, type) || {}).TF || 0);
+        total += tf * counts[type];
+        return tf > 0;
+      });
+      if(complete && total > 0) return total;
+    }
+    /* Without per-type fares only adults can be priced; any other traveller surfaces as a change. */
+    const perAdult = Number(supplierPriceFromFlight(f) || 0);
+    return perAdult > 0 ? perAdult * counts.ADULT : 0;
+  }
+
+  function tyReviewPricedCopies(list, supplierTf){
+    const copies = list.map(function(f){
+      const c = Object.assign({}, f, {pricingBreakup: Object.assign({}, flightPricingBreakup(f))});
+      if(f.raw && typeof f.raw === 'object') c.raw = Object.assign({}, f.raw);
+      return c;
+    });
+    return tyApplyReviewSupplierTf(copies, supplierTf);
+  }
+
+  /* Grand Total the customer expects vs the Grand Total the airline review makes payable,
+     both through the same fare-review pricing used at payment. */
+  function tyReviewedPayableChange(flights, raw){
+    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
+    if(!list.length || !raw) return null;
+    const reviewedTf = tyFlightReviewSupplierTf(raw, list);
+    const expectedTf = list.reduce(function(sum, f){ return sum + tySearchSupplierTotalForTravellers(f); }, 0);
+    if(!(reviewedTf > 0) || !(expectedTf > 0)) return null;
+    const oldTotal = Number(computeFare(tyReviewPricedCopies(list, expectedTf)).total || 0);
+    const newTotal = Number(computeFare(tyReviewPricedCopies(list, reviewedTf)).total || 0);
+    if(!oldTotal || !newTotal) return null;
+    if(newTotal > oldTotal || tyMoneyChangeIsReal(oldTotal, newTotal)){
+      return {label:'Price', oldValue:money(oldTotal), newValue:money(newTotal), payable:true};
+    }
+    return null;
   }
 
   function seatMapRawFromResponse(data){
@@ -2260,23 +2327,17 @@
     const raw = reviewRawFromResponse(reviewData);
     if(!raw) return [];
 
-    const changes = tyExplicitReviewChanges(raw);
+    let changes = tyExplicitReviewChanges(raw);
 
     /*
-      Price can be validated without a generic deep search, but only from the selected fare id.
-      Do not read the first random TF/price/amount from the whole review response.
+      Price is compared on the payable Grand Total from the same review TF payment uses
+      (the review may re-issue fare ids). Any increase must be accepted; decreases only
+      when real.
     */
-    const oldSupplierTotal = (Array.isArray(flights) ? flights : [flights]).filter(Boolean)
-      .reduce(function(sum, f){ return sum + Number(supplierPriceFromFlight(f) || 0); }, 0);
-    const oldCustomerTotal = (Array.isArray(flights) ? flights : [flights]).filter(Boolean)
-      .reduce(function(sum, f){ return sum + Number(f && (f.price || f.resultDisplayAmount || f.displayPrice) || 0); }, 0);
-
-    const selectedSupplierTotal = tyReviewSelectedSupplierTotal(raw, flights);
-    if(selectedSupplierTotal && oldSupplierTotal && tyMoneyChangeIsReal(oldSupplierTotal, selectedSupplierTotal)){
-      const newCustomerTotal = customerReviewPriceForSupplierTotal(flights, selectedSupplierTotal);
-      if(newCustomerTotal && oldCustomerTotal && tyMoneyChangeIsReal(oldCustomerTotal, newCustomerTotal)){
-        changes.push({label:'Price', oldValue:money(oldCustomerTotal), newValue:money(newCustomerTotal)});
-      }
+    const priceChange = tyReviewedPayableChange(flights, raw);
+    if(priceChange){
+      changes = changes.filter(function(c){ return c.label !== 'Price'; });
+      changes.push(priceChange);
     }
 
     /*
@@ -2317,6 +2378,7 @@
       const value = changeTextValue(c && c.newValue);
       if(!value || !list.length) return;
       if(label.includes('price')){
+        if(c.payable) return;
         const amount = parseMoneyNumber(value);
         if(amount > 0){
           const each = Math.round(amount / Math.max(1, list.length));
@@ -2400,6 +2462,15 @@
     };
   }
 
+  function tyConfirmPayableIncrease(flights, oldTotal, newTotal){
+    return new Promise(function(resolve){
+      renderChangeConfirm(flights, [{label:'Price', oldValue:money(oldTotal), newValue:money(newTotal), payable:true}], {
+        onContinue:function(){ resolve(true); },
+        onBack:function(){ resolve(false); }
+      });
+    });
+  }
+
   async function openReviewWithAirReview(flights){
     if(tyIsPassportScanBusy() || tyPassportScanLockActive() || tyPassportUploadIntentActive()){
       const current = Array.isArray(flights) ? flights.filter(Boolean) : [flights].filter(Boolean);
@@ -2415,7 +2486,9 @@
       applyReviewDataToFlights(flights, review);
       const changes = detectReviewChanges(flights, review);
       hideBookingLoader();
-      if(changes.length){ renderChangeConfirm(flights, changes, {onContinue:function(){ renderFlightReviewStep(flights); }, onBack:openFlightSearchPage}); return; }
+      /* Review shows the reviewed payable; a changed one is shown only after Continue. */
+      if(changes.length){ renderChangeConfirm(flights, changes, {onContinue:function(){ tySyncFlightsDisplayFromReview(flights, review); renderFlightReviewStep(flights); }, onBack:openFlightSearchPage}); return; }
+      tySyncFlightsDisplayFromReview(flights, review);
       renderFlightReviewStep(flights);
     }catch(e){
       hideBookingLoader();
@@ -4153,7 +4226,7 @@ function renderShell(content, opts){
         const id = button.getAttribute("data-book-flight");
         const key = button.getAttribute("data-leg-key") || "onward";
         const flight = state.rawFlights.find(f => String(f.id) === String(id) && String(f.legKey) === String(key));
-        if(flight) openFareOptionsForFlight(flight, key);
+        if(flight) openFlightBooking(flight, key);
       };
     });
 
@@ -4162,7 +4235,7 @@ function renderShell(content, opts){
         const id = card.getAttribute("data-card-book-flight");
         const key = card.getAttribute("data-leg-key") || "onward";
         const flight = state.rawFlights.find(f => String(f.id) === String(id) && String(f.legKey) === String(key));
-        if(flight) openFareOptionsForFlight(flight, key);
+        if(flight) openFlightBooking(flight, key);
       };
       card.onclick = (ev) => {
         const interactive = ev.target && ev.target.closest && ev.target.closest('button,a,input,select,textarea,label');
@@ -10551,6 +10624,18 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       /* Authoritative payable = Razorpay paise / 100 (whole rupees after backend canonicalize).
          Keep sticky/side Grand Total identical to checkout — never leave a ₹1 display drift. */
       const authPayable = Math.max(0, Math.round(amount / 100));
+      const shownPayable = Math.max(0, Math.round(Number(fare && fare.total || 0)));
+      if(authPayable > 0 && shownPayable > 0 && authPayable > shownPayable){
+        hideSecurePaymentOverlay();
+        const accepted = await tyConfirmPayableIncrease(flights, shownPayable, authPayable);
+        if(!accepted){
+          try{ await recordPaymentStatus(bookingPayload.bookingId, "PAYMENT_CANCELLED", {description:"Customer declined the updated fare."}); }catch(_e){}
+          releasePaymentCheckoutLock();
+          openFlightSearchPage();
+          return;
+        }
+        showSecurePaymentOverlay('payment');
+      }
       if(authPayable > 0){
         if(fare && typeof fare === 'object') fare.total = authPayable;
         if(bookingPayload.fare && typeof bookingPayload.fare === 'object') bookingPayload.fare.total = authPayable;
@@ -10813,11 +10898,221 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
   
 
 
+  /* AI Yaraa booking handoff. Embed renders this page's own result cards from the
+     server-held handoff; continue consumes a one-time handoff and opens fare review
+     for that exact priceId without showing the results list. */
+  const aiFlightHandoff = { embedId: "", priceIds: new Set(), busy: false };
+
+  function tyAiHandoffClient(){ return window.TYAiBookingHandoff || null; }
+
+  function tyAiHandoffError(code){
+    const client = tyAiHandoffClient();
+    if(client) return client.error(code, 0);
+    const error = new Error(code);
+    error.code = code;
+    return error;
+  }
+
+  function tyAiHandoffMessage(error){
+    const client = tyAiHandoffClient();
+    return client ? client.message(error) : "We couldn’t open this booking right now. Please try again, or search again in AI Yaraa.";
+  }
+
+  function tyAiNumber(value){
+    if(value === null || value === undefined || value === "") return NaN;
+    return Number(value);
+  }
+
+  /* Maps a handoff flight snapshot onto the /api/flights/search item semantics this page
+     prices with: the card amount is the ticket amount (fees are added at review), and the
+     supplier baseline drives markup and changed-fare detection. Snapshots without a
+     supplier baseline cannot be priced consistently, so they are not bookable here. */
+  function tyAiFlightSearchItem(raw){
+    if(!raw || typeof raw !== "object") return null;
+    const priceId = String(raw.priceId || raw.id || "").trim();
+    if(!priceId) return null;
+    const fare = raw.fare && typeof raw.fare === "object" ? raw.fare : {};
+    const pb = Object.assign({}, raw.pricingBreakup && typeof raw.pricingBreakup === "object" ? raw.pricingBreakup : {});
+    const ticket = tyAiNumber(pb.ticketAmount != null ? pb.ticketAmount : fare.ticketAmount);
+    const baseFare = tyAiNumber(raw.baseFare != null ? raw.baseFare : fare.baseFare);
+    const taxes = tyAiNumber(raw.taxes != null ? raw.taxes : fare.taxesAndFees);
+    let supplier = tyAiNumber(pb.supplierTotal != null ? pb.supplierTotal : raw.netFare);
+    if(!(supplier > 0) && baseFare > 0 && taxes >= 0) supplier = baseFare + taxes;
+    if(!(ticket > 0) || !(supplier > 0)) return null;
+    pb.supplierTotal = Math.round(supplier * 100) / 100;
+    pb.ticketAmount = ticket;
+    pb.resultDisplayAmount = ticket;
+    return Object.assign({}, raw, {
+      id: priceId,
+      priceId: priceId,
+      price: ticket,
+      totalAmount: ticket,
+      amount: ticket,
+      totalFare: ticket,
+      resultDisplayAmount: ticket,
+      displayPrice: ticket,
+      pricingBreakup: pb
+    });
+  }
+
+  function tyAiFlightItems(view){
+    const session = (view && view.websiteSession) || {};
+    return (Array.isArray(session.liveResults) ? session.liveResults : []).map(tyAiFlightSearchItem).filter(Boolean);
+  }
+
+  function tySeedAiFlightSearch(view, items){
+    const session = (view && view.websiteSession) || {};
+    const s = session.search && typeof session.search === "object" ? session.search : {};
+    const origin = String(s.origin || s.from || "").trim().toUpperCase();
+    const destination = String(s.destination || s.to || "").trim().toUpperCase();
+    const departureDate = String(s.departureDate || s.depart || "").slice(0, 10);
+    if(!/^[A-Z0-9]{3}$/.test(origin) || !/^[A-Z0-9]{3}$/.test(destination) || origin === destination) return false;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(departureDate)) return false;
+    /* Handoff results are one leg; round trips need both legs from this page's own search. */
+    if(String(s.returnDate || "").trim() || String(s.tripType || "oneway").toLowerCase() !== "oneway") return false;
+    const cabin = normalizeCabin(s.cabinClass || s.cabin);
+    const seed = {
+      service: "flight",
+      type: "flight",
+      origin: origin,
+      destination: destination,
+      from: origin,
+      to: destination,
+      departureDate: departureDate,
+      depart: departureDate,
+      returnDate: "",
+      tripType: "oneway",
+      adults: Math.max(1, Number(s.adults || 1) || 1),
+      children: Math.max(0, Number(s.children || 0) || 0),
+      infants: Math.max(0, Number(s.infants || 0) || 0),
+      cabin: cabin,
+      cabinClass: cabin
+    };
+    try{
+      sessionStorage.setItem("tySearchPayload", JSON.stringify({service: "flight", search: seed, createdAt: new Date().toISOString()}));
+      sessionStorage.setItem("tySearchContext", JSON.stringify(seed));
+      sessionStorage.setItem("ty_last_search_payload", JSON.stringify(seed));
+      sessionStorage.setItem("ty_live_results_flight", JSON.stringify(items));
+      sessionStorage.removeItem("ty_flight_search_error");
+    }catch(e){ return false; }
+    state.search = readSearch();
+    return true;
+  }
+
+  function tyAiSelectedFlight(view){
+    const selectedId = String((view && view.selectedPriceId) || "");
+    const option = (view && view.selectedOption) || {};
+    const item = tyAiFlightSearchItem(option.websiteRaw || option);
+    if(!selectedId || !item || String(item.priceId) !== selectedId) return null;
+    const flight = normalizeFlight(item, 0, routeLegs()[0]);
+    return tyRealFlightCard(flight) && String(flight.id) === selectedId ? flight : null;
+  }
+
+  function tyClearAiFlightHandoff(){
+    aiFlightHandoff.embedId = "";
+    aiFlightHandoff.priceIds = new Set();
+  }
+
+  function renderAiHandoffError(error){
+    try{ hideFlightSearchLoader(); }catch(e){}
+    try{ hideBookingLoader(); }catch(e){}
+    injectStyles();
+    ROOT.innerHTML = `<div class="ty-fr-page"><section class="ty-empty ty-no-flights"><h2>Booking link unavailable</h2><p>${esc(tyAiHandoffMessage(error))}</p><button type="button" data-ai-handoff-search>Search flights</button></section></div>`;
+    const btn = ROOT.querySelector("[data-ai-handoff-search]");
+    if(btn) btn.onclick = function(){ location.href = "/?service=flight#flight-search"; };
+  }
+
+  async function bootAiFlightEmbed(handoffId){
+    const client = tyAiHandoffClient();
+    showFlightSearchLoader();
+    try{
+      if(!client) throw tyAiHandoffError("BOOKING_HANDOFF_UNAVAILABLE");
+      const view = await client.validate(handoffId, "flight");
+      const items = tyAiFlightItems(view);
+      if(!items.length) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
+      if(!tySeedAiFlightSearch(view, items)) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
+      aiFlightHandoff.embedId = handoffId;
+      aiFlightHandoff.priceIds = new Set(items.map(function(item){ return String(item.priceId); }));
+      await loadFlights(false);
+    }catch(error){
+      tyClearAiFlightHandoff();
+      renderAiHandoffError(error);
+    }
+  }
+
+  async function bootAiFlightContinue(handoffId){
+    const client = tyAiHandoffClient();
+    showFlightSearchLoader();
+    try{
+      if(!client) throw tyAiHandoffError("BOOKING_HANDOFF_UNAVAILABLE");
+      const view = await client.consume(handoffId, "flight");
+      const option = view.selectedOption || {};
+      const item = tyAiFlightSearchItem(option.websiteRaw || option);
+      if(!item) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
+      if(!tySeedAiFlightSearch(view, [item])) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
+      const flight = tyAiSelectedFlight(view);
+      if(!flight) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
+      /* The consumed link cannot be reopened; Back from review shows only this selection. */
+      try{ history.replaceState({}, "", "/pages/results/flights.html?service=flight"); }catch(e){}
+      state.rawFlights = [flight];
+      state.legFlights = {};
+      state.legFlights[flight.legKey] = [flight];
+      state.flights = [flight];
+      hideFlightSearchLoader();
+      openReviewWithAirReview([flight]);
+    }catch(error){
+      renderAiHandoffError(error);
+    }
+  }
+
+  async function continueAiEmbedFlight(flight){
+    const client = tyAiHandoffClient();
+    if(!client || aiFlightHandoff.busy) return;
+    aiFlightHandoff.busy = true;
+    try{
+      if(!client.hasSession()){
+        try{ await requireGuestOtpBeforePayment({}, null); }
+        catch(loginCancelled){ return; }
+      }
+      showBookingLoader();
+      const view = await client.continueFromEmbed(aiFlightHandoff.embedId, "flight", flight.id);
+      const selected = tyAiSelectedFlight(view);
+      if(!selected) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
+      openReviewWithAirReview([selected]);
+    }catch(error){
+      tyClearAiFlightHandoff();
+      renderAiHandoffError(error);
+    }finally{
+      aiFlightHandoff.busy = false;
+    }
+  }
+
+  function openFlightBooking(flight, legKey){
+    if(aiFlightHandoff.embedId && aiFlightHandoff.priceIds.has(String(flight.id))){
+      continueAiEmbedFlight(flight);
+      return;
+    }
+    openFareOptionsForFlight(flight, legKey);
+  }
+
+  function bootAiFlightHandoff(params){
+    const mode = params.get("aiContinue") === "1" ? "continue" : (params.get("aiEmbed") === "1" ? "embed" : "");
+    if(!mode) return false;
+    injectStyles();
+    injectCss();
+    injectReviewTimerUpdateCss();
+    const handoffId = String(params.get("handoffId") || "").trim();
+    if(mode === "continue") bootAiFlightContinue(handoffId);
+    else bootAiFlightEmbed(handoffId);
+    return true;
+  }
+
   window.handleSelectFlight = handleSelectFlight;
   window.addEventListener("pageshow", function(ev){ if(ev.persisted || tyIsBackForwardNavigation()){ hideFlightSearchLoader(); hideBookingLoader(); } });
 
   loadLookups().finally(function(){
     const params = new URLSearchParams(location.search);
+    if(bootAiFlightHandoff(params)) return;
     const step = String(params.get("step") || "").toLowerCase();
     if(step === "booking-status"){
       injectStyles();

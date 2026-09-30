@@ -1643,7 +1643,7 @@ async function loadResults(){
   hotelSearchLock=job;
   return job.promise;
 }
-function setResults(list){ S.all=list; applyFilters(); maybeShowHotelDetailsFromUrl(); }
+function setResults(list){ S.all=aiHotelScope(list); applyFilters(); maybeShowHotelDetailsFromUrl(); }
 function applyFilters(){
   let list=S.all.slice();
   if(S.filters.priceRanges.size) list=list.filter(h=>S.filters.priceRanges.has(priceRangeKey(h.price)));
@@ -1982,6 +1982,7 @@ function persistHotelSearch(patch){
 }
 function clearStaleStateForNewHotelSearch(){
   // New Results search fully replaces prior hotel/rate/guest/offer state tied to old occupancy.
+  clearAiHotelHandoff();
   S.selectedHotel=null;
   S.selectedOption=null;
   S.review=null;
@@ -3061,7 +3062,7 @@ function bindResults(){
       const hid=String(a.getAttribute('data-hotel-open')||card.getAttribute('data-hotel-id')||'').trim();
       if(!hid) return;
       const h=hotelByRealId(hid);
-      if(h){ openHotelDetails(h); return; }
+      if(h){ openHotelFromCard(h); return; }
       // Fallback: persist URL hotelId even if live list lookup missed (string/type edge cases).
       openHotelDetails({hotelId:hid,id:hid,tjHotelId:hid,name:card.querySelector('h2')&&card.querySelector('h2').textContent||'Hotel',searchContext:(S.search&&S.search.searchContext)||{}});
     };
@@ -6009,11 +6010,145 @@ async function downloadStatusFile(path){
   }catch(e){alert(e.message||'Document could not be downloaded.');}finally{hideLoader();}
 }
 
+/* AI Yaraa booking handoff. The handoff snapshot has no live room rates, so embed runs
+   this page's own live search for the same stay and shows only the handoff's hotels;
+   continue consumes a one-time handoff and opens that hotel's details (room rates)
+   without showing the results list. Hotels missing from the live search are not shown. */
+const AI_HOTEL={embedId:'', hotelIds:[], busy:false};
+function aiHotelClient(){ return window.TYAiBookingHandoff||null; }
+function aiHotelError(code){
+  const c=aiHotelClient();
+  if(c) return c.error(code,0);
+  const e=new Error(code); e.code=code; return e;
+}
+function aiHotelMessage(err){
+  const c=aiHotelClient();
+  return c?c.message(err):'We couldn’t open this booking right now. Please try again, or search again in AI Yaraa.';
+}
+function clearAiHotelHandoff(){ AI_HOTEL.embedId=''; AI_HOTEL.hotelIds=[]; }
+function aiHotelScope(list){
+  if(!AI_HOTEL.hotelIds.length) return list;
+  const byId={};
+  arr(list).forEach(function(h){ const id=realHotelId(h); if(id&&!byId[id]) byId[id]=h; });
+  return AI_HOTEL.hotelIds.map(function(id){ return byId[id]; }).filter(Boolean);
+}
+function aiHotelSearchFromQuery(query){
+  const qy=query&&typeof query==='object'?query:{};
+  const regionId=String(qy.regionId||qy.cityId||'').trim();
+  const checkIn=String(qy.checkIn||'').slice(0,10);
+  const checkOut=String(qy.checkOut||'').slice(0,10);
+  if(!/^\d+$/.test(regionId)||!/^\d{4}-\d{2}-\d{2}$/.test(checkIn)||!/^\d{4}-\d{2}-\d{2}$/.test(checkOut)||checkOut<=checkIn) return null;
+  const cityName=String(qy.cityName||'').trim();
+  const childAges=arr(qy.childAges||qy.childAge);
+  const rooms=arr(qy.rooms).length?arr(qy.rooms):[{adults:Math.max(1, Number(qy.adults||1)||1), children:childAges.length, childAge:childAges}];
+  return normalizeHotelSearchOccupancy({
+    service:'hotel', type:'hotel', regionId:regionId, cityId:regionId, cityName:cityName, city:cityName,
+    checkIn:checkIn, checkOut:checkOut, checkinDate:checkIn, checkoutDate:checkOut,
+    rooms:rooms, roomCount:rooms.length, nationality:'IN', countryOfResidence:'IN', residenceCountry:'IN'
+  });
+}
+function seedAiHotelSearch(view){
+  const live=aiHotelSearchFromQuery(view&&view.query);
+  if(!live) return false;
+  save(KEY.payload, live);
+  save(KEY.search, {service:'hotel', livePayload:live, createdAt:new Date().toISOString()});
+  try{ sessionStorage.removeItem(KEY.results); sessionStorage.removeItem(KEY.selectedListing); }catch(e){}
+  S.search=searchPayload();
+  return true;
+}
+function aiHotelIds(view){
+  const c=aiHotelClient();
+  return arr(view&&view.results).map(function(r){ return c?c.rowId(r,'hotel'):''; }).filter(Boolean);
+}
+function renderAiHotelHandoffError(err){
+  hideLoader();
+  shell('<main class="tyh-empty"><h2>Booking link unavailable</h2><p>'+esc(aiHotelMessage(err))+'</p><button type="button" data-try>Back to search</button></main>',{title:'Hotels'});
+  const t=q('[data-try]',root); if(t) t.onclick=function(){ location.href='/'; };
+}
+async function bootAiHotelEmbed(handoffId){
+  const c=aiHotelClient();
+  showLoader('Finding the best hotels for you...');
+  try{
+    if(!c) throw aiHotelError('BOOKING_HANDOFF_UNAVAILABLE');
+    const view=await c.validate(handoffId,'hotel');
+    const ids=aiHotelIds(view);
+    if(!ids.length) throw aiHotelError('BOOKING_HANDOFF_UNBOOKABLE');
+    if(!seedAiHotelSearch(view)) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
+    AI_HOTEL.embedId=handoffId;
+    AI_HOTEL.hotelIds=ids;
+    await loadResults();
+  }catch(err){
+    clearAiHotelHandoff();
+    renderAiHotelHandoffError(err);
+  }
+}
+async function bootAiHotelContinue(handoffId, hotelIdHint){
+  const c=aiHotelClient();
+  showLoader('Finding the best hotels for you...');
+  try{
+    if(!c) throw aiHotelError('BOOKING_HANDOFF_UNAVAILABLE');
+    const view=await c.consume(handoffId,'hotel',hotelIdHint);
+    const hid=String(view.selectedHotelId);
+    if(!seedAiHotelSearch(view)) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
+    AI_HOTEL.embedId='';
+    AI_HOTEL.hotelIds=[hid];
+    // The consumed link cannot be reopened; Back from details shows only this hotel.
+    try{ history.replaceState({service:'hotel',step:'hotel-details'},'','/pages/results/hotels.html?service=hotel&step=hotel-details&hotelId='+encodeURIComponent(hid)); }catch(e){}
+    beginHotelDetailSwitch(hid);
+    S.detailHotel=null;
+    S.detailStatus='loading';
+    S.detailError='';
+    await loadResults();
+    if(realHotelId(S.detailHotel)!==hid) renderHotelDetailsPlumbing();
+  }catch(err){
+    renderAiHotelHandoffError(err);
+  }finally{
+    hideLoader();
+  }
+}
+async function continueAiEmbedHotel(h){
+  const c=aiHotelClient();
+  if(!c||AI_HOTEL.busy) return;
+  AI_HOTEL.busy=true;
+  const hid=realHotelId(h);
+  try{
+    if(!c.hasSession()){
+      try{ await tyhRequireGuestOtpBeforePayment({}); }
+      catch(loginCancelled){ return; }
+      finally{ try{ sessionStorage.removeItem('ty_hotel_pending_payment'); }catch(e){} }
+    }
+    showLoader('',true);
+    const view=await c.continueFromEmbed(AI_HOTEL.embedId,'hotel',hid);
+    if(String(view.selectedHotelId)!==hid) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
+    hideLoader();
+    openHotelDetails(h);
+  }catch(err){
+    clearAiHotelHandoff();
+    renderAiHotelHandoffError(err);
+  }finally{
+    AI_HOTEL.busy=false;
+  }
+}
+function openHotelFromCard(h){
+  if(AI_HOTEL.embedId && AI_HOTEL.hotelIds.indexOf(realHotelId(h))>=0){ continueAiEmbedHotel(h); return; }
+  openHotelDetails(h);
+}
+function bootAiHotelHandoff(){
+  const params=new URLSearchParams(location.search);
+  const mode=params.get('aiContinue')==='1'?'continue':(params.get('aiEmbed')==='1'?'embed':'');
+  if(!mode) return false;
+  const handoffId=String(params.get('handoffId')||'').trim();
+  if(mode==='continue') bootAiHotelContinue(handoffId, String(params.get('hotelId')||'').trim());
+  else bootAiHotelEmbed(handoffId);
+  return true;
+}
+
 function init(){
   if(window.__tyhSkipHotelInit) return;
   if(window.__tyhResultsInit) return;
   window.__tyhResultsInit=true;
   tyhResumePendingPaymentContext();
+  if(bootAiHotelHandoff()) return;
   const params=new URLSearchParams(location.search);
   const step=params.get('step')||'results';
   const bookingId=params.get('bookingId')||params.get('id');
