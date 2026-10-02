@@ -165,7 +165,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
  /* Google refuses OAuth inside embedded WebViews, and the TravelYaraa app opens
     the firebaseapp.com auth handler in the system browser, which does not have
     this WebView's sessionStorage ("missing initial state"). Social login must
-    therefore not start there; mobile OTP works inside the WebView. */
+    therefore not start there; OTP login works inside the WebView. */
  function inEmbeddedWebView(){
    if(window.ReactNativeWebView) return true;
    const ua = String(navigator.userAgent || "");
@@ -175,7 +175,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
 
  window.tySocialLoginAvailable = function(){ return !inEmbeddedWebView(); };
  window.tySocialLoginUnavailableError = function(){
-   const error = new Error("Google or Facebook sign-in can't be completed inside the TravelYaraa app. Please log in with your mobile number OTP.");
+   const error = new Error("Google or Facebook sign-in can't be completed inside the TravelYaraa app. Please log in with OTP instead.");
    error.name = "EmbeddedWebViewLoginError";
    return error;
  };

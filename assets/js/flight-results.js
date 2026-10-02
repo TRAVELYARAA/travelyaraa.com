@@ -8681,11 +8681,13 @@ function mobileFareSheets(flights, fare, options){
     throw new Error(lastMessage || "API route not found");
   }
 
-  async function tyStartGuestOtp(payload){
+  async function tyStartGuestOtp(payload, loginIdentity){
+    /* loginIdentity limits OTP to the contact typed in the login sheet; account lookup
+       matches email OR phone, so a booking contact must not be added to it. */
     const body = Object.assign({}, payload || {}, {
       service:"flight",
-      email: tyGuestEmail(payload),
-      phone: tyGuestPhone(payload),
+      email: loginIdentity ? (loginIdentity.email || "") : tyGuestEmail(payload),
+      phone: loginIdentity ? (loginIdentity.phone || "") : tyGuestPhone(payload),
       name: [payload?.passenger?.title, payload?.passenger?.firstName, payload?.passenger?.lastName].filter(Boolean).join(" "),
       payload
     });
@@ -8789,10 +8791,12 @@ function mobileFareSheets(flights, fare, options){
           return;
         }
 
-        /* Email/Gmail should not use OTP in booking payment popup.
-           If user enters an email and clicks LOGIN, open Google account selector directly.
+        /* Email/Gmail opens the Google account selector in a browser. Inside the app
+           WebView Google cannot complete, so the email gets the existing email OTP instead.
            Mobile number continues with OTP. */
-        if(value.includes("@")){
+        const isEmail = value.includes("@");
+        const socialAvailable = typeof window.tySocialLoginAvailable !== "function" || window.tySocialLoginAvailable();
+        if(isEmail && socialAvailable){
           await socialNow("google");
           return;
         }
@@ -8800,8 +8804,8 @@ function mobileFareSheets(flights, fare, options){
         try{
           primary.disabled = true;
           message.textContent = "Sending OTP...";
-          if(msg) msg.textContent = "Sending OTP to verify mobile...";
-          const sent = await tyStartGuestOtp(payload);
+          if(msg) msg.textContent = isEmail ? "Sending OTP to verify email..." : "Sending OTP to verify mobile...";
+          const sent = await tyStartGuestOtp(payload, isEmail ? {email:value, phone:""} : undefined);
           otpSent = true;
           otpArea.hidden = false;
           primary.textContent = "VERIFY & CONTINUE";
