@@ -2201,7 +2201,7 @@ body{background:var(--ty-soft)!important;color:#10233f!important}
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>window.TRAVELYARAA_API_BASE="https://api.travelyaraa.com";</script>
-<script type="module" id="ty-firebase-auth-core" src="/assets/js/firebase-auth.js?v=20260803b"></script>
+<script type="module" id="ty-firebase-auth-core" src="/assets/js/firebase-auth.js?v=20261002webview"></script>
 
 
 
@@ -4553,6 +4553,48 @@ window.setCabinV5=function(c){S.flight.cabin=c;renderTraveller("flight")}
 window.setCabTypeV5=function(c){S.cab.type=c;renderTraveller("cab")}
 window.applyTravellerV5=function(){if(S.travKind==="cab"){let t=$("cabTimePickerV5");if(t)S.cab.time=t.value||"12:30"}closePickerV5("travellerPickerV5");sync()}
 window.S=S;window.sync=sync;window.setTripActive=setTripActive;window.renderTravellerV5=renderTraveller;
+/* Modify search from the flight results page: prefill this form with the search being shown.
+   A date outside the bookable window keeps the form's own date rather than a stale one. */
+(function restoreModifiedFlightSearchV5(){
+  let s=null;
+  try{
+    if(new URLSearchParams(location.search).get("modify")!=="1")return;
+    if(sessionStorage.getItem("ty_restore_search_bar")!=="1"||sessionStorage.getItem("ty_modify_search_request")!=="flight")return;
+    s=JSON.parse(sessionStorage.getItem("ty_modify_search_flight")||"null");
+    ["ty_restore_search_bar","ty_modify_search_request","ty_modify_search_flight"].forEach(k=>sessionStorage.removeItem(k));
+  }catch(e){return;}
+  if(!s)return;
+  const from=String(s.origin||"").toUpperCase(),to=String(s.destination||"").toUpperCase();
+  if(!/^[A-Z0-9]{3}$/.test(from)||!/^[A-Z0-9]{3}$/.test(to)||from===to)return;
+  const toDay=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||""));if(!m)return null;const d=new Date(+m[1],+m[2]-1,+m[3]);d.setHours(0,0,0,0);return d>=today&&d<=maxDate?d:null;};
+  S.active="flight";
+  S.flight.from={city:from,code:from,airport:""};
+  S.flight.to={city:to,code:to,airport:""};
+  const depart=toDay(s.departureDate);
+  if(depart)S.flight.depart=depart;
+  const ret=s.tripType==="roundtrip"?toDay(s.returnDate):null;
+  S.trip=ret&&ret>S.flight.depart?"roundtrip":"oneway";
+  S.flight.ret=S.trip==="roundtrip"?ret:null;
+  const n=(v,min,max)=>Math.max(min,Math.min(max,Math.floor(Number(v))||min));
+  S.flight.adults=n(s.adults,1,12);S.flight.children=n(s.children,0,11);S.flight.infants=Math.min(n(s.infants,0,12),S.flight.adults);
+  const cabin=String(s.cabinClass||"").toUpperCase().replace(/\s+/g,"_");
+  S.flight.cabin=cabin==="PREMIUM_ECONOMY"?"Premium Economy":cabin==="BUSINESS"?"Business":cabin==="FIRST"||cabin==="FIRST_CLASS"?"First Class":"Economy/Premium Economy";
+  const fare=String(s.fareType||"").toUpperCase();
+  if(fare==="REGULAR"||fare==="STUDENT"||fare==="SENIOR_CITIZEN"){S.flight.fareType=fare;try{sessionStorage.setItem("ty_flight_fare_type_v128",fare);}catch(e){}}
+  document.addEventListener("DOMContentLoaded",function(){
+    setTripActive(S.trip);
+    document.querySelectorAll("[data-v5-trip]").forEach(b=>b.classList.toggle("active",b.dataset.v5Trip===S.trip));
+  });
+  fetch("/assets/data/airports.json?v=185",{cache:"force-cache"}).then(r=>r.ok?r.json():{}).then(function(all){
+    [["from",from],["to",to]].forEach(function(pair){
+      const a=all&&all[pair[1]];
+      if(a&&S.flight[pair[0]].code===pair[1])S.flight[pair[0]]={city:String(a.city||pair[1]),code:pair[1],airport:String(a.name||""),country:String(a.country||""),countryCode:String(a.countryCode||"")};
+    });
+  }).catch(function(){}).then(function(){
+    S.flight.multi=[{from:{...S.flight.from},to:{...S.flight.to},date:new Date(S.flight.depart)}];
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",sync);else sync();
+  });
+})();
 document.addEventListener("DOMContentLoaded",function(){
   closeAllPickersOnLoadV10();
   document.querySelectorAll(".ty-picker-v5").forEach(p=>p.classList.remove("active"));

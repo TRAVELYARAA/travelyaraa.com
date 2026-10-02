@@ -162,6 +162,24 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
    try{ return sessionStorage.getItem(REDIRECT_GUARD_KEY) === "1"; }catch(e){ return false; }
  }
 
+ /* Google refuses OAuth inside embedded WebViews, and the TravelYaraa app opens
+    the firebaseapp.com auth handler in the system browser, which does not have
+    this WebView's sessionStorage ("missing initial state"). Social login must
+    therefore not start there; mobile OTP works inside the WebView. */
+ function inEmbeddedWebView(){
+   if(window.ReactNativeWebView) return true;
+   const ua = String(navigator.userAgent || "");
+   if(/Android/i.test(ua) && /;\s*wv\)/.test(ua)) return true;
+   return /(iPhone|iPad|iPod)/i.test(ua) && /AppleWebKit/i.test(ua) && !/Safari\//i.test(ua);
+ }
+
+ window.tySocialLoginAvailable = function(){ return !inEmbeddedWebView(); };
+ window.tySocialLoginUnavailableError = function(){
+   const error = new Error("Google or Facebook sign-in can't be completed inside the TravelYaraa app. Please log in with your mobile number OTP.");
+   error.name = "EmbeddedWebViewLoginError";
+   return error;
+ };
+
  /* Single Google login entry point: popup first, redirect only when the
     browser refuses the popup. A popup closed by the user is not retried. */
  let googleLoginInFlight = null;
@@ -178,6 +196,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/fireba
  };
 
  async function runGoogleLogin(extraPayload){
+   if(inEmbeddedWebView()) throw window.tySocialLoginUnavailableError();
    const alreadyRedirected = redirectAlreadyAttempted();
    try{
      const credential = await signInWithPopup(auth, googleProvider);

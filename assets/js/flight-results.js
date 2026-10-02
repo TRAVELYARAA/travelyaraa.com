@@ -2355,11 +2355,26 @@
     });
   }
 
-  function openFlightSearchPage(){
+  /* `search === false` opens the form without prefill (e.g. a handoff whose context could not be trusted). */
+  function openFlightSearchPage(search){
+    const s = search === false ? null : (search && search.origin ? search : state.search);
     try{
-      sessionStorage.setItem("ty_modify_search_request", "flight");
       sessionStorage.setItem("tySelectedService", "flight");
-      sessionStorage.setItem("ty_restore_search_bar", "1");
+      if(s && s.origin && s.destination){
+        sessionStorage.setItem("ty_modify_search_flight", JSON.stringify({
+          origin: s.origin, destination: s.destination,
+          departureDate: s.departureDate || "", returnDate: s.returnDate || "",
+          tripType: s.tripType || "oneway",
+          adults: s.adults, children: s.children, infants: s.infants,
+          cabinClass: s.cabinClass || "", fareType: s.fareType || ""
+        }));
+        sessionStorage.setItem("ty_modify_search_request", "flight");
+        sessionStorage.setItem("ty_restore_search_bar", "1");
+      }else{
+        sessionStorage.removeItem("ty_modify_search_flight");
+        sessionStorage.removeItem("ty_modify_search_request");
+        sessionStorage.removeItem("ty_restore_search_bar");
+      }
     }catch(e){}
     showFlightSearchLoader();
     location.href = "/?service=flight&modify=1#flight-search";
@@ -4226,7 +4241,7 @@ function renderShell(content, opts){
         const id = button.getAttribute("data-book-flight");
         const key = button.getAttribute("data-leg-key") || "onward";
         const flight = state.rawFlights.find(f => String(f.id) === String(id) && String(f.legKey) === String(key));
-        if(flight) openFlightBooking(flight, key);
+        if(flight) openFareOptionsForFlight(flight, key);
       };
     });
 
@@ -4235,7 +4250,7 @@ function renderShell(content, opts){
         const id = card.getAttribute("data-card-book-flight");
         const key = card.getAttribute("data-leg-key") || "onward";
         const flight = state.rawFlights.find(f => String(f.id) === String(id) && String(f.legKey) === String(key));
-        if(flight) openFlightBooking(flight, key);
+        if(flight) openFareOptionsForFlight(flight, key);
       };
       card.onclick = (ev) => {
         const interactive = ev.target && ev.target.closest && ev.target.closest('button,a,input,select,textarea,label');
@@ -8572,6 +8587,9 @@ function mobileFareSheets(flights, fare, options){
   async function tyFirebaseSocialLogin(providerName, payload){
     await tyAwaitSharedFirebaseAuth();
     const provider = String(providerName || "google").toLowerCase();
+    if(typeof window.tySocialLoginAvailable === "function" && !window.tySocialLoginAvailable()){
+      throw window.tySocialLoginUnavailableError();
+    }
     let data;
 
     if(provider === "google"){
@@ -10899,10 +10917,9 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
 
 
   /* AI Yaraa booking handoff. Embed renders this page's own result cards from the
-     server-held handoff; continue consumes a one-time handoff and opens fare review
-     for that exact priceId without showing the results list. */
-  const aiFlightHandoff = { embedId: "", priceIds: new Set(), busy: false };
-
+     server-held handoff, and Book Now on them is the ordinary booking journey; continue
+     consumes a one-time handoff and opens fare review for that exact priceId without
+     showing the results list. */
   function tyAiHandoffClient(){ return window.TYAiBookingHandoff || null; }
 
   function tyAiHandoffError(code){
@@ -10960,33 +10977,84 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     return (Array.isArray(session.liveResults) ? session.liveResults : []).map(tyAiFlightSearchItem).filter(Boolean);
   }
 
-  function tySeedAiFlightSearch(view, items){
+  function tyAiYmd(value){
+    const m = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : "";
+  }
+
+  function tyAiCode(value){ return String(value || "").trim().toUpperCase(); }
+
+  function tyAiDayLabel(ymdText){
+    const d = toDate(ymdText);
+    return d ? d.toLocaleDateString("en-GB", {weekday: "short", day: "2-digit", month: "short"}) : ymdText;
+  }
+
+  /* The validated server context is authoritative: its search, query and resolved travel
+     date must agree, and every option must fly that route on that date. A disagreement is
+     rejected instead of being shown under a header the options do not match. */
+  function tyAiFlightContext(view, items){
     const session = (view && view.websiteSession) || {};
     const s = session.search && typeof session.search === "object" ? session.search : {};
-    const origin = String(s.origin || s.from || "").trim().toUpperCase();
-    const destination = String(s.destination || s.to || "").trim().toUpperCase();
-    const departureDate = String(s.departureDate || s.depart || "").slice(0, 10);
-    if(!/^[A-Z0-9]{3}$/.test(origin) || !/^[A-Z0-9]{3}$/.test(destination) || origin === destination) return false;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(departureDate)) return false;
-    /* Handoff results are one leg; round trips need both legs from this page's own search. */
-    if(String(s.returnDate || "").trim() || String(s.tripType || "oneway").toLowerCase() !== "oneway") return false;
+    const q = view && view.query && typeof view.query === "object" ? view.query : {};
+    const td = view && view.travelDate && typeof view.travelDate === "object" ? view.travelDate : {};
     const cabin = normalizeCabin(s.cabinClass || s.cabin);
-    const seed = {
-      service: "flight",
-      type: "flight",
-      origin: origin,
-      destination: destination,
-      from: origin,
-      to: destination,
-      departureDate: departureDate,
-      depart: departureDate,
-      returnDate: "",
-      tripType: "oneway",
+    const ctx = {
+      origin: tyAiCode(s.origin || s.from),
+      destination: tyAiCode(s.destination || s.to),
+      departureDate: tyAiYmd(s.departureDate || s.depart),
       adults: Math.max(1, Number(s.adults || 1) || 1),
       children: Math.max(0, Number(s.children || 0) || 0),
       infants: Math.max(0, Number(s.infants || 0) || 0),
-      cabin: cabin,
       cabinClass: cabin
+    };
+    const routeOk = /^[A-Z0-9]{3}$/.test(ctx.origin) && /^[A-Z0-9]{3}$/.test(ctx.destination) && ctx.origin !== ctx.destination;
+    function reject(code, detail){
+      const error = tyAiHandoffError(code);
+      if(detail) error.detail = detail;
+      /* Route and travellers stay usable for a new search; the date is what is in doubt. */
+      if(routeOk) error.search = {origin: ctx.origin, destination: ctx.destination, tripType: "oneway", adults: ctx.adults, children: ctx.children, infants: ctx.infants, cabinClass: ctx.cabinClass};
+      return error;
+    }
+    if(!routeOk || !ctx.departureDate) throw reject("BOOKING_HANDOFF_MISMATCH");
+    /* Handoff results are one leg; round trips need both legs from this page's own search. */
+    if(String(s.returnDate || "").trim() || String(s.tripType || "oneway").toLowerCase() !== "oneway") throw reject("BOOKING_HANDOFF_MISMATCH");
+    const routeAgrees = [[q.from || q.origin, ctx.origin], [q.to || q.destination, ctx.destination]].every(function(p){ return !p[0] || tyAiCode(p[0]) === p[1]; });
+    const otherDate = [q.departureDate || q.depart, td.isoDate].map(tyAiYmd).find(function(d){ return d && d !== ctx.departureDate; });
+    if(!routeAgrees || otherDate || (q.adults != null && Number(q.adults) !== ctx.adults)){
+      throw reject("BOOKING_HANDOFF_CONTEXT_MISMATCH", otherDate ? "Link travel date " + tyAiDayLabel(ctx.departureDate) + ", searched date " + tyAiDayLabel(otherDate) + "." : "");
+    }
+    if(ctx.departureDate < todayYmd()) throw reject("BOOKING_HANDOFF_DATE_PASSED", "Travel date " + tyAiDayLabel(ctx.departureDate) + ".");
+    items.forEach(function(item){
+      const segs = Array.isArray(item.segments) ? item.segments : [];
+      const first = segs[0] || {};
+      const last = segs[segs.length - 1] || {};
+      const dep = tyAiYmd(item.departureDateTime || first.dep || first.departureTime || item.departureTime);
+      const from = tyAiCode(first.from || first.origin || item.origin || item.from);
+      const to = tyAiCode(last.to || last.destination || item.destination || item.to);
+      if(dep !== ctx.departureDate || from !== ctx.origin || to !== ctx.destination){
+        throw reject("BOOKING_HANDOFF_CONTEXT_MISMATCH", "Link: " + ctx.origin + " → " + ctx.destination + ", " + tyAiDayLabel(ctx.departureDate) + ". Flight option: " + (from || "?") + " → " + (to || "?") + ", " + (dep ? tyAiDayLabel(dep) : "no date") + ".");
+      }
+    });
+    return ctx;
+  }
+
+  function tySeedAiFlightSearch(ctx, items){
+    const seed = {
+      service: "flight",
+      type: "flight",
+      origin: ctx.origin,
+      destination: ctx.destination,
+      from: ctx.origin,
+      to: ctx.destination,
+      departureDate: ctx.departureDate,
+      depart: ctx.departureDate,
+      returnDate: "",
+      tripType: "oneway",
+      adults: ctx.adults,
+      children: ctx.children,
+      infants: ctx.infants,
+      cabin: ctx.cabinClass,
+      cabinClass: ctx.cabinClass
     };
     try{
       sessionStorage.setItem("tySearchPayload", JSON.stringify({service: "flight", search: seed, createdAt: new Date().toISOString()}));
@@ -10996,7 +11064,9 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       sessionStorage.removeItem("ty_flight_search_error");
     }catch(e){ return false; }
     state.search = readSearch();
-    return true;
+    /* The header shows state.search; it must be exactly the validated context. */
+    return state.search.origin === ctx.origin && state.search.destination === ctx.destination && state.search.departureDate === ctx.departureDate
+      && state.search.adults === ctx.adults && state.search.children === ctx.children && state.search.infants === ctx.infants;
   }
 
   function tyAiSelectedFlight(view){
@@ -11008,18 +11078,14 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     return tyRealFlightCard(flight) && String(flight.id) === selectedId ? flight : null;
   }
 
-  function tyClearAiFlightHandoff(){
-    aiFlightHandoff.embedId = "";
-    aiFlightHandoff.priceIds = new Set();
-  }
-
   function renderAiHandoffError(error){
     try{ hideFlightSearchLoader(); }catch(e){}
     try{ hideBookingLoader(); }catch(e){}
     injectStyles();
-    ROOT.innerHTML = `<div class="ty-fr-page"><section class="ty-empty ty-no-flights"><h2>Booking link unavailable</h2><p>${esc(tyAiHandoffMessage(error))}</p><button type="button" data-ai-handoff-search>Search flights</button></section></div>`;
+    const detail = error && error.detail ? `<p>${esc(error.detail)}</p>` : "";
+    ROOT.innerHTML = `<div class="ty-fr-page"><section class="ty-empty ty-no-flights"><h2>Booking link unavailable</h2><p>${esc(tyAiHandoffMessage(error))}</p>${detail}<button type="button" data-ai-handoff-search>Search flights</button></section></div>`;
     const btn = ROOT.querySelector("[data-ai-handoff-search]");
-    if(btn) btn.onclick = function(){ location.href = "/?service=flight#flight-search"; };
+    if(btn) btn.onclick = function(){ openFlightSearchPage((error && error.search) || false); };
   }
 
   async function bootAiFlightEmbed(handoffId){
@@ -11030,12 +11096,9 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       const view = await client.validate(handoffId, "flight");
       const items = tyAiFlightItems(view);
       if(!items.length) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
-      if(!tySeedAiFlightSearch(view, items)) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
-      aiFlightHandoff.embedId = handoffId;
-      aiFlightHandoff.priceIds = new Set(items.map(function(item){ return String(item.priceId); }));
+      if(!tySeedAiFlightSearch(tyAiFlightContext(view, items), items)) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
       await loadFlights(false);
     }catch(error){
-      tyClearAiFlightHandoff();
       renderAiHandoffError(error);
     }
   }
@@ -11049,7 +11112,7 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       const option = view.selectedOption || {};
       const item = tyAiFlightSearchItem(option.websiteRaw || option);
       if(!item) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
-      if(!tySeedAiFlightSearch(view, [item])) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
+      if(!tySeedAiFlightSearch(tyAiFlightContext(view, [item]), [item])) throw tyAiHandoffError("BOOKING_HANDOFF_MISMATCH");
       const flight = tyAiSelectedFlight(view);
       if(!flight) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
       /* The consumed link cannot be reopened; Back from review shows only this selection. */
@@ -11063,36 +11126,6 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
     }catch(error){
       renderAiHandoffError(error);
     }
-  }
-
-  async function continueAiEmbedFlight(flight){
-    const client = tyAiHandoffClient();
-    if(!client || aiFlightHandoff.busy) return;
-    aiFlightHandoff.busy = true;
-    try{
-      if(!client.hasSession()){
-        try{ await requireGuestOtpBeforePayment({}, null); }
-        catch(loginCancelled){ return; }
-      }
-      showBookingLoader();
-      const view = await client.continueFromEmbed(aiFlightHandoff.embedId, "flight", flight.id);
-      const selected = tyAiSelectedFlight(view);
-      if(!selected) throw tyAiHandoffError("BOOKING_HANDOFF_UNBOOKABLE");
-      openReviewWithAirReview([selected]);
-    }catch(error){
-      tyClearAiFlightHandoff();
-      renderAiHandoffError(error);
-    }finally{
-      aiFlightHandoff.busy = false;
-    }
-  }
-
-  function openFlightBooking(flight, legKey){
-    if(aiFlightHandoff.embedId && aiFlightHandoff.priceIds.has(String(flight.id))){
-      continueAiEmbedFlight(flight);
-      return;
-    }
-    openFareOptionsForFlight(flight, legKey);
   }
 
   function bootAiFlightHandoff(params){

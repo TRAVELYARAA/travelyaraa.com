@@ -18,7 +18,9 @@
     AUTH_REQUIRED: 'Your TravelYaraa sign-in has expired. Please sign in again to continue this booking.',
     BOOKING_HANDOFF_NOT_CONSUMABLE: 'This booking link does not match the selected option. Please search again in AI Yaraa.',
     BOOKING_HANDOFF_MISMATCH: 'This booking link does not match the selected option. Please search again in AI Yaraa.',
-    BOOKING_HANDOFF_UNBOOKABLE: 'This option can no longer be booked from this link. Please search again in AI Yaraa.'
+    BOOKING_HANDOFF_UNBOOKABLE: 'This option can no longer be booked from this link. Please search again in AI Yaraa.',
+    BOOKING_HANDOFF_CONTEXT_MISMATCH: 'The route or travel date on this booking link does not match its flight options, so we have not shown them. Please search again.',
+    BOOKING_HANDOFF_DATE_PASSED: 'The travel date on this booking link has already passed. Please search again for a new date.'
   };
   const FALLBACK_MESSAGE = 'We couldn’t open this booking right now. Please try again, or search again in AI Yaraa.';
 
@@ -43,13 +45,12 @@
     return value;
   }
 
-  async function request(path, method, body, requireSession){
+  async function request(path, method, body){
     const headers = {Accept: 'application/json'};
     const token = authToken();
     /* Optional on validate/consume, but when present the gateway requires it to be
        the same account that created the handoff. */
     if(token) headers.Authorization = 'Bearer ' + token;
-    else if(requireSession) throw handoffError('BOOKING_HANDOFF_USER_REQUIRED', 401);
     if(body) headers['Content-Type'] = 'application/json';
     let res;
     try{
@@ -103,28 +104,6 @@
     return view;
   }
 
-  /* Card Book/Continue inside an embed: re-validate the embed, then create and consume a
-     continue_selected handoff for that exact server-held row. Creating requires the
-     signed-in TravelYaraa account; the gateway rejects other accounts. */
-  async function continueFromEmbed(embedHandoffId, service, selectedId){
-    const embed = await validate(embedHandoffId, service);
-    const wanted = String(selectedId || '').trim();
-    const row = (Array.isArray(embed.results) ? embed.results : []).find(function(r){ return rowId(r, service) === wanted; });
-    if(!wanted || !row) throw handoffError('BOOKING_HANDOFF_MISMATCH', 0);
-    const body = {
-      service: service,
-      mode: 'continue_selected',
-      searchId: embed.searchId || '',
-      query: embed.query || null,
-      travelDate: embed.travelDate || null,
-      results: [row],
-      language: embed.language || 'en'
-    };
-    body[service === 'hotel' ? 'selectedHotelId' : 'selectedPriceId'] = wanted;
-    const created = await request(PATH, 'POST', body, true);
-    return consume(created.handoffId, service, wanted);
-  }
-
   function message(err){
     const code = String((err && err.code) || '').toUpperCase();
     return MESSAGES[code] || FALLBACK_MESSAGE;
@@ -133,10 +112,8 @@
   window.TYAiBookingHandoff = {
     validate: validate,
     consume: consume,
-    continueFromEmbed: continueFromEmbed,
     message: message,
     rowId: rowId,
-    error: handoffError,
-    hasSession: function(){ return !!authToken(); }
+    error: handoffError
   };
 })();

@@ -3062,7 +3062,7 @@ function bindResults(){
       const hid=String(a.getAttribute('data-hotel-open')||card.getAttribute('data-hotel-id')||'').trim();
       if(!hid) return;
       const h=hotelByRealId(hid);
-      if(h){ openHotelFromCard(h); return; }
+      if(h){ openHotelDetails(h); return; }
       // Fallback: persist URL hotelId even if live list lookup missed (string/type edge cases).
       openHotelDetails({hotelId:hid,id:hid,tjHotelId:hid,name:card.querySelector('h2')&&card.querySelector('h2').textContent||'Hotel',searchContext:(S.search&&S.search.searchContext)||{}});
     };
@@ -6011,10 +6011,11 @@ async function downloadStatusFile(path){
 }
 
 /* AI Yaraa booking handoff. The handoff snapshot has no live room rates, so embed runs
-   this page's own live search for the same stay and shows only the handoff's hotels;
-   continue consumes a one-time handoff and opens that hotel's details (room rates)
-   without showing the results list. Hotels missing from the live search are not shown. */
-const AI_HOTEL={embedId:'', hotelIds:[], busy:false};
+   this page's own live search for the same stay and shows only the handoff's hotels,
+   whose cards open the ordinary hotel details; continue consumes a one-time handoff and
+   opens that hotel's details (room rates) without showing the results list. Hotels
+   missing from the live search are not shown. */
+const AI_HOTEL={hotelIds:[]};
 function aiHotelClient(){ return window.TYAiBookingHandoff||null; }
 function aiHotelError(code){
   const c=aiHotelClient();
@@ -6025,7 +6026,7 @@ function aiHotelMessage(err){
   const c=aiHotelClient();
   return c?c.message(err):'We couldn’t open this booking right now. Please try again, or search again in AI Yaraa.';
 }
-function clearAiHotelHandoff(){ AI_HOTEL.embedId=''; AI_HOTEL.hotelIds=[]; }
+function clearAiHotelHandoff(){ AI_HOTEL.hotelIds=[]; }
 function aiHotelScope(list){
   if(!AI_HOTEL.hotelIds.length) return list;
   const byId={};
@@ -6050,6 +6051,9 @@ function aiHotelSearchFromQuery(query){
 function seedAiHotelSearch(view){
   const live=aiHotelSearchFromQuery(view&&view.query);
   if(!live) return false;
+  const now=new Date();
+  const today=[now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
+  if(live.checkIn<today) throw aiHotelError('BOOKING_HANDOFF_DATE_PASSED');
   save(KEY.payload, live);
   save(KEY.search, {service:'hotel', livePayload:live, createdAt:new Date().toISOString()});
   try{ sessionStorage.removeItem(KEY.results); sessionStorage.removeItem(KEY.selectedListing); }catch(e){}
@@ -6074,7 +6078,6 @@ async function bootAiHotelEmbed(handoffId){
     const ids=aiHotelIds(view);
     if(!ids.length) throw aiHotelError('BOOKING_HANDOFF_UNBOOKABLE');
     if(!seedAiHotelSearch(view)) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
-    AI_HOTEL.embedId=handoffId;
     AI_HOTEL.hotelIds=ids;
     await loadResults();
   }catch(err){
@@ -6090,7 +6093,6 @@ async function bootAiHotelContinue(handoffId, hotelIdHint){
     const view=await c.consume(handoffId,'hotel',hotelIdHint);
     const hid=String(view.selectedHotelId);
     if(!seedAiHotelSearch(view)) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
-    AI_HOTEL.embedId='';
     AI_HOTEL.hotelIds=[hid];
     // The consumed link cannot be reopened; Back from details shows only this hotel.
     try{ history.replaceState({service:'hotel',step:'hotel-details'},'','/pages/results/hotels.html?service=hotel&step=hotel-details&hotelId='+encodeURIComponent(hid)); }catch(e){}
@@ -6105,33 +6107,6 @@ async function bootAiHotelContinue(handoffId, hotelIdHint){
   }finally{
     hideLoader();
   }
-}
-async function continueAiEmbedHotel(h){
-  const c=aiHotelClient();
-  if(!c||AI_HOTEL.busy) return;
-  AI_HOTEL.busy=true;
-  const hid=realHotelId(h);
-  try{
-    if(!c.hasSession()){
-      try{ await tyhRequireGuestOtpBeforePayment({}); }
-      catch(loginCancelled){ return; }
-      finally{ try{ sessionStorage.removeItem('ty_hotel_pending_payment'); }catch(e){} }
-    }
-    showLoader('',true);
-    const view=await c.continueFromEmbed(AI_HOTEL.embedId,'hotel',hid);
-    if(String(view.selectedHotelId)!==hid) throw aiHotelError('BOOKING_HANDOFF_MISMATCH');
-    hideLoader();
-    openHotelDetails(h);
-  }catch(err){
-    clearAiHotelHandoff();
-    renderAiHotelHandoffError(err);
-  }finally{
-    AI_HOTEL.busy=false;
-  }
-}
-function openHotelFromCard(h){
-  if(AI_HOTEL.embedId && AI_HOTEL.hotelIds.indexOf(realHotelId(h))>=0){ continueAiEmbedHotel(h); return; }
-  openHotelDetails(h);
 }
 function bootAiHotelHandoff(){
   const params=new URLSearchParams(location.search);
