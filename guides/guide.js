@@ -5,7 +5,7 @@
   function build(){
     box = document.createElement("dialog");
     box.className = "lightbox";
-    box.setAttribute("aria-label", "Full photo");
+    box.setAttribute("aria-label", "Enlarged photo");
     box.innerHTML = '<div class="lightbox-inner"><button type="button" class="lightbox-close" aria-label="Close photo">&times;</button><img alt=""><div class="lightbox-text"></div></div>';
     document.body.appendChild(box);
     boxImg = box.querySelector("img");
@@ -40,6 +40,13 @@
     var cap = fig && fig.querySelector("figcaption");
     open(btn.getAttribute("data-full"), img ? img.alt : "", cap ? cap.innerHTML : "");
   });
+
+  var credits = document.getElementById("image-credits");
+  function openCredits(){ if(credits) credits.open = true; }
+  document.addEventListener("click", function(e){
+    if(e.target.closest('a[href="#image-credits"]')) openCredits();
+  });
+  if(location.hash === "#image-credits") openCredits();
 
   var toc = document.querySelector(".toc");
   if(toc && window.matchMedia && window.matchMedia("(max-width: 960px)").matches) toc.removeAttribute("open");

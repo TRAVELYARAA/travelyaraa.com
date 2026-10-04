@@ -26,6 +26,10 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteRule ^review\.html$ /my-bookings.html [R=301,L,NE]
 RewriteRule ^pages/booking(?:/.*)?$ /index.html?service=flight [R=301,L,NE]
 
+# Policy pages merged into Terms & Conditions. The obsolete files are deleted.
+RewriteRule ^legal/payment-security\.html$ /legal/terms-and-conditions.html#payment [R=301,L,NE]
+RewriteRule ^legal/shipping-delivery-policy\.html$ /legal/terms-and-conditions.html#tickets [R=301,L,NE]
+
 # The website and mobile app use the same backend API. 307 preserves request methods.
 RewriteRule ^api(/.*)?$ https://api.travelyaraa.com/api$1 [R=307,L,QSA]
 RewriteRule ^health$ https://api.travelyaraa.com/health [R=307,L,QSA]
