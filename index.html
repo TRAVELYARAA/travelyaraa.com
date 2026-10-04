@@ -4559,18 +4559,22 @@ support_title:"TravelYaraaサポート",
     }
   }
 
-  /* ---------- one-time migration of details saved by the old page ---------- */
+  /* ---------- migration of details saved by the old page ---------- */
   function readJson(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
 
-  function purgeLegacyKeys(keepUid){
+  /* Old records stay in this browser until their owner has saved the profile
+     to the server and the read-back matched; only that owner's keys go. */
+  function removeOwnLegacyKeys(user, profile){
     try{
-      var keep = keepUid ? LEGACY_PREFIX + "uid_" + keepUid : "";
-      var remove = [LEGACY_LAST_KEY];
-      for(var i = 0; i < localStorage.length; i++){
-        var k = localStorage.key(i);
-        if(k && k.indexOf(LEGACY_PREFIX) === 0 && k !== keep) remove.push(k);
-      }
-      remove.forEach(function(k){ localStorage.removeItem(k); });
+      var uid = text(user && user.uid);
+      if(!uid) return;
+      var own = [LEGACY_PREFIX + "uid_" + uid, LEGACY_PREFIX + "legacy_" + uid];
+      var email = text(user.email).toLowerCase();
+      if(email && email === text(profile && profile.email).toLowerCase()) own.push(LEGACY_PREFIX + "email_" + email);
+      var phone = digits(user.phoneNumber);
+      if(phone) own.push(LEGACY_PREFIX + "phone_" + phone);
+      if(own.indexOf(localStorage.getItem(LEGACY_LAST_KEY) || "") >= 0) own.push(LEGACY_LAST_KEY);
+      own.forEach(function(k){ localStorage.removeItem(k); });
     }catch(e){}
   }
 
@@ -4584,7 +4588,8 @@ support_title:"TravelYaraaサポート",
   }
 
   /* The old page merged records across accounts, so a record is only offered
-     when it belongs to this sign-in and carries no other account's email. */
+     when it is stamped with this sign-in's uid and carries no other account's
+     email. It is shown for review; nothing is stored until Save. */
   async function readLegacyProfile(user, profile){
     if(!user || !user.uid) return null;
     var found = [];
@@ -4600,7 +4605,7 @@ support_title:"TravelYaraaサポート",
     var accountEmail = text(profile.email || user.email).toLowerCase();
     var usable = found.filter(function(p){
       if(!p || typeof p !== "object") return false;
-      if(p.uid && p.uid !== user.uid) return false;
+      if(text(p.uid) !== user.uid) return false;
       var email = text(p.email).toLowerCase();
       return !email || (accountEmail && email === accountEmail);
     }).sort(function(a, b){ return legacyTime(b) - legacyTime(a); });
@@ -4746,7 +4751,7 @@ support_title:"TravelYaraaサポート",
       fillForm(readBack.profile);
       updatePhoneHelp(readBack.profile);
       refreshSessionName(readBack.profile);
-      purgeLegacyKeys("");
+      removeOwnLegacyKeys(user, readBack.profile);
       showSuccess("Profile saved successfully.");
     }catch(error){
       if(error.field && FIELD_ERROR[error.field]) setFieldError(error.field, error.message);
@@ -4827,11 +4832,9 @@ support_title:"TravelYaraaサポート",
       setFieldsEnabled(false);
     }
     if(loggedIn){
-      purgeLegacyKeys(identity);
       if(pageOpen()) loadProfile();
-    }else{
-      purgeLegacyKeys("");
-      if(pageOpen()) window.closeProfilePage();
+    }else if(pageOpen()){
+      window.closeProfilePage();
     }
   };
 
