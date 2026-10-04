@@ -839,23 +839,84 @@ body.no-scroll{overflow:hidden!important;height:100vh!important}
 
 
 /* TY PROFILE EDIT FORM */
+#profile-page .back-btn{width:44px!important;height:44px!important;min-width:44px!important;margin:-10px 0 -10px -12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border-radius:999px!important;font-size:20px!important}
+#profile-page .back-btn:focus-visible{outline:2px solid #2563eb!important;outline-offset:2px!important}
+#profile-page .page-header h1{font-size:18px!important;font-weight:950!important;color:#071d49!important;margin:0!important}
 .ty-profile-final-wrap{max-width:460px!important;margin:0 auto!important;padding:14px 12px 26px!important}
-.ty-profile-final-card{background:#fff!important;border:1px solid #e5e7eb!important;border-radius:18px!important;box-shadow:0 10px 28px rgba(15,23,42,.08)!important;overflow:hidden!important}
+.ty-profile-final-card{background:#fff!important;border:1px solid #e5e7eb!important;border-radius:18px!important;box-shadow:0 10px 28px rgba(15,23,42,.08)!important;overflow:visible!important}
 .ty-profile-section-head{display:flex!important;align-items:center!important;justify-content:space-between!important;padding:14px 14px 10px!important;border-bottom:1px solid #edf2f7!important}
 .ty-profile-section-head h2{font-size:16px!important;font-weight:950!important;color:#071d49!important;margin:0!important}
 .ty-profile-section-head i{color:#64748b!important}
 .ty-profile-final-body{padding:14px!important}
-.ty-title-radio{display:flex!important;align-items:center!important;gap:14px!important;margin-bottom:12px!important}
-.ty-title-radio label{display:flex!important;align-items:center!important;gap:7px!important;font-size:13px!important;font-weight:950!important;color:#374151!important;text-transform:none!important;letter-spacing:0!important;margin:0!important}
-.ty-title-radio input{appearance:auto!important;-webkit-appearance:radio!important;width:18px!important;height:18px!important;min-width:18px!important;accent-color:#2563eb!important}
-.ty-profile-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
-.ty-profile-field{background:#fff!important;border:1px solid #d9dee8!important;border-radius:10px!important;padding:9px 10px!important;margin-bottom:10px!important;min-height:58px!important}
+.ty-profile-final-body fieldset{border:0!important;margin:0!important;padding:0!important;min-width:0!important}
+.ty-title-radio{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:6px 14px!important;margin-bottom:12px!important}
+.ty-title-radio legend{float:left!important;width:100%!important;font-size:12px!important;font-weight:850!important;color:#5f6673!important;margin:0 0 6px!important;padding:0!important}
+.ty-title-radio label{display:flex!important;align-items:center!important;gap:7px!important;min-height:36px!important;font-size:14px!important;font-weight:900!important;color:#374151!important;text-transform:none!important;letter-spacing:0!important;margin:0!important;cursor:pointer!important}
+.ty-title-radio .ty-pf-error{width:100%!important;margin-top:0!important}
+.ty-title-radio input{appearance:auto!important;-webkit-appearance:radio!important;width:20px!important;height:20px!important;min-width:20px!important;accent-color:#2563eb!important}
+.ty-profile-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:0 10px!important}
+.ty-profile-field{background:#fff!important;border:1px solid #d9dee8!important;border-radius:10px!important;padding:9px 10px!important;margin-bottom:12px!important;min-height:58px!important;min-width:0!important}
+.ty-profile-field:focus-within{border-color:#2563eb!important;box-shadow:0 0 0 3px rgba(37,99,235,.14)!important}
+.ty-profile-field.has-error{border-color:#dc2626!important}
 .ty-profile-field.full{grid-column:1/-1!important}
-.ty-profile-field label{font-size:11px!important;color:#5f6673!important;font-weight:850!important;letter-spacing:0!important;margin-bottom:5px!important;text-transform:none!important;line-height:1.1!important}
-.ty-profile-field input,.ty-profile-field select{font-size:14px!important;font-weight:850!important;color:#071d49!important;width:100%!important;border:0!important;background:transparent!important;outline:0!important;padding:0!important;min-height:22px!important}
+.ty-profile-field label,.ty-profile-field .ty-pf-label{display:block!important;font-size:12px!important;color:#5f6673!important;font-weight:850!important;letter-spacing:0!important;margin-bottom:5px!important;text-transform:none!important;line-height:1.2!important}
+.ty-profile-field input,.ty-profile-field select{font-size:16px!important;font-weight:800!important;color:#071d49!important;width:100%!important;border:0!important;background:transparent!important;outline:0!important;padding:0!important;min-height:28px!important}
+.ty-profile-field input[readonly]{color:#334155!important;cursor:default!important}
+.ty-profile-field.is-readonly{background:#f8fafc!important}
+.ty-pf-optional{font-weight:700!important;color:#8a94a6!important}
+.ty-pf-error{display:block!important;margin:6px 0 0!important;font-size:12px!important;line-height:1.35!important;font-weight:800!important;color:#b91c1c!important}
+.ty-pf-error:empty{display:none!important}
+.ty-pf-help{margin:6px 0 0!important;font-size:12px!important;line-height:1.4!important;font-weight:700!important;color:#64748b!important}
+.ty-pf-help a{color:#0b4fc4!important;font-weight:850!important;text-decoration:underline!important}
+.ty-pf-email-row{display:flex!important;align-items:center!important;gap:8px!important;min-width:0!important}
+.ty-pf-email-row input{flex:1 1 auto!important;min-width:0!important;text-overflow:ellipsis!important}
+.ty-pf-badge{flex:0 0 auto!important;display:inline-flex!important;align-items:center!important;gap:4px!important;padding:3px 8px!important;border-radius:999px!important;font-size:11px!important;font-weight:900!important;background:#ecfdf5!important;color:#047857!important}
+.ty-pf-badge[hidden]{display:none!important}
+.ty-pf-phone-row{display:flex!important;align-items:stretch!important;gap:8px!important}
+.ty-pf-country-btn{flex:0 0 auto!important;display:inline-flex!important;align-items:center!important;gap:6px!important;min-height:44px!important;padding:0 10px!important;border:1px solid #d9dee8!important;border-radius:9px!important;background:#f8fafc!important;color:#071d49!important;font-size:15px!important;font-weight:900!important}
+.ty-pf-country-btn:focus-visible{outline:2px solid #2563eb!important;outline-offset:1px!important}
+.ty-pf-country-btn i{font-size:11px!important;color:#64748b!important}
+.ty-pf-flag{font-size:18px!important;line-height:1!important}
+.ty-profile-field .ty-pf-phone-row input{flex:1 1 auto!important;min-width:0!important;min-height:44px!important;padding:0 10px!important;border:1px solid #d9dee8!important;border-radius:9px!important;background:#fff!important;letter-spacing:.02em!important}
+.ty-profile-field .ty-pf-phone-row input:focus{border-color:#2563eb!important}
+.ty-profile-field.has-error .ty-pf-phone-row input{border-color:#dc2626!important}
+.ty-pf-country-panel{margin-top:8px!important;border:1px solid #d9dee8!important;border-radius:12px!important;background:#fff!important;box-shadow:0 12px 28px rgba(15,23,42,.12)!important;overflow:hidden!important;scroll-margin-bottom:96px!important}
+.ty-pf-country-panel[hidden]{display:none!important}
+.ty-profile-field .ty-pf-country-panel input{min-height:44px!important;padding:0 12px!important;border-bottom:1px solid #edf2f7!important;font-size:16px!important;font-weight:700!important}
+.ty-pf-country-list{list-style:none!important;margin:0!important;padding:4px 0!important;max-height:260px!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important}
+.ty-pf-country-list li{display:flex!important;align-items:center!important;gap:10px!important;min-height:44px!important;padding:6px 12px!important;font-size:14px!important;font-weight:800!important;color:#071d49!important;cursor:pointer!important}
+.ty-pf-country-list li .ty-pf-cname{flex:1 1 auto!important;min-width:0!important}
+.ty-pf-country-list li .ty-pf-cdial{flex:0 0 auto!important;color:#475569!important;font-weight:900!important}
+.ty-pf-country-list li.is-active{background:#eff6ff!important}
+.ty-pf-country-list li[aria-selected="true"]{color:#0b4fc4!important}
+.ty-pf-country-list li.ty-pf-group{min-height:0!important;padding:8px 12px 4px!important;font-size:11px!important;font-weight:900!important;color:#8a94a6!important;text-transform:uppercase!important;letter-spacing:.04em!important;cursor:default!important}
+.ty-pf-country-empty{margin:0!important;padding:12px!important;font-size:13px!important;font-weight:800!important;color:#64748b!important}
+.ty-pf-notices{margin-bottom:12px!important}
+.ty-pf-notice{display:flex!important;align-items:flex-start!important;gap:10px!important;padding:12px 14px!important;border-radius:14px!important;font-size:14px!important;font-weight:800!important;line-height:1.45!important;margin-bottom:10px!important;outline:0!important}
+.ty-pf-notice:empty,.ty-pf-notice[hidden]{display:none!important}
+.ty-pf-notice i{margin-top:2px!important}
+.ty-pf-notice p{margin:0!important;flex:1 1 auto!important}
+.ty-pf-notice.ok{background:#ecfdf5!important;color:#047857!important;border:1px solid #a7f3d0!important}
+.ty-pf-notice.err{background:#fef2f2!important;color:#b91c1c!important;border:1px solid #fecaca!important}
+.ty-pf-notice.info{background:#eff6ff!important;color:#1d4ed8!important;border:1px solid #bfdbfe!important}
+.ty-pf-retry{flex:0 0 auto!important;min-height:36px!important;padding:0 14px!important;border-radius:9px!important;border:1px solid #b91c1c!important;background:#fff!important;color:#b91c1c!important;font-size:13px!important;font-weight:900!important}
+.ty-pf-loading{display:flex!important;align-items:center!important;gap:10px!important;padding:10px 2px 14px!important;font-size:14px!important;font-weight:800!important;color:#475569!important}
+.ty-pf-loading[hidden]{display:none!important}
+.ty-pf-spinner{width:16px!important;height:16px!important;border:2px solid currentColor!important;border-right-color:transparent!important;border-radius:50%!important;display:inline-block!important;animation:tyPfSpin .7s linear infinite!important}
+@keyframes tyPfSpin{to{transform:rotate(360deg)}}
+.ty-pf-sr{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .ty-profile-save-wrap{display:flex!important;justify-content:flex-end!important;margin-top:2px!important}
-.ty-profile-{width:auto!important;min-width:140px!important;border:0!important;border-radius:9px!important;background:#0b4fc4!important;color:#fff!important;padding:12px 18px!important;font-size:13px!important;font-weight:950!important;text-transform:none!important;box-shadow:0 8px 18px rgba(11,79,196,.20)!important;margin-top:0!important}
-@media(max-width:520px){.ty-profile-final-wrap{padding:12px 10px 22px!important}.ty-profile-grid{gap:8px!important}.ty-profile-field{padding:8px 9px!important;min-height:54px!important}.ty-title-radio{gap:12px!important}.ty-profile-section-head{padding:12px 12px 8px!important}.ty-profile-final-body{padding:12px!important}}
+.ty-profile-save-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;width:auto!important;min-width:160px!important;min-height:48px!important;border:0!important;border-radius:10px!important;background:#0b4fc4!important;color:#fff!important;padding:12px 20px!important;font-size:15px!important;font-weight:950!important;text-transform:none!important;box-shadow:0 8px 18px rgba(11,79,196,.20)!important;margin-top:0!important}
+.ty-profile-save-btn:focus-visible{outline:3px solid #93c5fd!important;outline-offset:2px!important}
+.ty-profile-save-btn[disabled]{opacity:.7!important;cursor:not-allowed!important}
+.ty-profile-save-btn .ty-pf-spinner[hidden]{display:none!important}
+@media(max-width:900px){
+  .ty-profile-final-wrap{padding-bottom:12px!important}
+  .ty-profile-save-wrap{position:sticky!important;bottom:0!important;z-index:5!important;margin:4px -14px -14px!important;padding:12px 14px calc(12px + env(safe-area-inset-bottom))!important;background:#fff!important;border-top:1px solid #edf2f7!important;border-radius:0 0 18px 18px!important}
+  .ty-profile-save-btn{width:100%!important}
+}
+@media(max-width:520px){.ty-profile-final-wrap{padding:12px 10px 12px!important}.ty-profile-grid{gap:0 8px!important}.ty-profile-field{padding:8px 9px!important;min-height:54px!important}.ty-profile-section-head{padding:12px 12px 8px!important}.ty-profile-final-body{padding:12px!important}.ty-profile-save-wrap{margin:4px -12px -12px!important;padding:12px 12px calc(12px + env(safe-area-inset-bottom))!important}}
+@media(max-width:340px){.ty-profile-grid{grid-template-columns:1fr!important}}
 
 
 
@@ -3854,357 +3915,992 @@ support_title:"TravelYaraaサポート",
 </script>
 
 
-<div class="slide-page" id="profile-page">
+<div class="slide-page" id="profile-page" role="dialog" aria-modal="true" aria-labelledby="profilePageTitle">
   <div class="page-header">
-    <button class="back-btn" onclick="closeProfilePage()" aria-label="Back"></button>
-    <span class="font-black text-lg" data-i18n="profile_title">Edit Profile</span>
+    <button class="back-btn" type="button" onclick="closeProfilePage()" aria-label="Back"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></button>
+    <h1 id="profilePageTitle" data-i18n="profile_title">Edit Profile</h1>
   </div>
 
   <div class="ty-profile-final-wrap">
-    <div class="status-box mb-4" id="profile-status"></div>
+    <div class="ty-pf-notices">
+      <div class="ty-pf-notice ok" id="profileSuccess" role="status" aria-live="polite" tabindex="-1"></div>
+      <div class="ty-pf-notice err" id="profileError" role="alert" tabindex="-1" hidden>
+        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+        <p id="profileErrorText"></p>
+        <button class="ty-pf-retry" type="button" id="profileRetryBtn" hidden>Retry</button>
+      </div>
+      <div class="ty-pf-notice info" id="profileInfo" role="status" aria-live="polite"></div>
+    </div>
 
-    <div class="ty-profile-final-card">
+    <form class="ty-profile-final-card" id="profileForm" novalidate aria-describedby="profileLoading">
       <div class="ty-profile-section-head">
         <h2 data-i18n="personal_details">Personal Details</h2>
-        <i class="fa-solid fa-user-pen"></i>
+        <i class="fa-solid fa-user-pen" aria-hidden="true"></i>
       </div>
 
       <div class="ty-profile-final-body">
-        <div class="ty-title-radio">
-          <label><input type="radio" name="profileTitle" value="Mr"> Mr</label>
-          <label><input type="radio" name="profileTitle" value="Ms"> Ms</label>
-          <label><input type="radio" name="profileTitle" value="Mrs"> Mrs</label>
-        </div>
+        <div class="ty-pf-loading" id="profileLoading" hidden><span class="ty-pf-spinner" aria-hidden="true"></span><span>Loading your profile…</span></div>
 
-        <div class="ty-profile-grid">
-          <div class="ty-profile-field">
-            <label data-i18n="first_name">First Name</label>
-            <input id="profileFirstName" type="text" autocomplete="given-name">
-          </div>
+        <fieldset id="profileFields" disabled>
+          <fieldset class="ty-title-radio" id="profileTitleGroup" aria-describedby="profileTitleError">
+            <legend>Title <span class="ty-pf-optional">(optional)</span></legend>
+            <label><input type="radio" name="profileTitle" value="Mr"> Mr</label>
+            <label><input type="radio" name="profileTitle" value="Ms"> Ms</label>
+            <label><input type="radio" name="profileTitle" value="Mrs"> Mrs</label>
+            <p class="ty-pf-error" id="profileTitleError"></p>
+          </fieldset>
 
-          <div class="ty-profile-field">
-            <label data-i18n="last_name">Last Name</label>
-            <input id="profileLastName" type="text" autocomplete="family-name">
-          </div>
+          <div class="ty-profile-grid">
+            <div class="ty-profile-field" data-field="firstName">
+              <label for="profileFirstName" data-i18n="first_name">First Name</label>
+              <input id="profileFirstName" name="firstName" type="text" autocomplete="given-name" autocapitalize="words" maxlength="50" required aria-describedby="profileFirstNameError">
+              <p class="ty-pf-error" id="profileFirstNameError"></p>
+            </div>
 
-          <div class="ty-profile-field">
-            <label data-i18n="date_of_birth">Date of Birth</label>
-            <input id="profileDob" type="date">
-          </div>
+            <div class="ty-profile-field" data-field="lastName">
+              <label for="profileLastName" data-i18n="last_name">Last Name</label>
+              <input id="profileLastName" name="lastName" type="text" autocomplete="family-name" autocapitalize="words" maxlength="50" required aria-describedby="profileLastNameError">
+              <p class="ty-pf-error" id="profileLastNameError"></p>
+            </div>
 
-          <div class="ty-profile-field">
-            <label data-i18n="marital_status">Marital Status</label>
-            <select id="profileMaritalStatus">
-              <option value="">Select</option>
-              <option value="Unmarried">Unmarried</option>
-              <option value="Married">Married</option>
-            </select>
-          </div>
+            <div class="ty-profile-field" data-field="dob">
+              <label for="profileDob" data-i18n="date_of_birth">Date of Birth</label>
+              <input id="profileDob" name="dob" type="date" autocomplete="bday" aria-describedby="profileDobError">
+              <p class="ty-pf-error" id="profileDobError"></p>
+            </div>
 
-          <div class="ty-profile-field full">
-            <label data-i18n="gmail_email">Gmail / Email</label>
-            <input id="profileEmail" type="email" autocomplete="email">
-          </div>
+            <div class="ty-profile-field" data-field="maritalStatus">
+              <label for="profileMaritalStatus" data-i18n="marital_status">Marital Status</label>
+              <select id="profileMaritalStatus" name="maritalStatus" aria-describedby="profileMaritalStatusError">
+                <option value="">Select</option>
+                <option value="Unmarried">Unmarried</option>
+                <option value="Married">Married</option>
+              </select>
+              <p class="ty-pf-error" id="profileMaritalStatusError"></p>
+            </div>
 
-          <div class="ty-profile-field full">
-            <label data-i18n="mobile_number">Mobile Number</label>
-            <input id="profilePhone" type="tel" autocomplete="tel">
+            <div class="ty-profile-field full is-readonly" data-field="email">
+              <label for="profileEmail">Email</label>
+              <div class="ty-pf-email-row">
+                <input id="profileEmail" type="email" readonly aria-readonly="true" aria-describedby="profileEmailBadge profileEmailHelp profileEmailError">
+                <span class="ty-pf-badge" id="profileEmailBadge" hidden><i class="fa-solid fa-circle-check" aria-hidden="true"></i>Verified</span>
+              </div>
+              <p class="ty-pf-help" id="profileEmailHelp"></p>
+              <p class="ty-pf-error" id="profileEmailError"></p>
+            </div>
+
+            <div class="ty-profile-field full" data-field="phone">
+              <label for="profilePhone" data-i18n="mobile_number">Mobile Number</label>
+              <div class="ty-pf-phone-row">
+                <button class="ty-pf-country-btn" type="button" id="profileCountryBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="profileCountryPanel">
+                  <span class="ty-pf-flag" id="profileCountryFlag" aria-hidden="true"></span>
+                  <span id="profileCountryDial"></span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <input id="profilePhone" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="24" placeholder="Mobile number" aria-describedby="profilePhoneError profilePhoneHelp">
+              </div>
+              <div class="ty-pf-country-panel" id="profileCountryPanel" hidden>
+                <label class="ty-pf-sr" for="profileCountrySearch">Search country or calling code</label>
+                <input id="profileCountrySearch" type="search" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="profileCountryList" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" placeholder="Search country or code, e.g. India or +91">
+                <ul class="ty-pf-country-list" id="profileCountryList" role="listbox" aria-label="Country calling codes"></ul>
+                <p class="ty-pf-country-empty" id="profileCountryEmpty" hidden>No matching country or code.</p>
+              </div>
+              <p class="ty-pf-error" id="profilePhoneError"></p>
+              <p class="ty-pf-help" id="profilePhoneHelp">Used to contact you about bookings. Changing it here does not change how you sign in.</p>
+            </div>
           </div>
-        </div>
+        </fieldset>
 
         <div class="ty-profile-save-wrap">
-          <button class="ty-profile-" type="button" onclick="saveUserProfile()" data-i18n="save_profile">Save Profile</button>
+          <button class="ty-profile-save-btn" type="submit" id="profileSaveBtn" disabled>
+            <span class="ty-pf-spinner" id="profileSaveSpinner" aria-hidden="true" hidden></span>
+            <span id="profileSaveLabel" data-i18n="save_profile">Save Profile</span>
+          </button>
         </div>
       </div>
-    </div>
+    </form>
   </div>
 </div>
 
 
 <script id="ty-profile-save-logic">
+/* Edit Profile reads and writes the signed-in customer's TravelYaraa account
+   through /api/account/profile. ty_user_profile stays the backend login record
+   used by booking pages; only its name is refreshed after a confirmed save. */
 (function(){
   "use strict";
 
-  function $(id){ return document.getElementById(id); }
-  function clean(v){ return String(v == null ? "" : v).trim(); }
-  function cleanEmail(v){ return clean(v).toLowerCase(); }
-  function cleanPhone(v){ return clean(v).replace(/\D/g, ""); }
+  var PHONE_LIB_SRC = "/assets/vendor/libphonenumber-js-1.13.14/libphonenumber-max.js";
+  var DEFAULT_COUNTRY = "IN";
+  var SUGGESTED_COUNTRIES = ["IN"];
+  var NOT_MOBILE_TYPES = {FIXED_LINE:1, TOLL_FREE:1, PREMIUM_RATE:1, SHARED_COST:1, PAGER:1, UAN:1, VOICEMAIL:1};
+  var NAME_MAX = 50;
+  var NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M} .'\-]*$/u;
+  var LEGACY_PREFIX = "ty_user_profile_";
+  var LEGACY_LAST_KEY = "ty_last_profile_key";
+  var SUPPORT_URL = "/legal/contact-us.html";
+  var FIELD_INPUT = {firstName:"profileFirstName", lastName:"profileLastName", dob:"profileDob", maritalStatus:"profileMaritalStatus", phone:"profilePhone", email:"profileEmail", title:"profileTitleGroup"};
+  var FIELD_ERROR = {firstName:"profileFirstNameError", lastName:"profileLastNameError", dob:"profileDobError", maritalStatus:"profileMaritalStatusError", phone:"profilePhoneError", email:"profileEmailError", title:"profileTitleError"};
 
-  function setProfileStatus(msg,type,autoHideMs){
-    const el = $("profile-status");
-    if(!el) return;
-    clearTimeout(window.__tyProfileStatusTimer);
-    if(!msg){
-      el.className = "status-box";
-      el.textContent = "";
+  var state = {
+    identity:"",
+    profile:null,
+    loadSeq:0,
+    loading:false,
+    loaded:false,
+    saving:false,
+    country:DEFAULT_COUNTRY,
+    countries:null,
+    activeIndex:-1,
+    retry:null,
+    historyEntry:false
+  };
+
+  function $(id){ return document.getElementById(id); }
+  function text(v){ return String(v == null ? "" : v).trim(); }
+  function digits(v){ return text(v).replace(/\D/g, ""); }
+  function normalName(v){ return text(v).replace(/\s+/g, " "); }
+
+  function currentUser(){ return window.tyCurrentFirebaseUser || (window.auth && window.auth.currentUser) || null; }
+  function authToken(){
+    try{ return typeof window.tyStoredAuthToken === "function" ? window.tyStoredAuthToken() : (localStorage.getItem("ty_user_auth_token") || ""); }
+    catch(e){ return ""; }
+  }
+  function apiBase(){ return String(window.TRAVELYARAA_API_BASE || window.TY_API_BASE || "https://api.travelyaraa.com").replace(/\/$/, ""); }
+  function pageOpen(){ var p = $("profile-page"); return !!(p && p.classList.contains("active")); }
+
+  /* ---------- phone number library (loaded on demand) ---------- */
+  var phoneLibPromise = null;
+  function phoneLib(){ return window.libphonenumber || null; }
+  function loadPhoneLib(){
+    if(phoneLib()) return Promise.resolve(phoneLib());
+    if(phoneLibPromise) return phoneLibPromise;
+    phoneLibPromise = new Promise(function(resolve, reject){
+      var s = document.createElement("script");
+      s.src = PHONE_LIB_SRC;
+      s.async = true;
+      s.onload = function(){ phoneLib() ? resolve(phoneLib()) : reject(new Error("Phone library unavailable")); };
+      s.onerror = function(){ phoneLibPromise = null; s.remove(); reject(new Error("Phone library unavailable")); };
+      document.head.appendChild(s);
+    });
+    return phoneLibPromise;
+  }
+
+  function flagOf(iso){
+    try{ return String.fromCodePoint.apply(null, iso.toUpperCase().split("").map(function(c){ return 127397 + c.charCodeAt(0); })); }
+    catch(e){ return ""; }
+  }
+
+  function countries(){
+    var lib = phoneLib();
+    if(state.countries || !lib) return state.countries || [];
+    var names = null;
+    try{ names = new Intl.DisplayNames(["en"], {type:"region"}); }catch(e){}
+    state.countries = lib.getCountries().map(function(iso){
+      var name = "";
+      try{ name = names ? names.of(iso) : ""; }catch(e){}
+      return {iso:iso, name:(name && name !== iso) ? name : iso, dial:"+" + lib.getCountryCallingCode(iso), flag:flagOf(iso)};
+    }).sort(function(a, b){ return a.name.localeCompare(b.name, "en"); });
+    return state.countries;
+  }
+
+  function countryInfo(iso){
+    var list = countries();
+    for(var i = 0; i < list.length; i++) if(list[i].iso === iso) return list[i];
+    var lib = phoneLib();
+    var dial = "";
+    try{ dial = lib ? "+" + lib.getCountryCallingCode(iso) : ""; }catch(e){}
+    return {iso:iso, name:iso, dial:dial, flag:flagOf(iso)};
+  }
+
+  function formatNational(nationalDigits, iso){
+    var lib = phoneLib();
+    if(!lib || !nationalDigits) return nationalDigits || "";
+    try{ return new lib.AsYouType(iso).input(nationalDigits); }catch(e){ return nationalDigits; }
+  }
+
+  function setCountry(iso){
+    var lib = phoneLib();
+    iso = text(iso).toUpperCase();
+    if(!iso || (lib && !lib.isSupportedCountry(iso))) iso = DEFAULT_COUNTRY;
+    state.country = iso;
+    var info = countryInfo(iso);
+    if($("profileCountryFlag")) $("profileCountryFlag").textContent = info.flag;
+    if($("profileCountryDial")) $("profileCountryDial").textContent = info.dial;
+    var btn = $("profileCountryBtn");
+    if(btn) btn.setAttribute("aria-label", "Country calling code: " + info.name + " " + info.dial + ". Change country");
+  }
+
+  /* Accepts what a customer types or pastes: national digits, a leading +/00
+     international number, or digits that repeat the selected dial code. */
+  function normalizePhoneEntry(){
+    var input = $("profilePhone");
+    var lib = phoneLib();
+    if(!input || !lib) return;
+    var raw = text(input.value);
+    if(!raw) return;
+    var intl = raw.replace(/^00(?=\d)/, "+");
+    var parsed = null;
+    if(intl.charAt(0) === "+"){
+      try{ parsed = lib.parsePhoneNumberFromString(intl); }catch(e){}
+      if(parsed && parsed.country && parsed.isValid()){
+        setCountry(parsed.country);
+        input.value = formatNational(parsed.nationalNumber, parsed.country);
+      }
       return;
     }
-    el.className = "status-box show " + (type || "info");
-    el.textContent = msg;
-    const ms = Number(autoHideMs || 0);
-    if(ms > 0){
-      window.__tyProfileStatusTimer = setTimeout(function(){
-        if(el.textContent === msg){
-          el.className = "status-box";
-          el.textContent = "";
-        }
-      }, ms);
+    var d = digits(raw);
+    var dial = digits(countryInfo(state.country).dial);
+    var asTyped = null;
+    try{ asTyped = lib.parsePhoneNumberFromString(d, state.country); }catch(e){}
+    if(asTyped && asTyped.isValid()){
+      input.value = formatNational(asTyped.nationalNumber, state.country);
+      return;
+    }
+    if(dial && d.indexOf(dial) === 0 && d.length > dial.length){
+      var stripped = null;
+      try{ stripped = lib.parsePhoneNumberFromString("+" + d); }catch(e){}
+      if(stripped && stripped.isValid() && stripped.country){
+        setCountry(stripped.country);
+        input.value = formatNational(stripped.nationalNumber, stripped.country);
+      }
     }
   }
 
-  function clearProfileStatus(){ setProfileStatus("", "info"); }
-
-  function removeProfileToast(){
-    try{
-      clearTimeout(window.__tyProfileToastTimer);
-      const el = document.getElementById("tyProfileToast");
-      if(el) el.remove();
-    }catch(e){}
+  function checkPhone(){
+    var input = $("profilePhone");
+    var raw = text(input && input.value);
+    if(!raw) return {ok:true, e164:"", country:""};
+    var lib = phoneLib();
+    if(!lib){
+      if(state.profile && raw === text(state.profile.phone)) return {ok:true, e164:raw, country:text(state.profile.phoneCountry)};
+      return {ok:false, message:"Mobile number checking hasn't loaded yet. Please wait a moment and try again."};
+    }
+    var info = countryInfo(state.country);
+    if(/[^\d\s().+\-]/.test(raw)) return {ok:false, message:"Use digits only for the mobile number."};
+    var value = raw.replace(/^00(?=\d)/, "+");
+    var issue = null;
+    try{ issue = lib.validatePhoneNumberLength(value, state.country); }catch(e){}
+    if(issue === "TOO_SHORT") return {ok:false, message:"This number is too short for " + info.name + " (" + info.dial + ")."};
+    if(issue === "TOO_LONG") return {ok:false, message:"This number is too long for " + info.name + " (" + info.dial + ")."};
+    if(issue === "INVALID_COUNTRY") return {ok:false, message:"Choose the country code for this number."};
+    if(issue === "NOT_A_NUMBER") return {ok:false, message:"Enter a valid mobile number."};
+    var parsed = null;
+    try{ parsed = lib.parsePhoneNumberFromString(value, state.country); }catch(e){}
+    if(!parsed || !parsed.isValid()) return {ok:false, message:"Enter a valid mobile number for " + info.name + " (" + info.dial + ")."};
+    if(NOT_MOBILE_TYPES[parsed.getType()]) return {ok:false, message:"Enter a mobile number, not a landline or service number."};
+    return {ok:true, e164:parsed.number, country:parsed.country || state.country};
   }
 
-  function splitName(name){
-    const parts = clean(name).split(/\s+/).filter(Boolean);
-    return {
-      firstName: parts[0] || "",
-      lastName: parts.slice(1).join(" ") || ""
-    };
-  }
-
-  function formDataFromUser(user){
-    const name = splitName(user && user.displayName);
-    return {
-      title: "",
-      firstName: name.firstName,
-      lastName: name.lastName,
-      dob: "",
-      maritalStatus: "",
-      email: clean((user && user.email) || ""),
-      phone: clean((user && user.phoneNumber) || "")
-    };
-  }
-
-  function keyFromValue(prefix, value){
-    value = clean(value);
-    return value ? ("ty_user_profile_" + prefix + "_" + value) : "";
-  }
-
-  function profileKeyCandidates(user, profile){
-    const list = [];
-    const add = function(k){ if(k && !list.includes(k)) list.push(k); };
-    const u = user || {};
-    const p = profile || {};
-    add(keyFromValue("uid", u.uid || p.uid || p.userId));
-    add(keyFromValue("email", cleanEmail(u.email || p.email || p.providerEmail)));
-    add(keyFromValue("phone", cleanPhone(u.phoneNumber || p.phone || p.providerPhone)));
-    add(keyFromValue("legacy", u.uid || u.email || u.phoneNumber || p.uid || p.email || p.phone));
-    try{ add(localStorage.getItem("ty_last_profile_key") || ""); }catch(e){}
-    return list;
-  }
-
-  function parseJson(raw){
-    if(!raw) return null;
-    try{ return JSON.parse(raw); }catch(e){ return null; }
-  }
-
-  function profileTime(profile){
-    const ts = clean(profile && (profile.savedAtLocal || profile.updatedAtLocal || profile.updatedAt || profile.createdAt));
-    const n = ts ? Date.parse(ts) : 0;
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function mergeProfile(){
-    const out = {};
-    Array.prototype.slice.call(arguments).forEach(function(obj){
-      if(!obj || typeof obj !== "object") return;
-      Object.keys(obj).forEach(function(k){
-        const v = obj[k];
-        if(v !== undefined && v !== null && String(v).trim() !== "") out[k] = v;
-      });
+  /* ---------- country selector ---------- */
+  function countryMatches(q){
+    var list = countries();
+    q = text(q).toLowerCase();
+    if(!q){
+      var suggested = SUGGESTED_COUNTRIES.map(countryInfo);
+      return {suggested:suggested, rest:list.filter(function(c){ return SUGGESTED_COUNTRIES.indexOf(c.iso) < 0; })};
+    }
+    var dialQuery = /^\+?\d+$/.test(q) ? "+" + q.replace(/^\+/, "") : "";
+    var hits = list.filter(function(c){
+      if(dialQuery) return c.dial.indexOf(dialQuery) === 0;
+      return c.name.toLowerCase().indexOf(q) >= 0 || c.iso.toLowerCase() === q;
     });
-    return out;
+    hits.sort(function(a, b){
+      if(dialQuery) return (a.dial.length - b.dial.length) || a.name.localeCompare(b.name, "en");
+      var as = a.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+      var bs = b.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+      return (as - bs) || a.name.localeCompare(b.name, "en");
+    });
+    return {suggested:[], rest:hits};
   }
 
-  function getSelectedTitle(){
-    const checked = document.querySelector('input[name="profileTitle"]:checked');
+  function renderCountryList(){
+    var list = $("profileCountryList");
+    var search = $("profileCountrySearch");
+    if(!list || !search) return;
+    var result = countryMatches(search.value);
+    list.innerHTML = "";
+    var options = [];
+    function group(label){
+      var li = document.createElement("li");
+      li.className = "ty-pf-group";
+      li.setAttribute("role", "presentation");
+      li.textContent = label;
+      list.appendChild(li);
+    }
+    function option(c){
+      var li = document.createElement("li");
+      li.id = "profileCountryOpt-" + c.iso + "-" + options.length;
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", c.iso === state.country ? "true" : "false");
+      li.dataset.iso = c.iso;
+      var flag = document.createElement("span");
+      flag.setAttribute("aria-hidden", "true");
+      flag.textContent = c.flag;
+      var name = document.createElement("span");
+      name.className = "ty-pf-cname";
+      name.textContent = c.name;
+      var dial = document.createElement("span");
+      dial.className = "ty-pf-cdial";
+      dial.textContent = c.dial;
+      li.appendChild(flag); li.appendChild(name); li.appendChild(dial);
+      list.appendChild(li);
+      options.push(li);
+    }
+    if(result.suggested.length){
+      group("Suggested");
+      result.suggested.forEach(option);
+      group("All countries");
+    }
+    result.rest.forEach(option);
+    $("profileCountryEmpty").hidden = options.length > 0;
+    state.activeIndex = -1;
+    search.removeAttribute("aria-activedescendant");
+    if(options.length && text(search.value)) setActiveOption(0);
+  }
+
+  function countryOptions(){ return Array.prototype.slice.call(document.querySelectorAll("#profileCountryList [role=option]")); }
+
+  function setActiveOption(index){
+    var opts = countryOptions();
+    if(!opts.length) return;
+    index = Math.max(0, Math.min(opts.length - 1, index));
+    opts.forEach(function(o, i){ o.classList.toggle("is-active", i === index); });
+    state.activeIndex = index;
+    $("profileCountrySearch").setAttribute("aria-activedescendant", opts[index].id);
+    opts[index].scrollIntoView({block:"nearest"});
+  }
+
+  function openCountryPanel(){
+    var panel = $("profileCountryPanel");
+    if(!panel || !phoneLib()) return;
+    panel.hidden = false;
+    $("profileCountryBtn").setAttribute("aria-expanded", "true");
+    $("profileCountrySearch").value = "";
+    renderCountryList();
+    var selected = document.querySelector('#profileCountryList [aria-selected="true"]');
+    if(selected) selected.scrollIntoView({block:"nearest"});
+    panel.scrollIntoView({block:"nearest", behavior:"smooth"});
+    $("profileCountrySearch").focus({preventScroll:true});
+  }
+
+  function closeCountryPanel(returnFocus){
+    var panel = $("profileCountryPanel");
+    if(!panel || panel.hidden) return;
+    panel.hidden = true;
+    $("profileCountryBtn").setAttribute("aria-expanded", "false");
+    if(returnFocus) $("profileCountryBtn").focus();
+  }
+
+  function chooseCountry(iso){
+    setCountry(iso);
+    closeCountryPanel(false);
+    var input = $("profilePhone");
+    if(input){
+      if(text(input.value)) validateField("phone");
+      input.focus();
+    }
+    clearSuccess();
+  }
+
+  /* ---------- notices and field errors ---------- */
+  function clearSuccess(){ var el = $("profileSuccess"); if(el) el.textContent = ""; }
+  function clearInfo(){ var el = $("profileInfo"); if(el) el.textContent = ""; }
+  function clearError(){
+    var box = $("profileError");
+    if(!box) return;
+    box.hidden = true;
+    $("profileErrorText").textContent = "";
+    $("profileRetryBtn").hidden = true;
+    state.retry = null;
+  }
+  function clearNotices(){ clearSuccess(); clearInfo(); clearError(); }
+
+  function scrollNoticeIntoView(el){
+    var page = $("profile-page");
+    if(page) page.scrollTo({top:0, behavior:"smooth"});
+    if(el) setTimeout(function(){ try{ el.focus({preventScroll:true}); }catch(e){} }, 60);
+  }
+
+  function showSuccess(message){
+    clearError(); clearInfo();
+    var el = $("profileSuccess");
+    el.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>';
+    var p = document.createElement("p");
+    p.textContent = message;
+    el.appendChild(p);
+    scrollNoticeIntoView(el);
+  }
+
+  function showInfo(message){
+    var el = $("profileInfo");
+    el.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
+    var p = document.createElement("p");
+    p.textContent = message;
+    el.appendChild(p);
+  }
+
+  function showError(message, retry, retryLabel){
+    clearSuccess();
+    var box = $("profileError");
+    $("profileErrorText").textContent = message;
+    var btn = $("profileRetryBtn");
+    state.retry = typeof retry === "function" ? retry : null;
+    btn.hidden = !state.retry;
+    btn.textContent = retryLabel || "Retry";
+    box.hidden = false;
+    scrollNoticeIntoView(box);
+  }
+
+  function setFieldError(field, message){
+    var errEl = $(FIELD_ERROR[field]);
+    var input = $(FIELD_INPUT[field]);
+    var wrap = document.querySelector('.ty-profile-field[data-field="' + field + '"]');
+    if(errEl) errEl.textContent = message || "";
+    if(input){
+      if(message) input.setAttribute("aria-invalid", "true");
+      else input.removeAttribute("aria-invalid");
+    }
+    if(wrap) wrap.classList.toggle("has-error", !!message);
+  }
+
+  function clearFieldErrors(){ Object.keys(FIELD_ERROR).forEach(function(f){ setFieldError(f, ""); }); }
+
+  /* ---------- form values ---------- */
+  function selectedTitle(){
+    var checked = document.querySelector('input[name="profileTitle"]:checked');
     return checked ? checked.value : "";
   }
 
-  function setSelectedTitle(value){
-    document.querySelectorAll('input[name="profileTitle"]').forEach(function(r){
-      r.checked = r.value === value;
-    });
+  function dateKey(d){
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
-  function getFormData(){
+  function applyDobLimits(){
+    var input = $("profileDob");
+    if(!input) return;
+    var today = new Date();
+    var min = new Date(today.getFullYear() - 120, 0, 1);
+    input.max = dateKey(today);
+    input.min = dateKey(min);
+  }
+
+  function validateField(field){
+    var message = "";
+    if(field === "firstName" || field === "lastName"){
+      var label = field === "firstName" ? "First name" : "Last name";
+      var v = normalName($(FIELD_INPUT[field]).value);
+      if(!v) message = label + " is required.";
+      else if(v.length > NAME_MAX) message = label + " must be " + NAME_MAX + " characters or fewer.";
+      else if(!NAME_PATTERN.test(v)) message = label + " can contain letters, spaces, dots, apostrophes and hyphens only.";
+    }else if(field === "dob"){
+      var input = $("profileDob");
+      var dob = text(input.value);
+      if(input.validity && input.validity.badInput) message = "Enter a valid date of birth.";
+      else if(dob){
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(dob)) message = "Enter a valid date of birth.";
+        else if(dob > input.max) message = "Date of birth cannot be in the future.";
+        else if(dob < input.min) message = "Enter a valid date of birth.";
+      }
+    }else if(field === "phone"){
+      var phone = checkPhone();
+      if(!phone.ok) message = phone.message;
+    }
+    setFieldError(field, message);
+    return !message;
+  }
+
+  function readForm(){
+    var phone = checkPhone();
     return {
-      title: getSelectedTitle(),
-      firstName: $("profileFirstName")?.value?.trim() || "",
-      lastName: $("profileLastName")?.value?.trim() || "",
-      dob: $("profileDob")?.value || "",
-      maritalStatus: $("profileMaritalStatus")?.value || "",
-      email: $("profileEmail")?.value?.trim() || "",
-      phone: $("profilePhone")?.value?.trim() || "",
-      updatedAtLocal: new Date().toISOString()
+      title:selectedTitle(),
+      firstName:normalName($("profileFirstName").value),
+      lastName:normalName($("profileLastName").value),
+      dob:text($("profileDob").value),
+      maritalStatus:text($("profileMaritalStatus").value),
+      phone:phone.ok ? phone.e164 : "",
+      phoneCountry:phone.ok ? phone.country : ""
     };
   }
 
-  function fillProfileForm(profile){
-    profile = profile || {};
-    setSelectedTitle(profile.title || "");
-    if($("profileFirstName")) $("profileFirstName").value = profile.firstName || "";
-    if($("profileLastName")) $("profileLastName").value = profile.lastName || "";
-    if($("profileDob")) $("profileDob").value = profile.dob || "";
-    if($("profileMaritalStatus")) $("profileMaritalStatus").value = profile.maritalStatus || "";
-    if($("profileEmail")) $("profileEmail").value = profile.email || "";
-    if($("profilePhone")) $("profilePhone").value = profile.phone || "";
+  function fillForm(values){
+    values = values || {};
+    document.querySelectorAll('input[name="profileTitle"]').forEach(function(r){ r.checked = r.value === values.title; });
+    $("profileFirstName").value = values.firstName || "";
+    $("profileLastName").value = values.lastName || "";
+    $("profileDob").value = values.dob || "";
+    $("profileMaritalStatus").value = values.maritalStatus || "";
+    fillPhone(values.phone, values.phoneCountry);
+    fillEmail(values);
   }
 
-  function readLocalProfile(user){
-    if(!user) return null;
-    const base = formDataFromUser(user);
-    let saved = [];
+  function fillPhone(e164, country){
+    var lib = phoneLib();
+    var input = $("profilePhone");
+    var parsed = null;
+    if(lib && e164){ try{ parsed = lib.parsePhoneNumberFromString(e164); }catch(e){} }
+    if(parsed){
+      setCountry(parsed.country || country || DEFAULT_COUNTRY);
+      input.value = formatNational(parsed.nationalNumber, state.country);
+    }else{
+      setCountry(country || DEFAULT_COUNTRY);
+      input.value = e164 || "";
+    }
+  }
+
+  function fillEmail(values){
+    var email = text(values.email);
+    var input = $("profileEmail");
+    var badge = $("profileEmailBadge");
+    var help = $("profileEmailHelp");
+    input.value = email;
+    input.placeholder = email ? "" : "No email on this account";
+    badge.hidden = !(email && values.emailVerified);
+    help.textContent = "";
+    if(email){
+      help.appendChild(document.createTextNode("This is the email you sign in with, so it can't be changed here. To change it, "));
+      var a = document.createElement("a");
+      a.href = SUPPORT_URL;
+      a.textContent = "contact support";
+      help.appendChild(a);
+      help.appendChild(document.createTextNode("."));
+    }else{
+      help.textContent = "You sign in with your mobile number.";
+    }
+  }
+
+  function updatePhoneHelp(profile){
+    var help = $("profilePhoneHelp");
+    if(!help) return;
+    help.textContent = profile && profile.phoneIsLoginNumber
+      ? "This is also the number you sign in with. Editing it here only changes your contact number, not how you sign in."
+      : "Used to contact you about bookings. Changing it here does not change how you sign in.";
+  }
+
+  function resetForm(){
+    clearFieldErrors();
+    clearNotices();
+    fillForm({});
+    updatePhoneHelp(null);
+    state.profile = null;
+    state.loaded = false;
+  }
+
+  function setFieldsEnabled(on){
+    var fields = $("profileFields");
+    if(fields) fields.disabled = !on;
+    var btn = $("profileSaveBtn");
+    if(btn) btn.disabled = !on;
+  }
+
+  function setLoading(on){
+    state.loading = on;
+    $("profileLoading").hidden = !on;
+    $("profileForm").setAttribute("aria-busy", on ? "true" : "false");
+    if(on) setFieldsEnabled(false);
+  }
+
+  var saveLabelText = "";
+  function setSaving(on){
+    state.saving = on;
+    var label = $("profileSaveLabel");
+    if(on){
+      saveLabelText = label.textContent;
+      label.textContent = "Saving…";
+    }else if(saveLabelText){
+      label.textContent = saveLabelText;
+    }
+    $("profileSaveSpinner").hidden = !on;
+    $("profileSaveBtn").setAttribute("aria-disabled", on ? "true" : "false");
+    $("profileForm").setAttribute("aria-busy", on ? "true" : "false");
+    setFieldsEnabled(!on);
+  }
+
+  /* ---------- server access ---------- */
+  function profileError(message, extra){ return Object.assign(new Error(message), extra || {}); }
+
+  async function request(method, body){
+    var token = authToken();
+    if(!token) throw profileError("Please log in again to manage your profile.", {status:401});
+    var headers = {"Accept":"application/json", "Authorization":"Bearer " + token};
+    if(body) headers["Content-Type"] = "application/json";
+    var res;
     try{
-      profileKeyCandidates(user, base).forEach(function(k){
-        const p = parseJson(localStorage.getItem(k));
-        if(p) saved.push(p);
-      });
-      const active = parseJson(localStorage.getItem("ty_user_profile"));
-      if(active) saved.push(active);
+      res = await fetch(apiBase() + "/api/account/profile", {method:method, headers:headers, body:body ? JSON.stringify(body) : undefined, cache:"no-store", credentials:"omit"});
+    }catch(e){
+      throw profileError("We couldn't reach TravelYaraa. Check your internet connection and try again.", {network:true});
+    }
+    var data = await res.json().catch(function(){ return null; });
+    if(res.ok && data && data.success === true && data.profile && data.profile.userId) return data;
+    var status = res.status;
+    var message;
+    if(status === 400 && data && data.message) message = data.message;
+    else if(status === 401) message = "Your session has expired. Please log in again.";
+    else if(status === 404) message = (data && data.message) || "Your TravelYaraa account could not be found. Please log in again.";
+    else if(status === 503) message = "Profile changes are temporarily unavailable. Please try again in a few minutes.";
+    else message = method === "GET" ? "We couldn't load your profile right now. Please try again." : "We couldn't save your profile right now. Please try again.";
+    throw profileError(message, {status:status, field:(data && data.field) || ""});
+  }
+
+  /* A stored session token can expire while the Google/OTP session is still
+     valid: refresh it once through the existing login sync, then retry. */
+  async function requestWithSessionRefresh(method, body, user){
+    try{
+      return await request(method, body);
+    }catch(error){
+      if(error.status !== 401 || !user || typeof window.tySyncFirebaseUserWithBackend !== "function") throw error;
+      try{
+        if(typeof window.tyClearBackendSession === "function") window.tyClearBackendSession();
+        await window.tySyncFirebaseUserWithBackend(user, {service:"account"});
+      }catch(syncError){
+        throw profileError("Your session has expired. Please log in again.", {status:401});
+      }
+      return await request(method, body);
+    }
+  }
+
+  /* ---------- migration of details saved by the old page ---------- */
+  function readJson(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
+
+  /* Old records stay in this browser until their owner has saved the profile
+     to the server and the read-back matched; only that owner's keys go. */
+  function removeOwnLegacyKeys(user, profile){
+    try{
+      var uid = text(user && user.uid);
+      if(!uid) return;
+      var own = [LEGACY_PREFIX + "uid_" + uid, LEGACY_PREFIX + "legacy_" + uid];
+      var email = text(user.email).toLowerCase();
+      if(email && email === text(profile && profile.email).toLowerCase()) own.push(LEGACY_PREFIX + "email_" + email);
+      var phone = digits(user.phoneNumber);
+      if(phone) own.push(LEGACY_PREFIX + "phone_" + phone);
+      if(own.indexOf(localStorage.getItem(LEGACY_LAST_KEY) || "") >= 0) own.push(LEGACY_LAST_KEY);
+      own.forEach(function(k){ localStorage.removeItem(k); });
     }catch(e){}
-    saved = saved.filter(Boolean).sort(function(a,b){ return profileTime(a) - profileTime(b); });
-    return mergeProfile.apply(null, [base].concat(saved));
   }
 
-  function persistSessionProfile(user, profile){
-    if(!user) return null;
-    const base = formDataFromUser(user);
-    const p = mergeProfile(base, readLocalProfile(user), profile || {});
-    p.uid = user.uid || p.uid || "";
-    p.userId = p.userId || "";
-    p.email = p.email || user.email || "";
-    p.phone = p.phone || user.phoneNumber || "";
-    p.name = [p.firstName, p.lastName].filter(Boolean).join(" ") || user.displayName || p.name || "";
-    p.savedAtLocal = p.savedAtLocal || new Date().toISOString();
-    p.updatedAtLocal = p.updatedAtLocal || new Date().toISOString();
+  function withTimeout(promise, ms){
+    return Promise.race([promise, new Promise(function(resolve){ setTimeout(function(){ resolve(null); }, ms); })]);
+  }
 
+  function legacyTime(p){
+    var t = Date.parse(text(p && (p.savedAtLocal || p.updatedAtLocal)));
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  /* The old page merged records across accounts, so a record is only offered
+     when it is stamped with this sign-in's uid and carries no other account's
+     email. It is shown for review; nothing is stored until Save. */
+  async function readLegacyProfile(user, profile){
+    if(!user || !user.uid) return null;
+    var found = [];
+    var local = readJson(LEGACY_PREFIX + "uid_" + user.uid);
+    if(local) found.push(local);
     try{
-      const keys = profileKeyCandidates(user, p);
-      keys.forEach(function(k){ localStorage.setItem(k, JSON.stringify(p)); });
-      localStorage.setItem("ty_last_profile_key", keys[0] || "");
-      localStorage.setItem("ty_user_profile", JSON.stringify(p));
-      localStorage.setItem("travelYaraaUser", JSON.stringify({
-        uid: p.uid || "",
-        userId: p.userId || "",
-        email: p.email || "",
-        phone: p.phone || "",
-        name: p.name || ""
-      }));
-      localStorage.setItem("tyUserLoggedIn", "true");
+      var fns = window.firebaseFns;
+      if(fns && window.db && fns.doc && fns.getDoc){
+        var snap = await withTimeout(fns.getDoc(fns.doc(window.db, "users", user.uid)), 4000);
+        if(snap && snap.exists()) found.push(snap.data());
+      }
     }catch(e){}
-    return p;
+    var accountEmail = text(profile.email || user.email).toLowerCase();
+    var usable = found.filter(function(p){
+      if(!p || typeof p !== "object") return false;
+      if(text(p.uid) !== user.uid) return false;
+      var email = text(p.email).toLowerCase();
+      return !email || (accountEmail && email === accountEmail);
+    }).sort(function(a, b){ return legacyTime(b) - legacyTime(a); });
+    return usable[0] || null;
   }
 
-  async function fetchRemoteProfile(user){
-    if(!user || !window.firebaseFns || !window.db || !user.uid) return null;
+  function legacyPhone(raw){
+    var lib = phoneLib();
+    raw = text(raw);
+    if(!lib || !raw) return null;
+    var d = digits(raw);
+    var tries = raw.charAt(0) === "+" ? [[raw]] : (d.length > 10 ? [["+" + d], [d, DEFAULT_COUNTRY]] : [[d, DEFAULT_COUNTRY], ["+" + d]]);
+    for(var i = 0; i < tries.length; i++){
+      var p = null;
+      try{ p = lib.parsePhoneNumberFromString(tries[i][0], tries[i][1]); }catch(e){}
+      if(p && p.isValid()) return {e164:p.number, country:p.country || ""};
+    }
+    return null;
+  }
+
+  function looksLikePersonName(v){ v = text(v); return !!v && v.indexOf("@") < 0 && !/^\+?[\d\s-]+$/.test(v); }
+
+  function initialValues(profile, user, legacy){
+    var v = {
+      title:profile.title, firstName:profile.firstName, lastName:profile.lastName, dob:profile.dob,
+      maritalStatus:profile.maritalStatus, phone:profile.phone, phoneCountry:profile.phoneCountry,
+      email:profile.email, emailVerified:profile.emailVerified
+    };
+    var usedLegacy = false;
+    if(profile.saved) return {values:v, usedLegacy:false};
+    if(!v.firstName && !v.lastName && user && looksLikePersonName(user.displayName)){
+      var parts = text(user.displayName).split(/\s+/);
+      v.firstName = parts.shift() || "";
+      v.lastName = parts.join(" ");
+    }
+    if(legacy){
+      if(!v.title && ["Mr","Ms","Mrs"].indexOf(legacy.title) >= 0){ v.title = legacy.title; usedLegacy = true; }
+      if(!v.dob && /^\d{4}-\d{2}-\d{2}$/.test(text(legacy.dob))){ v.dob = text(legacy.dob); usedLegacy = true; }
+      if(!v.maritalStatus && ["Unmarried","Married"].indexOf(legacy.maritalStatus) >= 0){ v.maritalStatus = legacy.maritalStatus; usedLegacy = true; }
+      if(!v.phone){
+        var ph = legacyPhone(legacy.phone);
+        if(ph){ v.phone = ph.e164; v.phoneCountry = ph.country; usedLegacy = true; }
+      }
+      var lf = normalName(legacy.firstName), ll = normalName(legacy.lastName);
+      if(lf && ll && !v.firstName && !v.lastName){ v.firstName = lf; v.lastName = ll; usedLegacy = true; }
+    }
+    return {values:v, usedLegacy:usedLegacy};
+  }
+
+  /* ---------- load ---------- */
+  function identityOf(user){ return user ? text(user.uid) : ""; }
+
+  async function loadProfile(){
+    var user = currentUser();
+    if(!user || !authToken()) return;
+    var identity = identityOf(user);
+    if(state.identity !== identity){ state.identity = identity; resetForm(); }
+    var seq = ++state.loadSeq;
+    clearNotices();
+    clearFieldErrors();
+    setLoading(true);
+    var libReady = loadPhoneLib().catch(function(){ return null; });
     try{
-      const ref = window.firebaseFns.doc(window.db, "users", user.uid);
-      const snap = await window.firebaseFns.getDoc(ref);
-      return snap.exists() ? snap.data() : null;
-    }catch(e){ return null; }
+      var data = await requestWithSessionRefresh("GET", null, user);
+      var lib = await libReady;
+      if(seq !== state.loadSeq || identityOf(currentUser()) !== identity) return;
+      var legacy = data.profile.saved ? null : await readLegacyProfile(user, data.profile);
+      if(seq !== state.loadSeq || identityOf(currentUser()) !== identity) return;
+      state.profile = data.profile;
+      var init = initialValues(data.profile, user, legacy);
+      fillForm(init.values);
+      updatePhoneHelp(data.profile);
+      state.loaded = true;
+      setLoading(false);
+      setFieldsEnabled(true);
+      if(!lib){
+        $("profileCountryBtn").disabled = true;
+        showError("Mobile number checking couldn't load. You can still save your other details, or retry.", loadProfile);
+      }else{
+        $("profileCountryBtn").disabled = false;
+      }
+      if(init.usedLegacy) showInfo("We found details you entered earlier. Please check them and press Save Profile to store them in your account.");
+      else if(!data.profile.saved) showInfo("Check your details and press Save Profile to store them in your account.");
+    }catch(error){
+      if(seq !== state.loadSeq) return;
+      setLoading(false);
+      setFieldsEnabled(false);
+      showError(error.message || "We couldn't load your profile right now. Please try again.", loadProfile);
+    }
   }
 
-  async function refreshRemoteProfile(user, shouldFill){
-    if(!user) return null;
-    const localProfile = readLocalProfile(user) || formDataFromUser(user);
-    const remoteProfile = await fetchRemoteProfile(user);
-    const finalProfile = profileTime(localProfile) >= profileTime(remoteProfile || {})
-      ? mergeProfile(remoteProfile || {}, localProfile)
-      : mergeProfile(localProfile, remoteProfile || {});
-    const saved = persistSessionProfile(user, finalProfile);
-    if(shouldFill && $("profile-page")?.classList.contains("active")) fillProfileForm(saved || finalProfile);
-    return saved || finalProfile;
+  /* ---------- save ---------- */
+  function sameProfile(sent, stored){
+    return sent.title === text(stored.title)
+      && sent.firstName === text(stored.firstName)
+      && sent.lastName === text(stored.lastName)
+      && sent.dob === text(stored.dob)
+      && sent.maritalStatus === text(stored.maritalStatus)
+      && sent.phone === text(stored.phone);
+  }
+
+  function refreshSessionName(profile){
+    var name = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+    ["ty_user_profile", "travelYaraaUser"].forEach(function(key){
+      var stored = readJson(key);
+      if(!stored || text(stored.userId || stored.uid) !== text(profile.userId)) return;
+      stored.name = name;
+      try{ localStorage.setItem(key, JSON.stringify(stored)); }catch(e){}
+    });
+  }
+
+  async function saveProfile(){
+    if(state.saving || state.loading) return;
+    var user = currentUser();
+    if(!user || !authToken()){
+      showError("Please log in again to save your profile.", function(){ if(typeof window.openLogin === "function") window.openLogin(); }, "Log in");
+      return;
+    }
+    if(!state.loaded){ loadProfile(); return; }
+    clearNotices();
+    normalizePhoneEntry();
+    var firstInvalid = null;
+    ["firstName", "lastName", "dob", "phone"].forEach(function(f){
+      if(!validateField(f) && !firstInvalid) firstInvalid = f;
+    });
+    if(firstInvalid){
+      showError("Please correct the highlighted fields and try again.");
+      setTimeout(function(){ var el = $(FIELD_INPUT[firstInvalid]); if(el) el.focus(); }, 80);
+      return;
+    }
+    var payload = readForm();
+    var identity = identityOf(user);
+    setSaving(true);
+    try{
+      await requestWithSessionRefresh("PUT", payload, user);
+      var readBack = await requestWithSessionRefresh("GET", null, user);
+      if(identityOf(currentUser()) !== identity) return;
+      if(!sameProfile(payload, readBack.profile)){
+        throw profileError("We couldn't confirm your changes were stored. Please try again.");
+      }
+      state.profile = readBack.profile;
+      setSaving(false);
+      fillForm(readBack.profile);
+      updatePhoneHelp(readBack.profile);
+      refreshSessionName(readBack.profile);
+      removeOwnLegacyKeys(user, readBack.profile);
+      showSuccess("Profile saved successfully.");
+    }catch(error){
+      if(error.field && FIELD_ERROR[error.field]) setFieldError(error.field, error.message);
+      showError(error.message || "We couldn't save your profile right now. Please try again.", saveProfile);
+    }finally{
+      if(state.saving){
+        setSaving(false);
+        if(identityOf(currentUser()) !== identity) setFieldsEnabled(false);
+      }
+    }
+  }
+
+  /* ---------- page open / close / back ---------- */
+  function showPage(){
+    var page = $("profile-page");
+    if(!page) return;
+    page.classList.add("active");
+    document.body.classList.add("ty-page-open");
+    document.documentElement.classList.add("ty-page-open");
+    page.scrollTop = 0;
+    if(!state.historyEntry){
+      try{ history.pushState(Object.assign({}, history.state || {}, {tyProfilePage:true}), ""); state.historyEntry = true; }catch(e){}
+    }
+    setTimeout(function(){ var back = page.querySelector(".back-btn"); if(back) back.focus({preventScroll:true}); }, 300);
+  }
+
+  function hidePage(){
+    closeCountryPanel(false);
+    var page = $("profile-page");
+    if(page) page.classList.remove("active");
+    if(!document.querySelector(".slide-page.active, .selection-page.active")){
+      document.body.classList.remove("ty-page-open");
+      document.documentElement.classList.remove("ty-page-open");
+    }
   }
 
   window.openProfilePage = function(){
     if(typeof window.closeMenu === "function") window.closeMenu();
-    const user = window.tyCurrentFirebaseUser || (window.auth && window.auth.currentUser);
-    if(!user){
+    var user = currentUser();
+    if(!user || !authToken()){
       if(typeof window.openLogin === "function") window.openLogin();
       return;
     }
-    clearProfileStatus();
-    const page = $("profile-page");
-    if(page) page.classList.add("active");
-    const quickProfile = persistSessionProfile(user, readLocalProfile(user) || formDataFromUser(user));
-    fillProfileForm(quickProfile);
-    refreshRemoteProfile(user, true);
+    showPage();
+    loadProfile();
   };
 
   window.closeProfilePage = function(){
-    $("profile-page")?.classList.remove("active");
-  };
-
-  window.saveUserProfile = async function(){
-    const user = window.tyCurrentFirebaseUser || (window.auth && window.auth.currentUser);
-    if(!user){
-      if(typeof window.openLogin === "function") window.openLogin();
+    if(state.historyEntry && history.state && history.state.tyProfilePage){
+      history.back();
       return;
     }
-
-    const profile = getFormData();
-    if(!profile.firstName || !profile.lastName){
-      setProfileStatus("First name and last name are required.","err",5000);
-      removeProfileToast();
-      return;
-    }
-
-    const currentProfile = readLocalProfile(user) || {};
-    const payload = Object.assign({}, profile, {
-      uid: user.uid || "",
-      userId: currentProfile.userId || "",
-      providerEmail: user.email || "",
-      providerPhone: user.phoneNumber || "",
-      savedAtLocal: new Date().toISOString(),
-      updatedAtLocal: new Date().toISOString()
-    });
-
-    const savedProfile = persistSessionProfile(user, payload);
-    fillProfileForm(savedProfile);
-    setProfileStatus("Profile saved successfully.","ok",5000);
-    removeProfileToast();
-
-    try{
-      if(window.firebaseFns && window.db && user.uid){
-        const ref = window.firebaseFns.doc(window.db, "users", user.uid);
-        await window.firebaseFns.setDoc(ref, Object.assign({}, savedProfile, {
-          updatedAt: window.firebaseFns.serverTimestamp()
-        }), { merge:true });
-      }
-    }catch(error){
-      setProfileStatus("Profile saved successfully.","ok",5000);
-    }
+    state.historyEntry = false;
+    hidePage();
   };
 
-  window.tyPersistSessionProfile = persistSessionProfile;
-  window.tyReadLocalProfile = readLocalProfile;
-  window.tyFillProfileForm = fillProfileForm;
+  window.addEventListener("popstate", function(){
+    if(!state.historyEntry) return;
+    state.historyEntry = false;
+    if(pageOpen()) hidePage();
+  });
+
+  window.saveUserProfile = saveProfile;
 
   window.tyApplyAuthProfile = function(user){
-    const loggedIn = !!user;
-    $("menuLoginSignupBtn")?.classList.toggle("hidden-hard", loggedIn);
-    $("menuProfileBtn")?.classList.toggle("hidden-hard", !loggedIn);
-    $("desktopLoginBtn")?.classList.toggle("hidden-hard", loggedIn);
-    $("desktopProfileBtn")?.classList.toggle("hidden-hard", !loggedIn);
-    $("menuLogoutBtn")?.classList.toggle("hidden-hard", !loggedIn);
+    var loggedIn = !!user;
+    $("menuLoginSignupBtn") && $("menuLoginSignupBtn").classList.toggle("hidden-hard", loggedIn);
+    $("menuProfileBtn") && $("menuProfileBtn").classList.toggle("hidden-hard", !loggedIn);
+    $("desktopLoginBtn") && $("desktopLoginBtn").classList.toggle("hidden-hard", loggedIn);
+    $("desktopProfileBtn") && $("desktopProfileBtn").classList.toggle("hidden-hard", !loggedIn);
+    $("menuLogoutBtn") && $("menuLogoutBtn").classList.toggle("hidden-hard", !loggedIn);
 
+    var identity = identityOf(user);
+    if(state.identity && state.identity !== identity){
+      state.loadSeq++;
+      state.identity = "";
+      resetForm();
+      setFieldsEnabled(false);
+    }
     if(loggedIn){
-      const quickProfile = persistSessionProfile(user, readLocalProfile(user) || formDataFromUser(user));
-      if($("profile-page")?.classList.contains("active")) fillProfileForm(quickProfile);
-      refreshRemoteProfile(user, true);
-    }else{
-      closeProfilePage();
+      if(pageOpen()) loadProfile();
+    }else if(pageOpen()){
+      window.closeProfilePage();
     }
   };
+
+  document.addEventListener("DOMContentLoaded", function(){
+    try{
+      if(history.state && history.state.tyProfilePage){
+        var s = Object.assign({}, history.state);
+        delete s.tyProfilePage;
+        history.replaceState(s, "");
+      }
+    }catch(e){}
+    applyDobLimits();
+    setCountry(DEFAULT_COUNTRY);
+
+    var form = $("profileForm");
+    form.addEventListener("submit", function(ev){ ev.preventDefault(); saveProfile(); });
+    $("profileRetryBtn").addEventListener("click", function(){ if(state.retry) state.retry(); });
+
+    /* Submitting validates every field; skipping blur validation on the way to
+       Save keeps the button from shifting under the tap. */
+    function blurToSave(ev){ return !!(ev.relatedTarget && ev.relatedTarget.id === "profileSaveBtn"); }
+
+    ["firstName", "lastName", "dob"].forEach(function(f){
+      var el = $(FIELD_INPUT[f]);
+      el.addEventListener("blur", function(ev){ if(state.loaded && !state.saving && !blurToSave(ev) && (text(el.value) || el.getAttribute("aria-invalid"))) validateField(f); });
+      el.addEventListener("input", function(){ clearSuccess(); if(el.getAttribute("aria-invalid")) validateField(f); });
+    });
+    form.addEventListener("change", function(ev){ if(ev.target && ev.target.id !== "profileCountrySearch") clearSuccess(); });
+
+    var phone = $("profilePhone");
+    phone.addEventListener("input", function(){ clearSuccess(); if(phone.getAttribute("aria-invalid")) validateField("phone"); });
+    phone.addEventListener("paste", function(){ setTimeout(function(){ normalizePhoneEntry(); validateField("phone"); }, 0); });
+    phone.addEventListener("blur", function(ev){ if(!state.loaded || state.saving) return; normalizePhoneEntry(); if(!blurToSave(ev) && (text(phone.value) || phone.getAttribute("aria-invalid"))) validateField("phone"); });
+
+    var btn = $("profileCountryBtn");
+    btn.addEventListener("click", function(){
+      if($("profileCountryPanel").hidden) openCountryPanel(); else closeCountryPanel(true);
+    });
+    var search = $("profileCountrySearch");
+    search.addEventListener("input", renderCountryList);
+    search.addEventListener("keydown", function(ev){
+      var opts = countryOptions();
+      if(ev.key === "ArrowDown"){ ev.preventDefault(); setActiveOption(state.activeIndex + 1); }
+      else if(ev.key === "ArrowUp"){ ev.preventDefault(); setActiveOption(state.activeIndex - 1); }
+      else if(ev.key === "Enter"){
+        ev.preventDefault();
+        var pick = opts[state.activeIndex >= 0 ? state.activeIndex : 0];
+        if(pick) chooseCountry(pick.dataset.iso);
+      }else if(ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); closeCountryPanel(true); }
+    });
+    $("profileCountryList").addEventListener("click", function(ev){
+      var li = ev.target.closest("[role=option]");
+      if(li) chooseCountry(li.dataset.iso);
+    });
+    /* Closing on click rather than pointerdown keeps the layout still until
+       the tap has landed, so a tap on Save is not lost when the list closes. */
+    document.addEventListener("click", function(ev){
+      var panel = $("profileCountryPanel");
+      if(!panel || panel.hidden) return;
+      if(panel.contains(ev.target) || btn.contains(ev.target)) return;
+      closeCountryPanel(false);
+    });
+    $("profile-page").addEventListener("keydown", function(ev){
+      if(ev.key === "Escape" && $("profileCountryPanel").hidden && pageOpen()) window.closeProfilePage();
+    });
+  });
 })();
 </script>
 
@@ -4714,7 +5410,9 @@ window.addEventListener("pageshow", closeAllPickersOnLoadV10);
     closeAllStartupPages();
   }
 
-  window.addEventListener("pageshow", closeAllStartupPages);
+  window.addEventListener("pageshow", function(event){
+    if(event.persisted) closeAllStartupPages();
+  });
 })();
 </script>
 
@@ -4783,7 +5481,7 @@ window.addEventListener("pageshow", closeAllPickersOnLoadV10);
 #cityPickerV5 .ty-hotel-chip-v184{border:1px solid #dbe7f3!important;background:#fff!important;color:#071d49!important;border-radius:999px!important;min-height:34px!important;padding:0 13px!important;font-size:12px!important;font-weight:900!important;box-shadow:0 4px 12px rgba(7,29,73,.04)!important}
 #flightReturnBoxV5.ty-return-empty-v5 #flightReturnTextV5{font-size:7.8px!important;line-height:1.05!important;white-space:nowrap!important;display:block!important;overflow:visible!important;text-overflow:clip!important;color:#111827!important;font-weight:900!important;letter-spacing:-.04em!important;max-width:100%!important}
 #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-size:15px!important;white-space:nowrap!important;display:block!important;color:#071d49!important;letter-spacing:0!important;overflow:hidden!important;text-overflow:ellipsis!important}
-@media(min-width:901px){#profile-page.active{left:0!important;right:0!important;top:0!important;width:100vw!important;background:rgba(244,247,251,.98)!important}.ty-profile-final-wrap{max-width:860px!important;padding:28px 24px 42px!important}.ty-profile-final-card{border-radius:20px!important}.ty-profile-final-body{padding:24px!important}.ty-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}.ty-profile-field.full{grid-column:auto!important}.ty-profile-save-wrap{justify-content:flex-end!important}.ty-title-radio{max-width:420px!important}}
+@media(min-width:901px){#profile-page.active{left:0!important;right:0!important;top:0!important;width:100vw!important;background:rgba(244,247,251,.98)!important}.ty-profile-final-wrap{max-width:860px!important;padding:28px 24px 42px!important}.ty-profile-final-card{border-radius:20px!important}.ty-profile-final-body{padding:24px!important}.ty-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}.ty-profile-save-wrap{justify-content:flex-end!important}.ty-title-radio{max-width:420px!important}}
 </style>
 <script id="ty-clean-search-final-v66-js">
 (function(){
@@ -5496,22 +6194,6 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
     $('menuProfileBtn')&&$('menuProfileBtn').classList.toggle('hidden-hard',!logged);
     $('menuLogoutBtn')&&$('menuLogoutBtn').classList.toggle('hidden-hard',!logged);
     updateAccountButton(user||null);
-  };
-  var oldOpenProfile=window.openProfilePage;
-  window.openProfilePage=async function(){
-    var u=currentUser();
-    if(!u){ if(typeof window.openLogin==='function') window.openLogin(); return; }
-    if(typeof oldOpenProfile==='function') await oldOpenProfile();
-    setTimeout(function(){
-      var email=$('profileEmail'), phone=$('profilePhone'), first=$('profileFirstName'), last=$('profileLastName');
-      if(email && !email.value && u.email) email.value=u.email;
-      if(phone && !phone.value && u.phoneNumber) phone.value=u.phoneNumber;
-      if((first&&!first.value) && u.displayName){
-        var parts=String(u.displayName).trim().split(/\s+/);
-        first.value=parts.shift()||'';
-        if(last && !last.value) last.value=parts.join(' ');
-      }
-    },80);
   };
   document.addEventListener('DOMContentLoaded',function(){updateAccountButton(currentUser());});
 })();
