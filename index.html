@@ -3167,12 +3167,12 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
 </div>
 <section class="max-w-6xl mx-auto px-4 py-12">
 <div class="mb-8">
-<h2 class="text-2xl font-black uppercase" data-i18n="travel_guides">s &amp; Tips</h2>
+<h2 class="text-2xl font-black uppercase" data-i18n="travel_guides">Travel Guides &amp; Tips</h2>
 <div class="h-1 w-20 bg-blue-500 mt-1"></div>
 </div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
 <div class="guide-card">
-<img alt="Goa" class="w-full h-48 object-cover" src="https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
+<img alt="Palm-fringed beach with turquoise sea, for the Goa travel guide" class="w-full h-48 object-cover" loading="lazy" src="https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
 <div class="p-6">
 <h3 class="font-black text-lg mb-2 uppercase" data-i18n="goa_guide">Ultimate Guide to Goa</h3>
 <p class="text-gray-500 text-xs mb-4" data-i18n="goa_text">Explore beaches, churches, nightlife and coastal travel tips.</p>
@@ -3180,7 +3180,7 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
 </div>
 </div>
 <div class="guide-card">
-<img alt="Rajasthan" class="w-full h-48 object-cover" src="https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
+<img alt="Golden hilltop fort with ramparts and terraced walls, for the Rajasthan forts guide" class="w-full h-48 object-cover" loading="lazy" src="https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
 <div class="p-6">
 <h3 class="font-black text-lg mb-2 uppercase" data-i18n="rajasthan_guide">Royal Forts of Rajasthan</h3>
 <p class="text-gray-500 text-xs mb-4" data-i18n="rajasthan_text">Discover royal architecture, forts and desert experiences.</p>
@@ -3188,10 +3188,10 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
 </div>
 </div>
 <div class="guide-card">
-<img alt="Hotel" class="w-full h-48 object-cover" src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
+<img alt="Resort pool deck with sun loungers beside a wooden building, for the hotel booking tips guide" class="w-full h-48 object-cover" loading="lazy" src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&amp;fit=crop&amp;w=600&amp;q=80"/>
 <div class="p-6">
 <h3 class="font-black text-lg mb-2 uppercase" data-i18n="hotel_tips">Smart Hotel Booking Tips</h3>
-<p class="text-gray-500 text-xs mb-4" data-i18n="hotel_tips_text">Learn how to find good hotels at better prices.</p>
+<p class="text-gray-500 text-xs mb-4" data-i18n="hotel_tips_text">A practical checklist for choosing the right area, room and rate in India.</p>
 <a class="inline-block bg-[#071d49] text-white text-[10px] font-bold uppercase px-4 py-2 rounded-lg" data-i18n="read_details" href="/guides/hotel-tips.html">Read Full Details</a>
 </div>
 </div>
@@ -4640,6 +4640,9 @@ document.addEventListener("DOMContentLoaded",function(){
   document.querySelectorAll("[data-v5-tab]").forEach(btn=>btn.onclick=()=>{S.active=btn.dataset.v5Tab;document.querySelectorAll("[data-v5-tab]").forEach(x=>x.classList.toggle("active",x===btn));document.querySelectorAll("[data-v5-panel]").forEach(x=>x.classList.toggle("active",x.dataset.v5Panel===S.active));});
   document.querySelectorAll("[data-v5-trip]").forEach(btn=>btn.onclick=()=>{S.trip=btn.dataset.v5Trip;setTripActive(S.trip)});
   document.querySelectorAll("[data-v5-panel]").forEach(form=>form.addEventListener("submit",function(e){e.preventDefault();submitV5(form.dataset.v5Panel)}));
+  const svcParam=new URLSearchParams(location.search).get("service");
+  const svcTab=/^(flight|hotel|cab)$/.test(svcParam||"")&&document.querySelector('[data-v5-tab="'+svcParam+'"]');
+  if(svcTab&&!svcTab.classList.contains("active"))svcTab.click();
 });
 function submitV5(service){
   if(service==="flight"){
