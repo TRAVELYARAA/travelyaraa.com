@@ -3084,11 +3084,10 @@ body #search-area #flightReturnBoxV5.ty-has-return-v66 #flightReturnTextV5{font-
     </form>
   </div>
 </section>
-<section id="tyHomeSpecialOffers" class="ty-special-offers ty-offer-cards-only" aria-label="TravelYaraa Offers">
+<section id="tyHomeSpecialOffers" class="ty-special-offers ty-offer-cards-only is-loading" aria-label="TravelYaraa offers">
   <button class="ty-home-offer-nav prev" type="button" data-home-prev aria-label="Previous offer">&lsaquo;</button>
   <div class="ty-home-offer-window"><div class="ty-home-offer-track" id="tyHomeOfferTrack">
-    <article class="ty-home-offer-card flight" data-home-offer="TY0FEES" role="button" tabindex="0"><img class="ty-home-offer-img" src="/ty-offer-ty0fees.jpg?v=173" alt="Zero Convenience Fee"></article>
-    <article class="ty-home-offer-card flight" data-home-offer="TYWELCOME" role="button" tabindex="0"><img class="ty-home-offer-img" src="/ty-offer-tywelcome.jpg?v=173" alt="Welcome Flight Offer"></article>
+    <div class="ty-hof-skel" aria-hidden="true"></div><div class="ty-hof-skel" aria-hidden="true"></div><div class="ty-hof-skel" aria-hidden="true"></div>
   </div></div>
   <button class="ty-home-offer-nav next" type="button" data-home-next aria-label="Next offer">&rsaquo;</button>
   <div class="ty-home-offer-dots" id="tyHomeOfferDots"></div>
@@ -5685,13 +5684,13 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
   window.addEventListener('resize',function(){setTimeout(placeAll,50)});window.addEventListener('scroll',function(){setTimeout(placeAll,20)},true);
 })();
 </script>
-<script src="/assets/js/offers.js?v=20261004home"></script>
+<script src="/assets/js/offers.js?v=20261004cards"></script>
 
 <style id="ty-v126-offer-after-search-widget">
 #cityPickerV5 .ty-done-v5,#cityPickerV5 button[onclick*="applyCityV5"],#cityPickerV5 .ty-picker-done-v5{display:none!important}
 
-/* Homepage offer cards. Card artwork is unchanged; each 4:5 card box trims only the
-   white margin around the card drawn in the image (measured per image below). */
+/* Homepage offer cards: wide banner (cropped from the existing offer artwork) over a compact
+   body rendered from the live offers API by #ty-home-offers-js. */
 .ty-special-offers.ty-offer-cards-only{
   position:relative!important;
   width:min(1180px,calc(100% - 28px))!important;
@@ -5706,7 +5705,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
 .ty-home-offer-window{overflow:hidden!important;background:transparent!important}
 .ty-home-offer-track{
   display:flex!important;
-  align-items:flex-start!important;
+  align-items:stretch!important;
   gap:16px!important;
   padding:4px 4px 10px!important;
   overflow-x:auto!important;
@@ -5719,61 +5718,169 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
   background:transparent!important;
 }
 .ty-home-offer-track::-webkit-scrollbar{display:none!important}
-.ty-home-offer-card:first-child{margin-left:auto!important}
-.ty-home-offer-card:last-child{margin-right:auto!important}
-.ty-home-offer-card{
-  position:relative!important;
-  flex:0 0 280px!important;
-  aspect-ratio:4/5!important;
+.ty-hof-card,.ty-hof-skel{
+  flex:0 0 calc((100% - 32px)/3)!important;
   min-width:0!important;
-  padding:0!important;
-  border:0!important;
+  scroll-snap-align:start!important;
   border-radius:14px!important;
+}
+.ty-hof-card:first-child{margin-left:auto!important}
+.ty-hof-card:last-child{margin-right:auto!important}
+.ty-hof-skel{background:#eef2f8!important}
+.ty-hof-skel:before{content:""!important;display:block!important;aspect-ratio:3.2/1!important;background:#e2e8f2!important;border-radius:14px 14px 0 0!important}
+.ty-hof-skel:after{content:""!important;display:block!important;height:140px!important}
+.ty-hof-card{
+  position:relative!important;
+  display:flex!important;
+  flex-direction:column!important;
   overflow:hidden!important;
   background:#fff!important;
-  box-shadow:0 6px 18px rgba(7,29,73,.12)!important;
-  scroll-snap-align:start!important;
-  cursor:pointer!important;
-  line-height:0!important;
-  outline:none!important;
-  transition:transform .18s ease,box-shadow .18s ease!important;
+  border:1px solid #e3e9f3!important;
+  box-shadow:0 6px 18px rgba(7,29,73,.10)!important;
+  text-align:left!important;
+  transition:box-shadow .2s ease!important;
 }
-.ty-home-offer-card .ty-home-offer-img{
+.ty-hof-card.is-highlight{box-shadow:0 0 0 3px #f0ae22,0 8px 22px rgba(7,29,73,.14)!important}
+.ty-hof-banner{
+  position:relative!important;
+  aspect-ratio:3.2/1!important;
+  overflow:hidden!important;
+  background:linear-gradient(135deg,#0b2a6b,#0062e3)!important;
+}
+.ty-hof-banner img{
   position:absolute!important;
-  left:-3%!important;
-  top:-3%!important;
-  width:106%!important;
-  height:106%!important;
   max-width:none!important;
-  object-fit:fill!important;
+  height:auto!important;
+  margin:0!important;
   border-radius:0!important;
   box-shadow:none!important;
-  background:transparent!important;
   display:block!important;
 }
-/* 1122x1402 artwork; visible card area 34-1090 x 43-1363 */
-.ty-home-offer-card[data-home-offer="TY0FEES"] .ty-home-offer-img{left:-3.22%!important;top:-3.26%!important;width:106.25%!important;height:106.21%!important}
-/* 1122x1402 artwork; visible card area 38-1083 x 34-1340 (inside the drawn card's rim) */
-.ty-home-offer-card[data-home-offer="TYWELCOME"] .ty-home-offer-img{left:-3.64%!important;top:-2.6%!important;width:107.37%!important;height:107.35%!important}
-@media(hover:hover){
-  .ty-home-offer-card:hover{transform:translateY(-2px)!important;box-shadow:0 10px 24px rgba(7,29,73,.16)!important}
+/* 1122x1402 artwork. Each crop is the headline + illustration band, above the printed code
+   ticket (which shows "TYOFEES" with a letter O) and the drawn "Apply on Review Page" button. */
+.ty-hof-card[data-offer-code="TY0FEES"] .ty-hof-banner img{width:110.81%!important;left:-5.41%!important;top:-121.08%!important}
+.ty-hof-card[data-offer-code="TYWELCOME"] .ty-hof-banner img{width:110.81%!important;left:-5.41%!important;top:-94.27%!important}
+.ty-hof-card[data-offer-code="TYFIRSTSTAY"] .ty-hof-banner img{width:124.24%!important;left:-6.06%!important;top:-135.76%!important}
+.ty-hof-body{
+  display:flex!important;
+  flex-direction:column!important;
+  flex:1 1 auto!important;
+  padding:10px 12px 12px!important;
+  min-width:0!important;
 }
-.ty-home-offer-card:focus-visible{box-shadow:0 0 0 3px #0062e3,0 10px 24px rgba(7,29,73,.16)!important}
-.ty-home-offer-card.selected{box-shadow:0 0 0 2px #f0ae22,0 10px 22px rgba(240,174,34,.22)!important}
-.ty-home-offer-card.selected:after{
-  content:"SELECTED"!important;
-  position:absolute!important;
-  top:8px!important;
-  right:8px!important;
-  z-index:2!important;
-  padding:4px 8px!important;
+.ty-hof-head{display:flex!important;align-items:center!important;gap:8px!important;min-width:0!important;height:20px!important}
+.ty-hof-badge{
+  flex:0 0 auto!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:4px!important;
+  height:20px!important;
+  padding:0 8px 0 6px!important;
   border-radius:999px!important;
-  background:#d99300!important;
-  color:#fff!important;
-  font-size:9px!important;
-  font-weight:950!important;
+  font-size:10.5px!important;
+  font-weight:800!important;
   line-height:1!important;
 }
+.ty-hof-badge svg{width:12px!important;height:12px!important;fill:currentColor!important}
+.ty-hof-badge.is-flight{background:#e8f1ff!important;color:#0062e3!important}
+.ty-hof-badge.is-hotel{background:#fff3d9!important;color:#9a6200!important}
+.ty-hof-title{
+  margin:0!important;
+  min-width:0!important;
+  font-size:15px!important;
+  font-weight:800!important;
+  line-height:20px!important;
+  color:#0b1f44!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.ty-hof-terms{list-style:none!important;margin:6px 0 0!important;padding:0!important}
+.ty-hof-terms li{
+  position:relative!important;
+  margin:0!important;
+  padding:0 0 0 12px!important;
+  font-size:12px!important;
+  line-height:16px!important;
+  color:#4a5872!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.ty-hof-terms li:before{content:""!important;position:absolute!important;left:2px!important;top:6px!important;width:4px!important;height:4px!important;border-radius:50%!important;background:#f0ae22!important}
+.ty-hof-foot{display:flex!important;align-items:center!important;gap:8px!important;margin-top:auto!important;padding-top:10px!important}
+.ty-hof-code{
+  position:relative!important;
+  flex:1 1 auto!important;
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  height:34px!important;
+  padding-left:10px!important;
+  border:1.5px dashed #9bbcf0!important;
+  border-radius:8px!important;
+  background:#f5f9ff!important;
+}
+.ty-hof-code b{
+  flex:1 1 auto!important;
+  font-size:13px!important;
+  font-weight:900!important;
+  letter-spacing:.04em!important;
+  color:#0b2a6b!important;
+  white-space:nowrap!important;
+  user-select:all!important;
+}
+.ty-hof-copy{
+  flex:0 0 auto!important;
+  display:grid!important;
+  place-items:center!important;
+  width:34px!important;
+  height:100%!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  color:#0062e3!important;
+  cursor:pointer!important;
+}
+.ty-hof-copy svg{width:16px!important;height:16px!important;fill:currentColor!important}
+.ty-hof-copy.is-copied{color:#0a8a4a!important}
+.ty-hof-toast{
+  position:absolute!important;
+  right:0!important;
+  bottom:calc(100% + 6px)!important;
+  padding:4px 8px!important;
+  border-radius:6px!important;
+  background:#0b1f44!important;
+  color:#fff!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+  pointer-events:none!important;
+  opacity:0!important;
+  transform:translateY(4px)!important;
+  transition:opacity .15s ease,transform .15s ease!important;
+}
+.ty-hof-toast.show{opacity:1!important;transform:none!important}
+.ty-hof-action{
+  flex:0 0 auto!important;
+  height:34px!important;
+  padding:0 12px!important;
+  border:0!important;
+  border-radius:8px!important;
+  background:#0062e3!important;
+  color:#fff!important;
+  font-size:12.5px!important;
+  font-weight:800!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  cursor:pointer!important;
+}
+@media(hover:hover){
+  .ty-hof-action:hover{background:#0052c2!important}
+  .ty-hof-copy:hover{background:#e8f1ff!important}
+}
+.ty-hof-action:focus-visible,.ty-hof-copy:focus-visible{outline:2px solid #0b1f44!important;outline-offset:2px!important}
 .ty-home-offer-nav{
   position:absolute!important;
   top:calc(50% - 10px)!important;
@@ -5810,19 +5917,19 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});documen
 .ty-special-offers:not(.is-scrollable) .ty-home-offer-nav,
 .ty-special-offers:not(.is-scrollable) .ty-home-offer-dots{display:none!important}
 @media(min-width:901px) and (max-width:1099px){
-  .ty-home-offer-card{flex-basis:250px!important}
+  .ty-hof-card,.ty-hof-skel{flex-basis:calc((100% - 16px)/2.15)!important}
 }
 @media(max-width:900px){
   .ty-special-offers.ty-offer-cards-only{width:100%!important;margin:10px 0 4px!important}
-  .ty-home-offer-track{gap:10px!important;padding:4px 12px 10px!important;scroll-padding-inline:12px!important}
-  .ty-home-offer-card{
-    flex:0 0 calc((100% - 10px)/2)!important;
-    min-width:140px!important;
-    max-width:240px!important;
-    border-radius:10px!important;
-  }
-  .ty-home-offer-card.selected:after{top:6px!important;right:6px!important;padding:3px 6px!important;font-size:8px!important}
+  .ty-home-offer-track{gap:12px!important;padding:4px 16px 10px!important;scroll-padding-inline:16px!important}
+  .ty-hof-card,.ty-hof-skel{flex-basis:min(80vw,360px)!important}
   .ty-home-offer-nav{display:none!important}
+}
+@media(max-width:359px){
+  .ty-hof-card,.ty-hof-skel{flex-basis:84vw!important}
+  .ty-hof-skel:after{height:184px!important}
+  .ty-hof-foot{flex-direction:column!important;align-items:stretch!important}
+  .ty-hof-code{flex:0 0 34px!important}
 }
 
 /* V171: final list calendar fix */
@@ -6057,24 +6164,33 @@ body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth
 </style>
 <script id="ty-home-offers-js">
 /* Homepage offer strip and cards. The live offers API (TravelYaraaOffers.listOffers) is the
-   only source: strip items are built from it and a card stays only while its offer is active.
-   Eligibility and the discount itself are validated at review, never here. */
+   only source: every card and strip item is built from an active offer it returns, and the
+   card terms come from that offer's fields. Eligibility and the discount itself are validated
+   at review, never here. */
 (function(){
   "use strict";
   var PX_PER_SECOND = 40;
+  var ART_VERSION = "20261004";
+  var ART = {TY0FEES:"/ty-offer-ty0fees.jpg", TYWELCOME:"/ty-offer-tywelcome.jpg", TYFIRSTSTAY:"/ty-offer-tyfirststay.jpg"};
+  var SERVICES = {
+    flight: {label:"Flights", noun:"flight", action:"Search flights",
+      icon:'<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>'},
+    hotel: {label:"Hotels", noun:"hotel", action:"Search hotels",
+      icon:'<path d="M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"/>'}
+  };
+  var COPY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+  var CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
   function q(s,r){ return (r||document).querySelector(s); }
   function qa(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
-  var offersByCode = {};
-
-  function serviceFor(code){
-    var offer = offersByCode[code];
-    var svc = String(offer && offer.service || "").toLowerCase();
-    if(svc === "flight" || svc === "hotel" || svc === "cab") return svc;
-    code = String(code || "").toUpperCase();
-    if(code.indexOf("HOTEL") !== -1 || code.indexOf("STAY") !== -1) return "hotel";
-    if(code.indexOf("CAB") !== -1) return "cab";
-    return "flight";
+  function el(tag, cls, text){
+    var n = document.createElement(tag);
+    if(cls) n.className = cls;
+    if(text != null) n.textContent = text;
+    return n;
   }
+  function truthy(v){ return v === true || v === 1 || String(v).toLowerCase() === "true"; }
+  function money(v){ return "\u20B9" + Math.round(Number(v) || 0).toLocaleString("en-IN"); }
+
   function clickTab(svc){
     var tab = q('.ty-search-v5-tab[data-v5-tab="' + svc + '"]');
     if(tab && !tab.classList.contains("active")) tab.click();
@@ -6084,69 +6200,182 @@ body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth
     if(!t) return;
     try{ t.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){ t.scrollIntoView(); }
   }
-  function select(code){
-    qa("#tyHomeSpecialOffers .ty-home-offer-card").forEach(function(c){ c.classList.toggle("selected", c.dataset.homeOffer === code); });
-  }
-  function apply(code){
-    var svc = serviceFor(code);
-    sessionStorage.setItem("ty_preferred_offer_code", code);
-    sessionStorage.setItem("ty_preferred_offer", JSON.stringify({offerCode:code, code:code, service:svc, selectedAt:new Date().toISOString()}));
-    select(code);
+  function startSearch(svc){
     clickTab(svc);
     setTimeout(scrollSearch, 80);
   }
 
-  function initCards(){
+  function termLines(o, svc){
+    var noun = SERVICES[svc].noun, type = String(o.discountType || "").toLowerCase();
+    var value = Number(o.discountValue) || 0, max = Number(o.maxDiscount) || 0, min = Number(o.minBookingAmount) || 0;
+    var first = truthy(o.firstBookingOnly) || truthy(o.newUserOnly);
+    var login = first || truthy(o.oneTimePerUser);
+    var benefit = "";
+    if(type.indexOf("convenience_fee") !== -1 || type.indexOf("fee_waiver") !== -1) benefit = "TravelYaraa convenience fee waived";
+    else if(type === "flat" && value > 0) benefit = "Flat " + money(value) + " off";
+    else if(type === "percentage" && value > 0) benefit = value + "% off" + (max > 0 ? " up to " + money(max) : "");
+    var who = (first ? "First " + noun + " booking" : "Any " + noun + " booking") + " \u00B7 " + (min > 0 ? "min. " + money(min) : "no minimum");
+    if(o.expiryDate) who += " \u00B7 till " + o.expiryDate;
+    var where = (login ? "Log in, then apply" : "Apply") + " at " + noun + " review";
+    return [benefit, who, where].filter(Boolean).slice(0, 3);
+  }
+
+  function copyText(text){
+    if(navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(function(){ return legacyCopy(text); });
+    return legacyCopy(text);
+  }
+  function legacyCopy(text){
+    return new Promise(function(resolve, reject){
+      var ta = el("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try{ ok = document.execCommand("copy"); }catch(e){}
+      ta.remove();
+      if(ok) resolve(); else reject(new Error("copy failed"));
+    });
+  }
+  function bindCopy(btn, code, codeEl, toast){
+    var timer = 0;
+    function show(msg, copied){
+      clearTimeout(timer);
+      toast.textContent = msg;
+      toast.classList.add("show");
+      btn.classList.toggle("is-copied", copied);
+      btn.innerHTML = copied ? CHECK_ICON : COPY_ICON;
+      timer = setTimeout(function(){
+        toast.classList.remove("show");
+        btn.classList.remove("is-copied");
+        btn.innerHTML = COPY_ICON;
+      }, 1800);
+    }
+    btn.addEventListener("click", function(){
+      copyText(code).then(function(){ show("Code " + code + " copied", true); }, function(){
+        var range = document.createRange();
+        range.selectNodeContents(codeEl);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        show("Selected \u2013 copy it manually", false);
+      });
+    });
+  }
+
+  function buildCard(o, svc){
+    var meta = SERVICES[svc];
+    var card = el("article", "ty-hof-card");
+    card.dataset.offerCode = o.code;
+    card.dataset.service = svc;
+    card.setAttribute("aria-label", o.title || o.code);
+
+    var banner = el("div", "ty-hof-banner");
+    if(ART[o.code]){
+      var img = el("img");
+      img.src = ART[o.code] + "?v=" + ART_VERSION;
+      img.alt = "";
+      img.decoding = "async";
+      banner.appendChild(img);
+    }
+    card.appendChild(banner);
+
+    var body = el("div", "ty-hof-body");
+    var head = el("div", "ty-hof-head");
+    var badge = el("span", "ty-hof-badge is-" + svc);
+    badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + meta.icon + "</svg>";
+    badge.appendChild(document.createTextNode(meta.label));
+    head.appendChild(badge);
+    head.appendChild(el("h3", "ty-hof-title", o.title || o.code));
+    body.appendChild(head);
+
+    var terms = el("ul", "ty-hof-terms");
+    termLines(o, svc).forEach(function(t){
+      var li = el("li", "", t);
+      li.title = t;
+      terms.appendChild(li);
+    });
+    body.appendChild(terms);
+
+    var foot = el("div", "ty-hof-foot");
+    var codeBox = el("div", "ty-hof-code");
+    var codeEl = el("b", "", o.code);
+    var copy = el("button", "ty-hof-copy");
+    copy.type = "button";
+    copy.innerHTML = COPY_ICON;
+    copy.setAttribute("aria-label", "Copy code " + o.code);
+    copy.title = "Copy code";
+    var toast = el("span", "ty-hof-toast");
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    codeBox.appendChild(codeEl);
+    codeBox.appendChild(copy);
+    codeBox.appendChild(toast);
+    bindCopy(copy, o.code, codeEl, toast);
+    foot.appendChild(codeBox);
+
+    var action = el("button", "ty-hof-action", meta.action);
+    action.type = "button";
+    action.addEventListener("click", function(){ startSearch(svc); });
+    foot.appendChild(action);
+    body.appendChild(foot);
+    card.appendChild(body);
+    return card;
+  }
+
+  function initCarousel(offers){
     var sec = q("#tyHomeSpecialOffers"), track = q("#tyHomeOfferTrack"), dotsBox = q("#tyHomeOfferDots");
     if(!sec || !track) return null;
+    if(!offers.length){ sec.remove(); return null; }
+    track.innerHTML = "";
+    offers.forEach(function(o){ track.appendChild(buildCard(o, o.service)); });
+    sec.classList.remove("is-loading");
     var prev = q("[data-home-prev]", sec), next = q("[data-home-next]", sec);
-    function cards(){ return qa(".ty-home-offer-card", track); }
+    function cards(){ return qa(".ty-hof-card", track); }
     function stepWidth(){
       var c = cards()[0];
       return c ? c.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap || 0) : track.clientWidth;
     }
+    function scrollToCard(c){
+      track.scrollTo({left: c.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).paddingLeft || 0), behavior:"smooth"});
+    }
     function activeIndex(){
       var list = cards(), left = track.scrollLeft, best = 0, bestDist = Infinity;
-      list.forEach(function(c, i){ var d = Math.abs(c.offsetLeft - track.offsetLeft - left); if(d < bestDist){ bestDist = d; best = i; } });
+      list.forEach(function(c, i){ var d = Math.abs(c.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).paddingLeft || 0) - left); if(d < bestDist){ bestDist = d; best = i; } });
       if(track.scrollLeft + track.clientWidth >= track.scrollWidth - 4) best = list.length - 1;
       return best;
     }
     function update(){
-      var overflow = track.scrollWidth - track.clientWidth > 4;
-      sec.classList.toggle("is-scrollable", overflow);
+      sec.classList.toggle("is-scrollable", track.scrollWidth - track.clientWidth > 4);
       var i = activeIndex();
       qa("button", dotsBox).forEach(function(d, x){ d.classList.toggle("active", x === i); d.setAttribute("aria-current", x === i ? "true" : "false"); });
       if(prev) prev.disabled = track.scrollLeft <= 2;
       if(next) next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
     }
-    function buildDots(){
-      if(!dotsBox) return;
+    if(dotsBox){
       dotsBox.innerHTML = "";
       cards().forEach(function(c, i){
-        var d = document.createElement("button");
+        var d = el("button");
         d.type = "button";
         d.setAttribute("aria-label", "Show offer " + (i + 1));
-        d.addEventListener("click", function(){ track.scrollTo({left: c.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).paddingLeft || 0), behavior:"smooth"}); });
+        d.addEventListener("click", function(){ scrollToCard(c); });
         dotsBox.appendChild(d);
       });
-      update();
     }
-    if(prev) prev.addEventListener("click", function(e){ e.stopPropagation(); track.scrollBy({left:-stepWidth(), behavior:"smooth"}); });
-    if(next) next.addEventListener("click", function(e){ e.stopPropagation(); track.scrollBy({left:stepWidth(), behavior:"smooth"}); });
-    cards().forEach(function(card){
-      card.addEventListener("click", function(){ apply(card.dataset.homeOffer); });
-      card.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); apply(card.dataset.homeOffer); } });
-    });
+    if(prev) prev.addEventListener("click", function(){ track.scrollBy({left:-stepWidth(), behavior:"smooth"}); });
+    if(next) next.addEventListener("click", function(){ track.scrollBy({left:stepWidth(), behavior:"smooth"}); });
     track.addEventListener("scroll", update, {passive:true});
     if(window.ResizeObserver) new ResizeObserver(update).observe(track); else window.addEventListener("resize", update);
-    buildDots();
-    var saved = sessionStorage.getItem("ty_preferred_offer_code");
-    if(saved) select(saved);
+    update();
     return {
-      keepOnly: function(activeCodes){
-        cards().forEach(function(c){ if(activeCodes.indexOf(c.dataset.homeOffer) === -1) c.remove(); });
-        if(!cards().length){ sec.remove(); return; }
-        buildDots();
+      show: function(code){
+        var c = q('.ty-hof-card[data-offer-code="' + code + '"]', track);
+        if(!c) return;
+        try{ sec.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){ sec.scrollIntoView(); }
+        scrollToCard(c);
+        c.classList.add("is-highlight");
+        setTimeout(function(){ c.classList.remove("is-highlight"); }, 1600);
       }
     };
   }
@@ -6156,22 +6385,16 @@ body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth
     var m = t.match(/^.*?[.!?](?=\s|$)/);
     return (m ? m[0] : t).replace(/\.$/, "");
   }
-  function buildStrip(offers){
+  function buildStrip(offers, carousel){
     var strip = q(".ty-offer-marquee"), track = q("#tyOfferStripTrack");
     if(!strip || !track || !offers.length) return;
-    var group = document.createElement("div");
-    group.className = "ty-offer-group";
+    var group = el("div", "ty-offer-group");
     offers.forEach(function(o){
-      var b = document.createElement("button");
+      var b = el("button", "ty-offer-item");
       b.type = "button";
-      b.className = "ty-offer-item";
       b.dataset.offerCode = o.code;
-      var code = document.createElement("b");
-      code.textContent = o.code;
-      var text = document.createElement("span");
-      text.textContent = firstSentence(o.customer_text || o.terms || o.title);
-      b.appendChild(code);
-      b.appendChild(text);
+      b.appendChild(el("b", "", o.code));
+      b.appendChild(el("span", "", firstSentence(o.customer_text || o.terms || o.title)));
       group.appendChild(b);
     });
     var clone = group.cloneNode(true);
@@ -6183,7 +6406,7 @@ body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth
     track.style.setProperty("--ty-strip-duration", Math.max(16, Math.round(group.scrollWidth / PX_PER_SECOND)) + "s");
     track.addEventListener("click", function(e){
       var b = e.target.closest(".ty-offer-item");
-      if(b) apply(b.dataset.offerCode);
+      if(b && carousel) carousel.show(b.dataset.offerCode);
     });
     var resumeTimer = 0;
     strip.addEventListener("pointerdown", function(e){
@@ -6202,20 +6425,23 @@ body #search-area form[data-v5-panel="hotel"] .ty-v5-service-grid>.ty-box-v5:nth
   }
 
   function init(){
-    var cards = initCards();
     var api = window.TravelYaraaOffers;
-    if(!api || typeof api.listOffers !== "function") return;
-    Promise.all([api.listOffers("flight"), api.listOffers("hotel")]).then(function(lists){
-      var active = [];
-      [].concat(lists[0] || [], lists[1] || []).forEach(function(o){
-        var code = String(o && (o.code || o.offerCode) || "").toUpperCase();
-        if(!code || offersByCode[code] || String(o.status || "active").toLowerCase() !== "active") return;
-        offersByCode[code] = o;
-        active.push(Object.assign({}, o, {code:code}));
+    var sec = q("#tyHomeSpecialOffers");
+    if(!api || typeof api.listOffers !== "function"){ if(sec) sec.remove(); return; }
+    var svcs = ["flight", "hotel"];
+    Promise.all(svcs.map(function(s){ return api.listOffers(s); })).then(function(lists){
+      var active = [], seen = {};
+      lists.forEach(function(list, i){
+        (list || []).forEach(function(o){
+          var code = String(o && (o.code || o.offerCode) || "").toUpperCase();
+          if(!code || seen[code] || String(o.status || "active").toLowerCase() !== "active") return;
+          var svc = String(o.service || "").toLowerCase();
+          seen[code] = true;
+          active.push(Object.assign({}, o, {code:code, service: SERVICES[svc] ? svc : svcs[i]}));
+        });
       });
-      if(cards) cards.keepOnly(active.map(function(o){ return o.code; }));
-      buildStrip(active);
-    }).catch(function(){});
+      buildStrip(active, initCarousel(active));
+    }).catch(function(){ if(sec) sec.remove(); });
   }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
