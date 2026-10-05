@@ -1981,8 +1981,8 @@
     if(!oldTotal || !newTotal || (oldTicket === newTicket && oldTotal === newTotal)) return [];
     const reason = newTotal > oldTotal ? 'The airline increased the fare for this flight.' : 'The airline reduced the fare for this flight.';
     return [
-      {label:'Fare (' + tyTravellersText() + ')', oldValue:money(oldTicket), newValue:money(newTicket), reason:reason, payable:true},
-      {label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), reason:reason, payable:true}
+      {label:'Fare (' + tyTravellersText() + ')', oldValue:money(oldTicket), newValue:money(newTicket), reason:reason, payable:true, kind:'fare'},
+      {label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), reason:reason, payable:true, kind:'fare'}
     ];
   }
 
@@ -2270,7 +2270,8 @@
     return /(\bkg\b|\bkgs\b|kilogram|piece|pieces|\bpc\b|\bpcs\b|unit|units|bag|bags|lb|lbs|included|not included|nil|no baggage)/i.test(text);
   }
 
-  /* Allowance in comparable units: "15 Kg (01 Piece only)" and "15Kilograms" are the same 15 kg. */
+  /* Allowance per unit as written: "15 Kg (01 Piece only)" and "15Kilograms" are both 15 kg.
+     Kilograms and pieces are never converted into each other. */
   function tyBaggageAllowance(value){
     const t = changeTextValue(value).toLowerCase().replace(/\s+/g,' ').trim();
     if(!t || t === 'na' || t === 'n/a') return null;
@@ -2285,9 +2286,10 @@
     const a = tyBaggageAllowance(before), b = tyBaggageAllowance(after);
     if(!a || !b) return false;
     if(a.none || b.none) return !(a.none && b.none);
-    if(a.kg != null && b.kg != null) return a.kg !== b.kg;
-    if(a.pc != null && b.pc != null) return a.pc !== b.pc;
-    return true;
+    /* Weight on one side and pieces on the other is a different term, not a match. */
+    const shared = ['kg','pc'].filter(function(u){ return a[u] != null && b[u] != null; });
+    if(!shared.length) return true;
+    return shared.some(function(u){ return a[u] !== b[u]; });
   }
 
   function tySearchedTrip(f){ return f && (f.rawTrip || (f.raw && (f.raw.rawTrip || f.raw.trip)) || f.raw) || {}; }
@@ -2360,10 +2362,10 @@
       const a = (tyPaxFareDetail(after, type) || {}).bI || {};
       const who = type === 'ADULT' ? '' : ' (' + type.charAt(0) + type.slice(1).toLowerCase() + ')';
       if(tyBaggageDiffers(b.iB, a.iB)){
-        out.push({label:'Check-in baggage' + who, oldValue:changeTextValue(b.iB), newValue:changeTextValue(a.iB), reason:'The airline changed the baggage allowance.', apply: type === 'ADULT' ? function(){ f.baggage = changeTextValue(a.iB); } : null});
+        out.push({label:'Check-in baggage' + who, oldValue:changeTextValue(b.iB), newValue:changeTextValue(a.iB), kind:'baggage', oldLabel:'In search', newLabel:'Airline confirmed', reason:'The baggage terms confirmed by the airline differ from search.', apply: type === 'ADULT' ? function(){ f.baggage = changeTextValue(a.iB); } : null});
       }
       if(tyBaggageDiffers(b.cB, a.cB)){
-        out.push({label:'Cabin baggage' + who, oldValue:changeTextValue(b.cB), newValue:changeTextValue(a.cB), reason:'The airline changed the baggage allowance.'});
+        out.push({label:'Cabin baggage' + who, oldValue:changeTextValue(b.cB), newValue:changeTextValue(a.cB), kind:'baggage', oldLabel:'In search', newLabel:'Airline confirmed', reason:'The baggage terms confirmed by the airline differ from search.'});
       }
     });
     const refundText = function(v){ const n = String(v); return n === '1' ? 'Refundable' : n === '2' ? 'Partially refundable' : n === '0' ? 'Non-refundable' : ''; };
@@ -2491,19 +2493,26 @@
       const oldValue = changeTextValue(c.oldValue);
       const newValue = changeTextValue(c.newValue);
       if(!oldValue && !newValue) return '';
-      return `<div class="ty-change-row"><span>${esc(c.label)}</span><div><small>Old</small><b>${esc(oldValue || 'Previous')}</b></div><div><small>New</small><strong>${esc(newValue || 'Updated')}</strong></div></div>`;
+      return `<div class="ty-change-row"><span>${esc(c.label)}</span><div><small>${esc(c.oldLabel || 'Old')}</small><b>${esc(oldValue || 'Previous')}</b></div><div><small>${esc(c.newLabel || 'New')}</small><strong>${esc(newValue || 'Updated')}</strong></div></div>`;
     }).filter(Boolean).join('');
     const reasons = Array.from(new Set((changes || []).map(function(c){ return changeTextValue(c && c.reason); }).filter(Boolean)));
-    const title = options.title || (blocking ? 'Flight no longer available' : 'Confirm to Proceed');
-    const intro = options.message || (blocking
-      ? 'The airline no longer offers the flight you selected. Please choose another flight.'
-      : 'The airline updated your selected flight. Please review the changes before continuing.');
+    /* Fare wording only for a real fare change; baggage-only differences get their own confirmation. */
+    const kinds = new Set((changes || []).filter(Boolean).map(function(c){ return c.kind || 'details'; }));
+    const kind = blocking ? 'unavailable' : kinds.has('fare') ? 'fare' : (kinds.size === 1 && kinds.has('baggage')) ? 'baggage' : 'details';
+    const copy = {
+      unavailable: ['Flight no longer available', 'The airline no longer offers the flight you selected. Please choose another flight.'],
+      fare: ['Fare changed', 'The airline changed the fare for the option you selected. Please check the old and new amounts before continuing.'],
+      baggage: ['Confirm baggage details', 'The baggage terms confirmed by the airline differ from those shown in search. Both are shown exactly as the airline provided them. Please check them before continuing.'],
+      details: ['Flight details changed', 'The airline updated details of the option you selected. Please review them before continuing.']
+    }[kind];
+    const title = options.title || copy[0];
+    const intro = options.message || copy[1];
     const actions = blocking
       ? '<button type="button" class="back" data-change-search>Modify search</button><button type="button" class="continue" data-change-back>Refresh results</button>'
       : '<button type="button" class="back" data-change-back>Back</button><button type="button" class="continue" data-change-continue>Continue</button>';
     ROOT.innerHTML = `<div class="ty-change-modal-page">
       <div class="ty-change-backdrop"></div>
-      <section class="ty-change-card" role="dialog" aria-modal="true" aria-labelledby="tyChangeTitle">
+      <section class="ty-change-card" role="dialog" aria-modal="true" aria-labelledby="tyChangeTitle" data-change-kind="${kind}">
         <div class="ty-change-icon">!</div>
         <h1 id="tyChangeTitle">${esc(title)}</h1>
         <p>${esc(intro)}</p>
@@ -2536,7 +2545,7 @@
 
   function tyConfirmPayableIncrease(flights, oldTotal, newTotal){
     return new Promise(function(resolve){
-      renderChangeConfirm(flights, [{label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), payable:true,
+      renderChangeConfirm(flights, [{label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), payable:true, kind:'fare',
         reason:'The airline fare was re-checked when payment started.'}], {
         onContinue:function(){ resolve(true); },
         onBack:function(){ resolve(false); }
