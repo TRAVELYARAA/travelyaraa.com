@@ -1350,14 +1350,19 @@
     return (Array.isArray(flights) ? flights : [flights]).filter(Boolean).reduce(function(sum, f){
       const supplier = supplierPriceFromFlight(f);
       const customer = Number(f && (f.resultDisplayAmount || f.displayPrice || f.customerResultPrice || f.price || f.totalAmount || f.amount) || 0) || 0;
-      return sum + Math.max(0, Math.round(customer - supplier));
+      return sum + Math.max(0, customer - supplier);
     }, 0);
   }
 
+  /* Fallback when the review has no server pricing: the card's markup is for one adult, so
+     scale it to the reviewed supplier total (all travellers). Server pricing is authoritative. */
   function customerReviewPriceForSupplierTotal(flights, supplierTotal){
     const supplier = Number(supplierTotal || 0) || 0;
     if(!supplier) return 0;
-    return Math.max(0, Math.round(supplier + markupDeltaForFlights(flights)));
+    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
+    const cardSupplier = list.reduce(function(sum, f){ return sum + (Number(supplierPriceFromFlight(f)) || 0); }, 0);
+    const delta = markupDeltaForFlights(list);
+    return Math.max(0, Math.round(supplier + (cardSupplier > 0 ? delta * supplier / cardSupplier : delta)));
   }
 
   function realFareOptions(flight){
@@ -1509,6 +1514,10 @@
     const customerPrice = tyCustomerFareDisplayAmount(flight, fare);
     const oldPb = flightPricingBreakup(flight);
 
+    const farePriceId = fare.id === 'selected' ? '' : String((fare.rawPrice && (fare.rawPrice.id || fare.rawPrice.priceId)) || fare.id || '').trim();
+    if(farePriceId) out.priceId = farePriceId;
+    ['reviewData','_reviewData','reviewRaw','_reviewRaw','tripjackReviewBookingId','_tyReviewPricing','_tySearchedPricing','_tyReviewedSupplierShare','_tyAcceptedChangeKeys'].forEach(function(k){ delete out[k]; });
+
     out.price = customerPrice;
     out.displayPrice = customerPrice;
     out.resultDisplayAmount = customerPrice;
@@ -1631,12 +1640,6 @@
   async function openFareOptionsForFlight(flight, legKey){
     if(tyIsPassportScanBusy() || tyPassportScanLockActive() || tyPassportUploadIntentActive()) return;
     if(!flight) return;
-    showBookingLoader();
-    try{
-      const review = await fetchAirReviewForFlights([flight]);
-      applyReviewDataToFlights([flight], review);
-    }catch(e){}
-    hideBookingLoader();
     showFareOptionsModal(flight, legKey || 'onward');
   }
 
@@ -1778,15 +1781,26 @@
   }
 
   function reviewRawFromResponse(data){ return data && (data.raw || data.data && data.data.raw || data.response || data.result || data); }
+  /* Outcome of the last review call: 'ok', 'unavailable' (the airline rejected the selected
+     priceId) or 'unverified' (network/server error — availability unknown). */
   async function fetchAirReviewForFlights(flights){
     const priceIds = flights.map(f=>f.priceId || f.id || (f.raw && (f.raw.priceId || f.raw.id))).filter(Boolean);
+    state.lastReviewOutcome = 'unverified';
     if(!priceIds.length) return null;
     const key = priceIds.join('|');
-    if(state.reviewCache[key]) return state.reviewCache[key];
+    if(state.reviewCache[key]){ state.lastReviewOutcome = 'ok'; return state.reviewCache[key]; }
+    const searchedSupplierTotal = Math.round(flights.reduce(function(sum, f){ return sum + tySearchedSupplierTotal(f); }, 0) * 100) / 100;
+    const body = {priceIds};
+    if(searchedSupplierTotal > 0) body.searchedSupplierTotal = searchedSupplierTotal;
     try{
-      const res = await fetch(API_BASE + '/api/flights/review', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({priceIds}),cache:'no-store'});
+      const res = await fetch(API_BASE + '/api/flights/review', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store'});
       const data = await res.json().catch(()=>({}));
-      if(res.ok && data && data.success !== false){ state.reviewCache[key]=data; return data; }
+      if(res.ok && data && data.success !== false && reviewRawFromResponse(data)){
+        state.reviewCache[key]=data;
+        state.lastReviewOutcome = 'ok';
+        return data;
+      }
+      if(res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) state.lastReviewOutcome = 'unavailable';
     }catch(e){}
     return null;
   }
@@ -1795,14 +1809,27 @@
     if(!reviewData) return flights;
     const raw = reviewRawFromResponse(reviewData);
     const reviewBookingId = firstTextFromDeep(raw, ['bookingId']);
+    const pricing = tyValidReviewPricing(reviewData.pricing);
     flights.forEach(f=>{
       f.reviewData=reviewData;
       f.reviewRaw=raw;
       f._reviewData=reviewData;
       f._reviewRaw=raw;
+      if(pricing) f._tyReviewPricing = pricing; else delete f._tyReviewPricing;
       if(reviewBookingId) f.tripjackReviewBookingId = reviewBookingId;
     });
     return flights;
+  }
+
+  function tyValidReviewPricing(p){
+    return p && typeof p === 'object' && Number(p.ticketAmount) > 0 && Number(p.customerPayable) > 0 ? p : null;
+  }
+
+  /* Server-priced review shared by every selected flight (one review call covers the itinerary). */
+  function tyReviewPricingFor(flights){
+    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
+    const p = list.length ? list[0]._tyReviewPricing : null;
+    return p && list.every(function(f){ return f._tyReviewPricing === p; }) ? p : null;
   }
 
   /* Same TF sources create-payment-order uses. Keep UI Grand Total aligned so
@@ -1823,12 +1850,13 @@
     const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
     if(!list.length) return list;
     const raw = reviewRawFromResponse(reviewData) || list[0].reviewRaw || list[0]._reviewRaw;
-    return tyApplyReviewSupplierTf(list, tyFlightReviewSupplierTf(raw, list));
+    const pricing = tyValidReviewPricing(reviewData && reviewData.pricing) || tyReviewPricingFor(list);
+    return tyApplyReviewSupplierTf(list, tyFlightReviewSupplierTf(raw, list), pricing);
   }
 
-  function tyApplyReviewSupplierTf(list, supplierTf){
+  function tyApplyReviewSupplierTf(list, supplierTf, pricing){
     if(!(supplierTf > 0)) return list;
-    const customerTotal = Math.max(0, Math.round(
+    const customerTotal = pricing ? Number(pricing.ticketAmount) : Math.max(0, Math.round(
       customerReviewPriceForSupplierTotal(list, supplierTf)
       || customerFarePriceForSupplier(list[0], supplierTf)
       || 0
@@ -1843,12 +1871,12 @@
       f.totalAmount = each;
       f.amount = each;
       const pb = Object.assign({}, flightPricingBreakup(f) || {});
-      pb.supplierTotal = Math.round(supplierTf / list.length) || pb.supplierTotal;
+      pb.supplierTotal = (supplierTf / list.length) || pb.supplierTotal;
       pb.apiSupplierTotal = pb.supplierTotal;
       pb.rawSupplierTotal = pb.supplierTotal;
       pb.resultDisplayAmount = each;
-      /* Force convenience fee to recompute from ticket (ENV/2%) at payment time. */
-      pb.convenienceFee = 0;
+      /* Without server pricing the convenience fee is recomputed from the ticket at payment time. */
+      pb.convenienceFee = pricing ? Number(pricing.convenienceFeeBeforeOffer || pricing.convenienceFee || 0) / list.length : 0;
       pb.platformFee = 0;
       pb.bookingFee = 0;
       pb.serviceCharge = 0;
@@ -1856,6 +1884,7 @@
       f.convenienceFee = 0;
       f.bookingFee = 0;
       f.serviceCharge = 0;
+      if(pricing) f._tyReviewPricing = pricing;
       f._tyReviewedSupplierShare = supplierTf / list.length;
       if(f.raw && typeof f.raw === 'object'){
         /* raw can be shared with the result card object; never reprice the card. */
@@ -1877,6 +1906,12 @@
   function tySearchSupplierTotalForTravellers(f){
     if(!f) return 0;
     if(Number(f._tyReviewedSupplierShare) > 0) return Number(f._tyReviewedSupplierShare);
+    return tySearchedSupplierTotal(f);
+  }
+
+  /* Selected fare option exactly as searched: per-traveller-type TF x traveller counts. */
+  function tySearchedSupplierTotal(f){
+    if(!f) return 0;
     const s = state.search || {};
     const counts = {ADULT: Math.max(1, Number(s.adults || 1) || 1), CHILD: Math.max(0, Number(s.children || 0) || 0), INFANT: Math.max(0, Number(s.infants || 0) || 0)};
     const id = String(f.priceId || f.id || '').trim();
@@ -1904,27 +1939,51 @@
   function tyReviewPricedCopies(list, supplierTf){
     const copies = list.map(function(f){
       const c = Object.assign({}, f, {pricingBreakup: Object.assign({}, flightPricingBreakup(f))});
+      delete c._tyReviewPricing;
       if(f.raw && typeof f.raw === 'object') c.raw = Object.assign({}, f.raw);
       return c;
     });
     return tyApplyReviewSupplierTf(copies, supplierTf);
   }
 
-  /* Grand Total the customer expects vs the Grand Total the airline review makes payable,
-     both through the same fare-review pricing used at payment. */
-  function tyReviewedPayableChange(flights, raw){
-    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
-    if(!list.length || !raw) return null;
+  function tyTravellersText(){
+    const c = tyPaxCounts();
+    return [[c.ADULT,'Adult'],[c.CHILD,'Child'],[c.INFANT,'Infant']].filter(function(x){ return x[0] > 0; }).map(function(x){
+      return x[0] + ' ' + x[1] + (x[0] > 1 ? (x[1] === 'Child' ? 'ren' : 's') : '');
+    }).join(', ');
+  }
+
+  function tyPaxCounts(){
+    const s = state.search || {};
+    return {ADULT: Math.max(1, Number(s.adults || 1) || 1), CHILD: Math.max(0, Number(s.children || 0) || 0), INFANT: Math.max(0, Number(s.infants || 0) || 0)};
+  }
+
+  /* Fare: the selected option's supplier total as searched vs the reviewed supplier total for
+     the same priceId, compared to the paisa. Customer amounts for both come from the server's
+     review pricing (same rules as payment). */
+  function tyReviewFareChanges(list, reviewData, raw){
     const reviewedTf = tyFlightReviewSupplierTf(raw, list);
-    const expectedTf = list.reduce(function(sum, f){ return sum + tySearchSupplierTotalForTravellers(f); }, 0);
-    if(!(reviewedTf > 0) || !(expectedTf > 0)) return null;
-    const oldTotal = Number(computeFare(tyReviewPricedCopies(list, expectedTf)).total || 0);
-    const newTotal = Number(computeFare(tyReviewPricedCopies(list, reviewedTf)).total || 0);
-    if(!oldTotal || !newTotal) return null;
-    if(newTotal > oldTotal || tyMoneyChangeIsReal(oldTotal, newTotal)){
-      return {label:'Price', oldValue:money(oldTotal), newValue:money(newTotal), payable:true};
+    const searchedTf = list.reduce(function(sum, f){ return sum + tySearchedSupplierTotal(f); }, 0);
+    if(!(reviewedTf > 0) || !(searchedTf > 0)) return [];
+    if(Math.round(reviewedTf * 100) === Math.round(searchedTf * 100)) return [];
+    const now = tyValidReviewPricing(reviewData && reviewData.pricing);
+    const before = tyValidReviewPricing(reviewData && reviewData.searchedPricing);
+    let oldTicket, newTicket, oldTotal, newTotal;
+    if(now && before){
+      oldTicket = Number(before.ticketAmount); newTicket = Number(now.ticketAmount);
+      oldTotal = Number(before.customerPayable); newTotal = Number(now.customerPayable);
+    }else{
+      const oldFare = computeFare(tyReviewPricedCopies(list, searchedTf));
+      const newFare = computeFare(tyReviewPricedCopies(list, reviewedTf));
+      oldTicket = Number(oldFare.ticketAmount || 0); newTicket = Number(newFare.ticketAmount || 0);
+      oldTotal = Number(oldFare.total || 0); newTotal = Number(newFare.total || 0);
     }
-    return null;
+    if(!oldTotal || !newTotal || (oldTicket === newTicket && oldTotal === newTotal)) return [];
+    const reason = newTotal > oldTotal ? 'The airline increased the fare for this flight.' : 'The airline reduced the fare for this flight.';
+    return [
+      {label:'Fare (' + tyTravellersText() + ')', oldValue:money(oldTicket), newValue:money(newTicket), reason:reason, payable:true},
+      {label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), reason:reason, payable:true}
+    ];
   }
 
   function seatMapRawFromResponse(data){
@@ -2203,17 +2262,6 @@
     return total;
   }
 
-  function tyMoneyChangeIsReal(oldAmount, newAmount){
-    const oldN = Number(oldAmount || 0) || 0;
-    const newN = Number(newAmount || 0) || 0;
-    if(!oldN || !newN) return false;
-    /*
-      Ignore tiny supplier/customer rounding noise.
-      The old logic was showing ₹1 changes on almost every review call.
-    */
-    return Math.abs(newN - oldN) >= 10;
-  }
-
   function tyIsRealBaggageValue(value){
     const text = changeTextValue(value).trim();
     if(!text) return false;
@@ -2222,136 +2270,147 @@
     return /(\bkg\b|\bkgs\b|kilogram|piece|pieces|\bpc\b|\bpcs\b|unit|units|bag|bags|lb|lbs|included|not included|nil|no baggage)/i.test(text);
   }
 
-  function tyNormalizeBaggageValue(value){
-    return changeTextValue(value)
-      .trim()
-      .replace(/\s+/g,' ')
-      .replace(/\bunit\(s\)/ig,'unit')
-      .toLowerCase();
+  /* Allowance in comparable units: "15 Kg (01 Piece only)" and "15Kilograms" are the same 15 kg. */
+  function tyBaggageAllowance(value){
+    const t = changeTextValue(value).toLowerCase().replace(/\s+/g,' ').trim();
+    if(!t || t === 'na' || t === 'n/a') return null;
+    if(/\b(nil|no baggage|not included)\b/.test(t) || /^0\s*(kg|kgs|kilo|pc|pcs|piece|unit)/.test(t)) return {none:true};
+    const kg = t.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilo(?:gram)?s?)\b/);
+    const pc = t.match(/(\d+)\s*(?:pc|pcs|piece|pieces|unit|units|bag|bags)\b/);
+    if(!kg && !pc) return null;
+    return {kg: kg ? Number(kg[1]) : null, pc: pc ? Number(pc[1]) : null};
   }
 
-  function tyNormalizeChangeTime(value){
-    const t = timeText(value);
-    return t && t !== '--:--' ? t : '';
+  function tyBaggageDiffers(before, after){
+    const a = tyBaggageAllowance(before), b = tyBaggageAllowance(after);
+    if(!a || !b) return false;
+    if(a.none || b.none) return !(a.none && b.none);
+    if(a.kg != null && b.kg != null) return a.kg !== b.kg;
+    if(a.pc != null && b.pc != null) return a.pc !== b.pc;
+    return true;
   }
 
-  function tyExplicitChangePath(path, node){
-    const p = String(path || '').toLowerCase();
-    const keys = Object.keys(node || {}).join(' ').toLowerCase();
-    return /(change|changed|updated|modified|alert|warning|farechange|fare-change|reviewchange|farevalidate|fare-validate|reprice|repriced|schedulechange|schedule-change)/i.test(p + ' ' + keys);
+  function tySearchedTrip(f){ return f && (f.rawTrip || (f.raw && (f.raw.rawTrip || f.raw.trip)) || f.raw) || {}; }
+  function tySearchedPrice(f){ return f && (f.rawPrice || (f.raw && f.raw.selectedPrice)) || {}; }
+  function tyPaxFareDetail(price, type){ return price && price.fd && (price.fd[type] || price.fd[type.charAt(0) + type.slice(1).toLowerCase()]) || null; }
+
+  function tySegmentFacts(seg){
+    const fd = seg && seg.fD || {};
+    const ai = fd.aI || {};
+    return {
+      flight: [ai.code || '', fd.fN || ''].join(' ').trim(),
+      from: String(seg && seg.da && seg.da.code || '').toUpperCase(),
+      to: String(seg && seg.aa && seg.aa.code || '').toUpperCase(),
+      dep: String(seg && seg.dt || ''),
+      arr: String(seg && seg.at || '')
+    };
   }
 
-  function tyExplicitChangePair(node){
-    if(!node || typeof node !== 'object' || Array.isArray(node)) return null;
-    const oldValue = tyDirectValue(node, ['oldValue','old','previousValue','previous','prevValue','before','fromValue','from','oV','oldVal']);
-    const newValue = tyDirectValue(node, ['newValue','new','updatedValue','updated','currentValue','current','after','toValue','to','nV','newVal']);
-    if(oldValue === '' || newValue === '') return null;
-    return { oldValue: oldValue, newValue: newValue };
+  function tyScheduleText(iso){
+    return iso ? [dateText(iso), timeText(iso)].filter(Boolean).join(', ') : '';
   }
 
-  function tyClassifyExplicitChange(node, path){
-    const text = [
-      path,
-      node && node.label,
-      node && node.type,
-      node && node.field,
-      node && node.name,
-      node && node.key,
-      node && node.changeType,
-      node && node.category,
-      node && node.code
-    ].map(function(v){ return String(v || '').toLowerCase(); }).join(' ');
-
-    if(/fare|price|amount|total|tf|reprice/.test(text)) return 'Price';
-    if(/baggage|checkin|check-in|cabin baggage|bag/.test(text)) return 'Baggage';
-    if(/departure|depart|deptime|\bdt\b|dep time|schedule dep/.test(text)) return 'Departure Time';
-    if(/arrival|arrive|arrtime|\bat\b|arr time|schedule arr/.test(text)) return 'Arrival Time';
-    if(/segment|flight|schedule|time/.test(text)) return 'Flight Details';
-    return '';
-  }
-
-  function tyExplicitReviewChanges(raw){
+  /* Itinerary and schedule for one selected trip vs its reviewed trip. A different set of
+     flights is not the option the customer chose, so it cannot be continued. */
+  function tyReviewItineraryChanges(f, reviewTrip){
+    const before = (tySearchedTrip(f).sI || []).map(tySegmentFacts);
+    const after = (reviewTrip && reviewTrip.sI || []).map(tySegmentFacts);
+    if(!before.length || !after.length) return [];
+    const route = function(list){ return list.map(function(s){ return s.flight + ' ' + s.from + '–' + s.to; }).join(', '); };
+    if(route(before) !== route(after)){
+      return [{label:'Flights', oldValue:route(before), newValue:route(after), reason:'The airline changed the flights on this itinerary.', blocking:true}];
+    }
     const out = [];
-    if(!raw) return out;
-
-    walkDeep(raw,function(node,path){
-      if(!node || typeof node !== 'object' || Array.isArray(node)) return false;
-      if(!tyExplicitChangePath(path, node)) return false;
-
-      const pair = tyExplicitChangePair(node);
-      if(!pair) return false;
-
-      const label = tyClassifyExplicitChange(node, path);
-      if(!label) return false;
-
-      if(label === 'Price'){
-        const oldN = parseMoneyNumber(pair.oldValue);
-        const newN = parseMoneyNumber(pair.newValue);
-        if(!tyMoneyChangeIsReal(oldN, newN)) return false;
-        out.push({label:'Price', oldValue:money(oldN), newValue:money(newN)});
-        return false;
+    const multi = before.length > 1;
+    before.forEach(function(s, i){
+      const n = after[i];
+      const seg = function(){ return f.segments && f.segments[i]; };
+      if(s.dep && n.dep && s.dep !== n.dep){
+        out.push({label:'Departure' + (multi ? ' (' + s.flight + ')' : ''), oldValue:tyScheduleText(s.dep), newValue:tyScheduleText(n.dep), reason:'The airline changed the schedule.', apply:function(){
+          if(seg()){ seg().depTime = timeText(n.dep); seg().depDate = n.dep.slice(0,10); }
+          if(i === 0) f.departureTime = timeText(n.dep);
+        }});
       }
-
-      if(label === 'Baggage'){
-        if(!tyIsRealBaggageValue(pair.oldValue) || !tyIsRealBaggageValue(pair.newValue)) return false;
-        if(tyNormalizeBaggageValue(pair.oldValue) === tyNormalizeBaggageValue(pair.newValue)) return false;
-        out.push({label:'Baggage', oldValue:changeTextValue(pair.oldValue), newValue:changeTextValue(pair.newValue)});
-        return false;
+      if(s.arr && n.arr && s.arr !== n.arr){
+        out.push({label:'Arrival' + (multi ? ' (' + s.flight + ')' : ''), oldValue:tyScheduleText(s.arr), newValue:tyScheduleText(n.arr), reason:'The airline changed the schedule.', apply:function(){
+          if(seg()){ seg().arrTime = timeText(n.arr); seg().arrDate = n.arr.slice(0,10); }
+          if(i === before.length - 1) f.arrivalTime = timeText(n.arr);
+        }});
       }
+    });
+    return out;
+  }
 
-      if(label === 'Departure Time' || label === 'Arrival Time'){
-        const oldT = tyNormalizeChangeTime(pair.oldValue);
-        const newT = tyNormalizeChangeTime(pair.newValue);
-        if(!oldT || !newT || oldT === newT) return false;
-        out.push({label:label, oldValue:oldT, newValue:newT});
-        return false;
+  /* Cabin, baggage, refund status and fare type of the selected fare vs the reviewed fare. */
+  function tyReviewFareRuleChanges(f, reviewTrip){
+    const before = tySearchedPrice(f);
+    const after = reviewTrip && Array.isArray(reviewTrip.totalPriceList) ? reviewTrip.totalPriceList[0] : null;
+    if(!after || !before || !before.fd) return [];
+    const out = [];
+    const counts = tyPaxCounts();
+    const adultB = tyPaxFareDetail(before, 'ADULT') || {};
+    const adultA = tyPaxFareDetail(after, 'ADULT') || {};
+    const cabinB = String(adultB.cc || '').toUpperCase(), cabinA = String(adultA.cc || '').toUpperCase();
+    if(cabinB && cabinA && cabinB !== cabinA){
+      out.push({label:'Cabin', oldValue:normalizeCabin(cabinB).replace(/_/g,' '), newValue:normalizeCabin(cabinA).replace(/_/g,' '), reason:'The airline changed the cabin for this fare.'});
+    }
+    ['ADULT','CHILD','INFANT'].forEach(function(type){
+      if(!counts[type]) return;
+      const b = (tyPaxFareDetail(before, type) || {}).bI || {};
+      const a = (tyPaxFareDetail(after, type) || {}).bI || {};
+      const who = type === 'ADULT' ? '' : ' (' + type.charAt(0) + type.slice(1).toLowerCase() + ')';
+      if(tyBaggageDiffers(b.iB, a.iB)){
+        out.push({label:'Check-in baggage' + who, oldValue:changeTextValue(b.iB), newValue:changeTextValue(a.iB), reason:'The airline changed the baggage allowance.', apply: type === 'ADULT' ? function(){ f.baggage = changeTextValue(a.iB); } : null});
       }
-
-      const oldText = changeTextValue(pair.oldValue);
-      const newText = changeTextValue(pair.newValue);
-      if(oldText && newText && oldText !== newText){
-        out.push({label:label, oldValue:oldText, newValue:newText});
+      if(tyBaggageDiffers(b.cB, a.cB)){
+        out.push({label:'Cabin baggage' + who, oldValue:changeTextValue(b.cB), newValue:changeTextValue(a.cB), reason:'The airline changed the baggage allowance.'});
       }
-      return false;
-    },'',0,new Set());
+    });
+    const refundText = function(v){ const n = String(v); return n === '1' ? 'Refundable' : n === '2' ? 'Partially refundable' : n === '0' ? 'Non-refundable' : ''; };
+    const rB = refundText(adultB.rT), rA = refundText(adultA.rT);
+    if(rB && rA && rB !== rA){
+      out.push({label:'Refund status', oldValue:rB, newValue:rA, reason:'The airline changed the fare rules.', apply:function(){ f.refundable = String(adultA.rT) === '1'; }});
+    }
+    const fareText = function(v){ return changeTextValue(v).replace(/_/g,' ').toLowerCase().replace(/\b\w/g, function(c){ return c.toUpperCase(); }); };
+    const ftB = fareText(before.fareIdentifier), ftA = fareText(after.fareIdentifier);
+    if(ftB && ftA && ftB !== ftA){
+      out.push({label:'Fare type', oldValue:ftB, newValue:ftA, reason:'The airline changed the fare rules.', apply:function(){ f.fareType = ftA; }});
+    }
+    return out;
+  }
 
+  function detectReviewChanges(flights, reviewData){
+    const raw = reviewRawFromResponse(reviewData);
+    const list = (Array.isArray(flights) ? flights : [flights]).filter(Boolean);
+    if(!raw || !list.length) return [];
+    let changes = [];
+    const trips = Array.isArray(raw.tripInfos) ? raw.tripInfos : [];
+    if(trips.length === list.length){
+      list.forEach(function(f, i){
+        changes = changes.concat(tyReviewItineraryChanges(f, trips[i]), tyReviewFareRuleChanges(f, trips[i]));
+      });
+    }
+    changes = changes.concat(tyReviewFareChanges(list, reviewData, raw));
     const seen = new Set();
-    return out.filter(function(c){
-      const key = [c.label, c.oldValue, c.newValue].join('|').toLowerCase();
-      if(seen.has(key)) return false;
+    const accepted = new Set(list[0]._tyAcceptedChangeKeys || []);
+    return changes.filter(function(c){
+      if(!c || !c.label || changeTextValue(c.oldValue) === '' || changeTextValue(c.newValue) === '') return false;
+      const key = tyChangeKey(c);
+      if(seen.has(key) || accepted.has(key)) return false;
       seen.add(key);
       return true;
     });
   }
-  function detectReviewChanges(flights, reviewData){
-    const raw = reviewRawFromResponse(reviewData);
-    if(!raw) return [];
 
-    let changes = tyExplicitReviewChanges(raw);
+  function tyChangeKey(c){
+    return [c.label, changeTextValue(c.oldValue), changeTextValue(c.newValue)].join('|').toLowerCase();
+  }
 
-    /*
-      Price is compared on the payable Grand Total from the same review TF payment uses
-      (the review may re-issue fare ids). Any increase must be accepted; decreases only
-      when real.
-    */
-    const priceChange = tyReviewedPayableChange(flights, raw);
-    if(priceChange){
-      changes = changes.filter(function(c){ return c.label !== 'Price'; });
-      changes.push(priceChange);
-    }
-
-    /*
-      No more generic baggage/time deep-search here.
-      Single-letter values like N/Q/W must never trigger baggage changes.
-      Segment times must only trigger when the API explicitly sends an old/new schedule change.
-    */
-    const seen = new Set();
-    return changes.filter(function(c){
-      if(!c || !c.label || changeTextValue(c.oldValue) === '' || changeTextValue(c.newValue) === '') return false;
-      const key = [c.label, c.oldValue, c.newValue].join('|').toLowerCase();
-      if(seen.has(key)) return false;
-      seen.add(key);
-      return true;
+  /* Changes the customer already confirmed are not asked again for the same selection. */
+  function tyMarkChangesAccepted(flights, changes){
+    const keys = (changes || []).map(tyChangeKey);
+    (Array.isArray(flights) ? flights : [flights]).filter(Boolean).forEach(function(f){
+      f._tyAcceptedChangeKeys = Array.from(new Set((f._tyAcceptedChangeKeys || []).concat(keys)));
     });
   }
 
@@ -2387,28 +2446,9 @@
 
   function applyDetectedChangesToFlights(flights, changes){
     if(!Array.isArray(changes) || !changes.length) return;
-    const list = Array.isArray(flights) ? flights.filter(Boolean) : [flights].filter(Boolean);
+    /* Fare changes are applied by tySyncFlightsDisplayFromReview from the server pricing. */
     changes.forEach(function(c){
-      const label = String(c && c.label || '').toLowerCase();
-      const value = changeTextValue(c && c.newValue);
-      if(!value || !list.length) return;
-      if(label.includes('price')){
-        if(c.payable) return;
-        const amount = parseMoneyNumber(value);
-        if(amount > 0){
-          const each = Math.round(amount / Math.max(1, list.length));
-          list.forEach(function(f){ f.price = each; });
-        }
-      }else if(label.includes('baggage')){
-        list.forEach(function(f){ f.baggage = value; if(f.raw) f.raw.baggage = value; });
-      }else if(label.includes('departure')){
-        list[0].departureTime = value;
-        if(list[0].segments && list[0].segments[0]) list[0].segments[0].depTime = value;
-      }else if(label.includes('arrival')){
-        const last = list[list.length - 1];
-        last.arrivalTime = value;
-        if(last.segments && last.segments.length) last.segments[last.segments.length - 1].arrTime = value;
-      }
+      if(c && typeof c.apply === 'function'){ try{ c.apply(); }catch(e){} }
     });
   }
   function tyInjectChangeModalForceCss(){
@@ -2446,28 +2486,45 @@
     injectReviewTimerUpdateCss();
     tyInjectChangeModalForceCss();
     options = options || {};
+    const blocking = Boolean(options.blocking || (changes || []).some(function(c){ return c && c.blocking; }));
     const rows = (changes || []).map(function(c){
       const oldValue = changeTextValue(c.oldValue);
       const newValue = changeTextValue(c.newValue);
       if(!oldValue && !newValue) return '';
       return `<div class="ty-change-row"><span>${esc(c.label)}</span><div><small>Old</small><b>${esc(oldValue || 'Previous')}</b></div><div><small>New</small><strong>${esc(newValue || 'Updated')}</strong></div></div>`;
     }).filter(Boolean).join('');
+    const reasons = Array.from(new Set((changes || []).map(function(c){ return changeTextValue(c && c.reason); }).filter(Boolean)));
+    const title = options.title || (blocking ? 'Flight no longer available' : 'Confirm to Proceed');
+    const intro = options.message || (blocking
+      ? 'The airline no longer offers the flight you selected. Please choose another flight.'
+      : 'The airline updated your selected flight. Please review the changes before continuing.');
+    const actions = blocking
+      ? '<button type="button" class="back" data-change-search>Modify search</button><button type="button" class="continue" data-change-back>Refresh results</button>'
+      : '<button type="button" class="back" data-change-back>Back</button><button type="button" class="continue" data-change-continue>Continue</button>';
     ROOT.innerHTML = `<div class="ty-change-modal-page">
       <div class="ty-change-backdrop"></div>
       <section class="ty-change-card" role="dialog" aria-modal="true" aria-labelledby="tyChangeTitle">
         <div class="ty-change-icon">!</div>
-        <h1 id="tyChangeTitle">Confirm to Proceed</h1>
-        <p>Please review the latest airline changes before continuing.</p>
+        <h1 id="tyChangeTitle">${esc(title)}</h1>
+        <p>${esc(intro)}</p>
+        ${reasons.length ? `<ul class="ty-change-reasons">${reasons.map(function(r){ return `<li>${esc(r)}</li>`; }).join('')}</ul>` : ''}
         <div class="ty-change-table">${rows || '<p class="ty-muted">Updated details are not available from airline.</p>'}</div>
-        <div class="ty-change-actions"><button type="button" class="back" data-change-back>Back</button><button type="button" class="continue" data-change-continue>Continue</button></div>
+        <div class="ty-change-actions">${actions}</div>
       </section>
     </div>`;
     const back = ROOT.querySelector('[data-change-back]');
     const cont = ROOT.querySelector('[data-change-continue]');
-    if(back) back.onclick = function(){ if(typeof options.onBack === 'function') options.onBack(); else openFlightSearchPage(); };
+    const search = ROOT.querySelector('[data-change-search]');
+    if(back) back.onclick = function(){
+      if(blocking) tyRefreshResults();
+      else if(typeof options.onBack === 'function') options.onBack();
+      else tyBackToResults(flights);
+    };
+    if(search) search.onclick = function(){ openFlightSearchPage(); };
     if(cont) cont.onclick = function(){
       try{ cont.disabled = true; }catch(e){}
       try{ applyDetectedChangesToFlights(flights, changes || []); }catch(e){}
+      tyMarkChangesAccepted(flights, changes);
       try{
         if(typeof options.onContinue === 'function') options.onContinue();
         else renderFlightReviewStep(flights);
@@ -2479,11 +2536,37 @@
 
   function tyConfirmPayableIncrease(flights, oldTotal, newTotal){
     return new Promise(function(resolve){
-      renderChangeConfirm(flights, [{label:'Price', oldValue:money(oldTotal), newValue:money(newTotal), payable:true}], {
+      renderChangeConfirm(flights, [{label:'Total payable', oldValue:money(oldTotal), newValue:money(newTotal), payable:true,
+        reason:'The airline fare was re-checked when payment started.'}], {
         onContinue:function(){ resolve(true); },
         onBack:function(){ resolve(false); }
       });
     });
+  }
+
+  function tyRenderFareUnavailable(flights){
+    renderChangeConfirm(flights, [{label:'Availability', oldValue:'Available', newValue:'No longer available', reason:'The airline no longer offers this fare.'}], {blocking:true});
+  }
+
+  /* Same search, fresh inventory: never offers the unavailable option again from stale results. */
+  function tyRefreshResults(){
+    try{ history.replaceState({},"","/pages/results/flights.html?service=flight"); }catch(e){}
+    loadFlights(true);
+  }
+
+  /* Back to the same results list, scrolled to the card that was booked. */
+  function tyBackToResults(flights){
+    if(!state.rawFlights || !state.rawFlights.length){ openFlightSearchPage(); return; }
+    try{ history.replaceState({},"","/pages/results/flights.html?service=flight"); }catch(e){}
+    applyFilters();
+    const first = (Array.isArray(flights) ? flights : [flights]).filter(Boolean)[0];
+    if(!first) return;
+    const id = String(first.id || '');
+    const card = Array.from(ROOT.querySelectorAll('[data-card-book-flight]')).find(function(el){ return el.getAttribute('data-card-book-flight') === id; });
+    if(card){
+      card.classList.add('ty-card-returned');
+      try{ card.scrollIntoView({block:'center'}); }catch(e){}
+    }
   }
 
   async function openReviewWithAirReview(flights){
@@ -2495,14 +2578,16 @@
     }
     flights = Array.isArray(flights)?flights.filter(Boolean):[flights].filter(Boolean);
     if(!flights.length) return;
+    flights.forEach(function(f){ delete f._tyReviewPricing; delete f._tyAcceptedChangeKeys; });
     showBookingLoader();
     try{
       const review = await fetchAirReviewForFlights(flights);
+      if(!review && state.lastReviewOutcome === 'unavailable'){ hideBookingLoader(); tyRenderFareUnavailable(flights); return; }
       applyReviewDataToFlights(flights, review);
       const changes = detectReviewChanges(flights, review);
       hideBookingLoader();
       /* Review shows the reviewed payable; a changed one is shown only after Continue. */
-      if(changes.length){ renderChangeConfirm(flights, changes, {onContinue:function(){ tySyncFlightsDisplayFromReview(flights, review); renderFlightReviewStep(flights); }, onBack:openFlightSearchPage}); return; }
+      if(changes.length){ renderChangeConfirm(flights, changes, {onContinue:function(){ tySyncFlightsDisplayFromReview(flights, review); renderFlightReviewStep(flights); }, onBack:function(){ tyBackToResults(flights); }}); return; }
       tySyncFlightsDisplayFromReview(flights, review);
       renderFlightReviewStep(flights);
     }catch(e){
@@ -3052,7 +3137,39 @@ function normalizeCabin(value){
     };
   }
 
+  /* Desktop: filter and price/offer sidebar stay in view inside their own column.
+     overflow-x:hidden on a page wrapper makes it a scroll container and disables
+     sticky, so desktop uses clip (no scroll container). Mobile layout is untouched. */
+  function tyInjectStickyLayoutCss(){
+    if(document.getElementById('ty-sticky-layout-css')) return;
+    const style = document.createElement('style');
+    style.id = 'ty-sticky-layout-css';
+    style.textContent = `
+      @media(min-width:1025px){
+        body.travel-page,body.travel-page #travelRoot,body.travel-page .ty-fr-page,body.travel-page .ty-review-page{overflow-x:clip!important;overflow-y:visible!important}
+        body.travel-page .ty-fr-shell{align-items:start!important}
+        body.travel-page .ty-fr-shell>.ty-fr-filter{position:sticky!important;top:var(--ty-sticky-top,92px)!important;max-height:calc(100vh - var(--ty-sticky-top,92px) - 16px)!important;overflow-y:auto!important;overscroll-behavior:contain;scrollbar-width:thin;padding-bottom:0!important}
+        body.travel-page .ty-fr-shell>.ty-fr-filter>.ty-fr-filter-foot{margin-bottom:0!important;padding-bottom:14px!important}
+        body.travel-page .ty-review-page .ty-side{position:sticky!important;top:var(--ty-sticky-top,92px)!important;align-self:start!important;max-height:calc(100vh - var(--ty-sticky-top,92px) - 64px)!important;display:flex!important;flex-direction:column!important;min-height:0!important}
+        body.travel-page .ty-review-page .ty-side>*{flex:0 0 auto!important}
+        body.travel-page .ty-review-page .ty-side>.ty-offer-box{flex:0 1 auto!important;min-height:150px!important;overflow-y:auto!important;overscroll-behavior:contain;scrollbar-width:thin}
+        body.travel-page .ty-review-page .ty-side>.ty-offer-box .ty-offer-list{max-height:none!important}
+      }
+      .ty-change-reasons{margin:4px 0 12px;padding-left:18px;color:#334155;font-size:13px;line-height:1.4;font-weight:750}
+      .ty-flight-card.ty-card-returned{outline:2px solid #0062e3;outline-offset:2px}
+    `;
+    document.head.appendChild(style);
+    window.addEventListener('resize', tySyncStickyTop);
+  }
+
+  function tySyncStickyTop(){
+    const head = ROOT.querySelector('.ty-fr-top, .ty-review-top');
+    const h = head && getComputedStyle(head).position === 'sticky' ? Math.round(head.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty('--ty-sticky-top', (h + 14) + 'px');
+  }
+
   function injectStyles(){
+    tyInjectStickyLayoutCss();
     if(document.getElementById("ty-flight-style")) return;
     const style = document.createElement("style");
     style.id = "ty-flight-style";
@@ -3838,6 +3955,7 @@ function renderShell(content, opts){
         <div class="ty-fr-mobile-filter"><button type="button" data-filter-open>Filter</button></div>
       </div>
     `;
+    tySyncStickyTop();
     bindStaticEvents();
     if(!opts.skipDateFares) fetchDateFares();
   }
@@ -4563,23 +4681,35 @@ function renderShell(content, opts){
     let openBookingCharge = Math.round(parts.reduce(function(sum, p){ return sum + (p.openBookingCharge || p.bookingFee || 0); }, 0));
     let ticketAmount = Math.round(parts.reduce(function(sum, p){ return sum + (p.customerTicketAmount || p.ticketAmount || p.resultCardAmount || 0); }, 0));
 
-    if(!ticketAmount){
-      ticketAmount = Math.max(0, supplierPayable + markupAmount);
+    /* Reviewed itineraries use the server's whole-rupee price (same rules as payment). */
+    const reviewPricing = tyReviewPricingFor(flights);
+    let airlineTaxes = 0;
+    if(reviewPricing){
+      ticketAmount = Math.round(Number(reviewPricing.ticketAmount));
+      const feeBeforeOffer = reviewPricing.convenienceFeeBeforeOffer != null ? reviewPricing.convenienceFeeBeforeOffer : reviewPricing.convenienceFee;
+      openBookingCharge = Math.max(0, Math.round(Number(feeBeforeOffer) || 0));
+      airlineTaxes = Math.max(0, Math.min(ticketAmount, Math.round(Number(reviewPricing.airlineTaxes) || 0)));
+    } else {
+      if(!ticketAmount){
+        ticketAmount = Math.max(0, supplierPayable + markupAmount);
+      }
+      openBookingCharge = tyCheckoutConvenienceFee(ticketAmount, openBookingCharge);
     }
-    openBookingCharge = tyCheckoutConvenienceFee(ticketAmount, openBookingCharge);
 
     const selectedOffer = selectedOfferForFare();
     const addOnTotal = Math.max(0, Math.round(selectedAddOnTotal()));
     const subtotalBeforeDiscount = Math.max(0, ticketAmount + openBookingCharge + addOnTotal);
-    const offerDiscount = offerDiscountForFare(selectedOffer, {
+    const offerDiscount = Math.round(offerDiscountForFare(selectedOffer, {
       subtotalBeforeDiscount,
       bookingFee: openBookingCharge,
       convenienceFee: openBookingCharge
-    });
-    const total = Math.max(0, Math.round(subtotalBeforeDiscount - offerDiscount));
+    }));
+    const total = Math.max(0, subtotalBeforeDiscount - offerDiscount);
 
     return {
-      baseFare: ticketAmount,
+      baseFare: ticketAmount - airlineTaxes,
+      airlineTaxes,
+      fareSplitKnown: airlineTaxes > 0,
       ticketAmount,
       customerTicketAmount: ticketAmount,
       perTravellerFare: paxCount ? Math.round(ticketAmount / paxCount) : ticketAmount,
@@ -4587,11 +4717,6 @@ function renderShell(content, opts){
       adult,
       child,
       infant,
-      adultBaseFare: adult ? Math.round((ticketAmount / paxCount) * adult) : 0,
-      childBaseFare: child ? Math.round((ticketAmount / paxCount) * child) : 0,
-      infantBaseFare: infant ? Math.round((ticketAmount / paxCount) * infant) : 0,
-      taxes: openBookingCharge,
-      feeSurcharge: openBookingCharge,
       bookingFee: openBookingCharge,
       openBookingCharge,
       convenienceFee: openBookingCharge,
@@ -4628,27 +4753,31 @@ function renderShell(content, opts){
     return code ? `Discount (${esc(code)})` : 'Discount';
   }
 
-  function renderBaseFarePassengerRows(fare){
-    const rows = [];
-    if(Number(fare.adult || 0) > 0) rows.push(['Adult', Number(fare.adult || 0), Number(fare.adultBaseFare || 0)]);
-    if(Number(fare.child || 0) > 0) rows.push(['Child', Number(fare.child || 0), Number(fare.childBaseFare || 0)]);
-    if(Number(fare.infant || 0) > 0) rows.push(['Infant', Number(fare.infant || 0), Number(fare.infantBaseFare || 0)]);
-    return rows.map(function(row){
-      return `<div class="ty-fare-row"><span>${row[1]} X ${esc(row[0])}</span><b>${money(row[2])}</b></div>`;
-    }).join('');
+  /* Each line is one real component; together they add up to Total payable. */
+  function renderFareComponentRows(fare, rowClass){
+    const row = function(label, amount, cls){
+      return `<div class="${rowClass}"><span>${label}</span><b${cls ? ` class="${cls}"` : ''}>${amount}</b></div>`;
+    };
+    const pax = esc(tyTravellersText());
+    const out = [];
+    if(fare.fareSplitKnown){
+      out.push(row(`Base fare (${pax})`, money(fare.baseFare)));
+      out.push(row('Taxes &amp; airline fees', money(fare.airlineTaxes)));
+    } else {
+      out.push(row(`Ticket fare incl. taxes (${pax})`, money(fare.ticketAmount)));
+    }
+    if(fare.convenienceFee) out.push(row('TravelYaraa convenience fee', money(fare.convenienceFee)));
+    if(fare.addOnTotal) out.push(row('Add-ons', money(fare.addOnTotal)));
+    if(fare.offerDiscount) out.push(row(tyDiscountLabel(fare), '- ' + money(fare.offerDiscount), 'ty-discount'));
+    return out.join('');
   }
 
   function renderPriceSummaryBox(fare){
-    const baseRows = renderBaseFarePassengerRows(fare);
     return `<section class="ty-price-card">
       <div class="ty-section-head"><h2>Price Summary</h2></div>
       <div class="ty-section-body">
-        ${baseRows}
-        <div class="ty-fare-row"><span>Total (Base Fare)</span><b>${money(fare.baseFare)}</b></div>
-        <div class="ty-fare-row"><span>Fee & Surcharges</span><b>${money(fare.feeSurcharge || 0)}</b></div>
-        ${fare.addOnTotal?`<div class="ty-fare-row"><span>Add-ons</span><b>${money(fare.addOnTotal)}</b></div>`:""}
-        ${fare.offerDiscount?`<div class="ty-fare-row"><span>${tyDiscountLabel(fare)}</span><b class="ty-discount">- ${money(fare.offerDiscount)}</b></div>`:""}
-        <div class="ty-divider"></div><div class="ty-total-row"><span>Grand Total</span><b>${money(fare.total)}</b></div>
+        ${renderFareComponentRows(fare, 'ty-fare-row')}
+        <div class="ty-divider"></div><div class="ty-total-row"><span>Total payable</span><b>${money(fare.total)}</b></div>
       </div>
     </section>`;
   }
@@ -6142,9 +6271,8 @@ function mobileFareSheets(flights, fare, options){
     const buttonText = options.buttonText || "Continue Booking";
     const includeReview = options.includeReview !== false;
     const travellerCount = fare.paxCount || passengerMetas().length || 1;
-    const mobileBaseRows = renderBaseFarePassengerRows(fare).replace(/ty-fare-row/g, 'ty-break-row');
-    const fareSheet = `<div class="ty-mobile-sticky" id="tyMobileSticky"><div><span>Grand Total</span><div class="ty-total-line"><b>${money(fare.total)}</b><button type="button" class="ty-info-btn" data-open-fare-sheet>i</button></div></div><button type="button" class="ty-continue" id="tyMobileContinue">${esc(buttonText)}</button></div>
-    <div class="ty-mobile-sheet" id="tyFareSheet"><div class="ty-sheet-card"><button type="button" class="ty-sheet-close" data-close-sheet aria-label="Close">×</button><h2>Payment Details</h2><div class="ty-sheet-pane active" data-sheet-pane="breakup">${mobileBaseRows}<div class="ty-break-row"><span>Total (Base Fare)</span><b>${money(fare.baseFare || 0)}</b></div><div class="ty-break-row"><span>Fee & Surcharges</span><b>${money(fare.feeSurcharge || 0)}</b></div>${fare.addOnTotal?`<div class="ty-break-row"><span>Add-ons</span><b>${money(fare.addOnTotal)}</b></div>`:''}${fare.offerDiscount?`<div class="ty-break-row"><span>${tyDiscountLabel(fare)}</span><b class="ty-discount">- ${money(fare.offerDiscount)}</b></div>`:''}<div class="ty-break-row total"><span>Grand Total</span><b>${money(fare.total)}</b></div></div></div></div>`;
+    const fareSheet = `<div class="ty-mobile-sticky" id="tyMobileSticky"><div><span>Total payable</span><div class="ty-total-line"><b>${money(fare.total)}</b><button type="button" class="ty-info-btn" data-open-fare-sheet>i</button></div></div><button type="button" class="ty-continue" id="tyMobileContinue">${esc(buttonText)}</button></div>
+    <div class="ty-mobile-sheet" id="tyFareSheet"><div class="ty-sheet-card"><button type="button" class="ty-sheet-close" data-close-sheet aria-label="Close">×</button><h2>Payment Details</h2><div class="ty-sheet-pane active" data-sheet-pane="breakup">${renderFareComponentRows(fare, 'ty-break-row')}<div class="ty-break-row total"><span>Total payable</span><b>${money(fare.total)}</b></div></div></div></div>`;
     if(!includeReview) return fareSheet;
     return fareSheet + `<div class="ty-mobile-sheet" id="tyReviewConfirm"><div class="ty-sheet-card"><button type="button" class="ty-sheet-close" data-close-sheet aria-label="Close">×</button><h2>Review Details</h2><p>Please verify itinerary and passenger details carefully.</p><div class="ty-review-flight"><div>${airlineLogoHTML(flights[0], 'ty-review-logo-img')}</div><div><b>${esc(state.search.origin)} to ${esc(state.search.destination)}</b><span>${esc(dateText(firstSegment(flights[0]).depDate || state.search.departureDate))} | ${esc(flights[0].departureTime)}-${esc(flights[flights.length-1].arrivalTime)} | ${esc(flights[0].duration || '')}</span></div></div><div id="tyReviewPassengerSummary"></div><div class="ty-review-actions"><button type="button" class="edit" data-close-sheet>Edit</button><button type="button" class="confirm" id="tyConfirmPay">Continue</button></div></div></div>`;
   }
@@ -7561,7 +7689,8 @@ function mobileFareSheets(flights, fare, options){
   }
 
   function tyOfferApplyPayload(code, fare){
-    const bookingAmount = Math.max(0, Math.round(Number(fare && (fare.subtotalBeforeDiscount || fare.customerPayable || fare.total || fare.ticketAmount) || 0)));
+    /* Same basis create-payment-order validates offers against: ticket amount and fee separately. */
+    const bookingAmount = Math.max(0, Math.round(Number(fare && fare.ticketAmount || 0)));
     const bookingFee = Math.max(0, Math.round(Number(fare && (fare.bookingFee || fare.convenienceFee || fare.openBookingCharge) || 0)));
     return {
       service: 'flight',
@@ -7596,9 +7725,10 @@ function mobileFareSheets(flights, fare, options){
   }
 
   function bindReviewEvents(flights){
+    tySyncStickyTop();
     tyBindPhoneCountryCodeSelects(ROOT);
     const back = ROOT.querySelector("[data-review-back]");
-    if(back){ back.onclick = () => { try{history.replaceState({},"","/pages/results/flights.html?service=flight")}catch(e){} applyFilters(); }; }
+    if(back){ back.onclick = () => { tyBackToResults(flights); }; }
     ROOT.querySelectorAll('[data-open-policy]').forEach(btn => { btn.onclick = () => openPolicyModal(flights, btn.getAttribute('data-policy-target') || 'cancel'); });
     if(!ROOT.dataset.tyPolicyDelegateFixV306){
       ROOT.dataset.tyPolicyDelegateFixV306 = "1";
@@ -8905,8 +9035,9 @@ function mobileFareSheets(flights, fare, options){
       reviewRaw: paymentReviewRaw || null,
       clientRequestId: bookingPayload.clientRequestId
     };
-    /* Include displayed payable so backend can guard mismatches — unless a
-       one-shot retry after FLIGHT_PAYMENT_TOTAL_MISMATCH (assert uses exact ₹). */
+    /* Include displayed payable so backend can guard mismatches. The one-shot retry
+       without it returns the authoritative amount, which proceedToPayment shows
+       as old → new for confirmation whenever it differs from the displayed total. */
     if(!options.skipDisplayedPayableAssert && displayedPayable > 0){
       details.displayedCustomerPayable = displayedPayable;
       details.finalPayableAmount = displayedPayable;
@@ -10569,12 +10700,17 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
       try{
         if(msg){ msg.classList.remove("error"); msg.textContent = "Checking latest airline fare..."; }
         const review = await fetchAirReviewForFlights(flights);
+        state.paymentReviewInProgress = false;
+        if(!review && state.lastReviewOutcome === 'unavailable'){
+          releasePaymentCheckoutLock();
+          tyRenderFareUnavailable(flights);
+          return;
+        }
         applyReviewDataToFlights(flights, review);
         const changes = detectReviewChanges(flights, review);
-        state.paymentReviewInProgress = false;
         if(changes.length){
           releasePaymentCheckoutLock();
-          renderChangeConfirm(flights, changes, {onBack:openFlightSearchPage, onContinue:function(){ proceedToPayment(flights, form, error, msg, validate, true); }});
+          renderChangeConfirm(flights, changes, {onBack:function(){ tyBackToResults(flights); }, onContinue:function(){ proceedToPayment(flights, form, error, msg, validate, true); }});
           return;
         }
         /* Even sub-₹10 review moves (ignored by change modal) must refresh display
@@ -10647,13 +10783,13 @@ async function proceedToPayment(flights, form, error, msg, validate, skipAirRevi
          Keep sticky/side Grand Total identical to checkout — never leave a ₹1 display drift. */
       const authPayable = Math.max(0, Math.round(amount / 100));
       const shownPayable = Math.max(0, Math.round(Number(fare && fare.total || 0)));
-      if(authPayable > 0 && shownPayable > 0 && authPayable > shownPayable){
+      if(authPayable > 0 && shownPayable > 0 && authPayable !== shownPayable){
         hideSecurePaymentOverlay();
         const accepted = await tyConfirmPayableIncrease(flights, shownPayable, authPayable);
         if(!accepted){
           try{ await recordPaymentStatus(bookingPayload.bookingId, "PAYMENT_CANCELLED", {description:"Customer declined the updated fare."}); }catch(_e){}
           releasePaymentCheckoutLock();
-          openFlightSearchPage();
+          tyBackToResults(flights);
           return;
         }
         showSecurePaymentOverlay('payment');
